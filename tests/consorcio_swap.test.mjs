@@ -70,6 +70,9 @@ async function runTests() {
 
   // Teste 4: Execução de troca atômica de posições
   console.log("Testando troca atômica de posições de contemplação...");
+  const nomesCota1 = cota1.participantes.map(p => p.usuario.name).join(" & ");
+  const nomesCota2 = cota2.participantes.map(p => p.usuario.name).join(" & ");
+
   await prisma.$transaction([
     prisma.cota.update({
       where: { id: cota1.id },
@@ -84,7 +87,22 @@ async function runTests() {
         consorcioId: consorcio.id,
         usuarioResponsavelId: criador.id,
         tipoAcao: "TROCA_POSICAO_COTA",
-        detalhes: `Troca de ordem de contemplação: Cota #${cota1.numero} (foi para ciclo #${pos2Original}) permutada com Cota #${cota2.numero} (foi para ciclo #${pos1Original}).`,
+        detalhes: JSON.stringify({
+          cota1: {
+            id: cota1.id,
+            numero: cota1.numero,
+            participantes: nomesCota1,
+            ordemAnterior: pos1Original,
+            novaOrdem: pos2Original,
+          },
+          cota2: {
+            id: cota2.id,
+            numero: cota2.numero,
+            participantes: nomesCota2,
+            ordemAnterior: pos2Original,
+            novaOrdem: pos1Original,
+          },
+        }),
         justificativa: "Teste automatizado de troca de posições"
       }
     })
@@ -108,7 +126,7 @@ async function runTests() {
     orderBy: { createdAt: "desc" }
   });
 
-  if (!logTroca || !logTroca.detalhes.includes(`Cota #${cota1.numero}`)) {
+  if (!logTroca || (!logTroca.detalhes.includes(`"numero":${cota1.numero}`) && !logTroca.detalhes.includes(`Cota #${cota1.numero}`))) {
     throw new Error("Falha no Teste 5: Trilha de auditoria não registrou a troca de posições!");
   }
   console.log("✅ Teste 5: Trilha de auditoria de troca verificada.");

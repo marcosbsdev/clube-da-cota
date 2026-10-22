@@ -35,6 +35,333 @@ import {
   ArrowLeftRight,
 } from "lucide-react";
 
+function formatarDataHoraAuditoria(d: string | Date) {
+  const date = new Date(d);
+  return `${date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })}, ${date.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  })}`;
+}
+
+function getAcaoAuditoriaMeta(tipoAcao: string) {
+  switch (tipoAcao) {
+    case "TROCA_POSICAO_COTA":
+      return {
+        label: "Permuta de Contemplação",
+        bg: "bg-amber-100 text-amber-900 border-amber-200/80",
+        icon: ArrowLeftRight,
+      };
+    case "CONTEMPLACAO_COTA":
+      return {
+        label: "Contemplação Registrada",
+        bg: "bg-emerald-100 text-emerald-900 border-emerald-200/80",
+        icon: CheckCircle2,
+      };
+    case "REVERSAO_CONTEMPLACAO_COTA":
+      return {
+        label: "Reversão de Contemplação",
+        bg: "bg-orange-100 text-orange-900 border-orange-200/80",
+        icon: RotateCcw,
+      };
+    case "EDICAO_DADOS_CONSORCIO":
+      return {
+        label: "Edição de Dados",
+        bg: "bg-blue-100 text-blue-900 border-blue-200/80",
+        icon: Edit3,
+      };
+    case "CONFIRMACAO_PAGAMENTO":
+      return {
+        label: "Pagamento Confirmado",
+        bg: "bg-emerald-50 text-emerald-800 border-emerald-200/80",
+        icon: CheckCircle2,
+      };
+    case "ESTORNO_PAGAMENTO":
+      return {
+        label: "Estorno de Pagamento",
+        bg: "bg-rose-100 text-rose-900 border-rose-200/80",
+        icon: RotateCcw,
+      };
+    case "RECUSA_COMPROVANTE":
+      return {
+        label: "Comprovante Recusado",
+        bg: "bg-rose-100 text-rose-900 border-rose-200/80",
+        icon: X,
+      };
+    case "CRIACAO_CONSORCIO":
+      return {
+        label: "Consórcio Criado",
+        bg: "bg-violet-100 text-violet-900 border-violet-200/80",
+        icon: FolderKanban,
+      };
+    default:
+      return {
+        label: tipoAcao.replace(/_/g, " "),
+        bg: "bg-slate-100 text-slate-800 border-slate-200/80",
+        icon: FileText,
+      };
+  }
+}
+
+function getParticipantesCota(numero: number, consorcio: any): string {
+  if (!consorcio?.cotas) return "";
+  const cota = consorcio.cotas.find((c: any) => c.numero === Number(numero));
+  if (!cota || !cota.participantes) return "";
+  return cota.participantes.map((p: any) => p.usuario?.name).filter(Boolean).join(" & ") || "";
+}
+
+function getNomeUsuarioAfetado(usuarioId: string, consorcio: any): string {
+  if (!usuarioId || !consorcio) return "";
+  for (const c of consorcio.cotas || []) {
+    for (const p of c.participantes || []) {
+      if (p.usuarioId === usuarioId || p.usuario?.id === usuarioId) {
+        return p.usuario?.name || "";
+      }
+    }
+  }
+  const contrib = consorcio.contribuicoes?.find((cb: any) => cb.usuarioId === usuarioId);
+  if (contrib?.usuario?.name) return contrib.usuario.name;
+  return "";
+}
+
+function renderAuditoriaDetalhes(a: any, consorcio: any) {
+  let parsedJson: any = null;
+  if (typeof a.detalhes === "string" && (a.detalhes.startsWith("{") || a.detalhes.startsWith("["))) {
+    try {
+      parsedJson = JSON.parse(a.detalhes);
+    } catch {
+      parsedJson = null;
+    }
+  }
+
+  // 1. Caso TROCA_POSICAO_COTA (seja JSON estruturado ou texto plano do teste)
+  if (
+    a.tipoAcao === "TROCA_POSICAO_COTA" ||
+    (parsedJson && parsedJson.cota1 && parsedJson.cota2)
+  ) {
+    let num1 = parsedJson?.cota1?.numero;
+    let num2 = parsedJson?.cota2?.numero;
+    let anterior1 = parsedJson?.cota1?.ordemAnterior;
+    let novo1 = parsedJson?.cota1?.novaOrdem;
+    let anterior2 = parsedJson?.cota2?.ordemAnterior;
+    let novo2 = parsedJson?.cota2?.novaOrdem;
+    let nome1 = parsedJson?.cota1?.participantes;
+    let nome2 = parsedJson?.cota2?.participantes;
+
+    // Se não veio do JSON, extrai por regex do texto
+    if (!num1 || !num2) {
+      const match = typeof a.detalhes === "string" ? a.detalhes.match(/Cota #(\d+).*?ciclo #(\d+).*?Cota #(\d+).*?ciclo #(\d+)/i) : null;
+      if (match) {
+        num1 = Number(match[1]);
+        novo1 = Number(match[2]);
+        num2 = Number(match[3]);
+        novo2 = Number(match[4]);
+      }
+    }
+
+    if (!nome1 && num1) nome1 = getParticipantesCota(num1, consorcio);
+    if (!nome2 && num2) nome2 = getParticipantesCota(num2, consorcio);
+
+    if (num1 && num2) {
+      return (
+        <div className="bg-white p-3 rounded-2xl border border-slate-200/80 space-y-2 shadow-2xs">
+          <div className="flex items-center justify-between text-[11px] text-slate-400 font-bold uppercase tracking-wider pb-1 border-b border-slate-100">
+            <span>Participantes</span>
+            <span>Novo Ciclo</span>
+          </div>
+
+          {/* Participante 1 */}
+          <div className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-xl border border-slate-100 gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-black text-slate-900 leading-tight">
+                {nome1 || `Cota #${num1}`}
+              </p>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                Cota #{num1} {anterior1 ? `• era Ciclo #${anterior1}` : ""}
+              </p>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <span className="inline-block px-2.5 py-1 bg-amber-100 text-amber-950 font-black text-xs rounded-lg border border-amber-300 shadow-2xs">
+                Ciclo #{novo1}
+              </span>
+            </div>
+          </div>
+
+          {/* Participante 2 */}
+          <div className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-xl border border-slate-100 gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-black text-slate-900 leading-tight">
+                {nome2 || `Cota #${num2}`}
+              </p>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                Cota #{num2} {anterior2 ? `• era Ciclo #${anterior2}` : ""}
+              </p>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <span className="inline-block px-2.5 py-1 bg-amber-100 text-amber-950 font-black text-xs rounded-lg border border-amber-300 shadow-2xs">
+                Ciclo #{novo2}
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  }
+
+  // 2. Caso CONFIRMACAO_PAGAMENTO
+  if (a.tipoAcao === "CONFIRMACAO_PAGAMENTO") {
+    const matchPag = typeof a.detalhes === "string" ? a.detalhes.match(/R\$\s*([\d.,]+).*?participante\s+(.*?)\s+marcada como\s*(PAGO)/i) : null;
+    if (matchPag) {
+      const valor = matchPag[1];
+      const nomePart = matchPag[2];
+      return (
+        <div className="bg-white p-3 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-2 shadow-2xs">
+          <div className="min-w-0">
+            <p className="text-xs font-black text-slate-900 leading-tight">{nomePart}</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Parcela mensal confirmada</p>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <span className="inline-block text-xs font-black text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 shadow-2xs">
+              R$ {valor} • PAGO
+            </span>
+          </div>
+        </div>
+      );
+    }
+  }
+
+  // 3. Caso ESTORNO_PAGAMENTO
+  if (a.tipoAcao === "ESTORNO_PAGAMENTO") {
+    const matchEstorno = typeof a.detalhes === "string" ? a.detalhes.match(/R\$\s*([\d.,]+).*?revertido para\s*(\w+)/i) : null;
+    const nomePart = a.usuarioAfetadoId ? getNomeUsuarioAfetado(a.usuarioAfetadoId, consorcio) : "";
+    if (matchEstorno) {
+      const valor = matchEstorno[1];
+      const status = matchEstorno[2];
+      return (
+        <div className="bg-white p-3 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-2 shadow-2xs">
+          <div className="min-w-0">
+            {nomePart && <p className="text-xs font-black text-slate-900 leading-tight">{nomePart}</p>}
+            <p className="text-[11px] text-slate-500 mt-0.5">Pagamento estornado / revertido</p>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <span className="inline-block text-xs font-black text-rose-800 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200 shadow-2xs">
+              R$ {valor} • {status}
+            </span>
+          </div>
+        </div>
+      );
+    }
+  }
+
+  // 4. Caso CONTEMPLACAO_COTA ou REVERSAO_CONTEMPLACAO_COTA
+  if (a.tipoAcao === "CONTEMPLACAO_COTA" || a.tipoAcao === "REVERSAO_CONTEMPLACAO_COTA") {
+    const num = parsedJson?.numero;
+    const nomePart = parsedJson?.participantes || (num ? getParticipantesCota(num, consorcio) : "");
+    const ciclo = parsedJson?.ordemSorteio || num;
+    const isContemplada = a.tipoAcao === "CONTEMPLACAO_COTA" || parsedJson?.novoStatus === "CONTEMPLADA";
+
+    return (
+      <div className="bg-white p-3 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-2 shadow-2xs">
+        <div className="min-w-0">
+          <p className="text-xs font-black text-slate-900 leading-tight">
+            {nomePart || `Cota #${num}`}
+          </p>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            Cota #{num} {ciclo ? `• Ciclo #${ciclo}` : ""}
+          </p>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <span
+            className={`inline-block text-xs font-black px-2.5 py-1 rounded-lg border shadow-2xs ${
+              isContemplada
+                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                : "bg-slate-100 text-slate-700 border-slate-200"
+            }`}
+          >
+            {isContemplada ? "🏆 Contemplada" : "Ativa"}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // 5. Caso EDICAO_DADOS_CONSORCIO com JSON
+  if (parsedJson && (parsedJson.antes || parsedJson.depois)) {
+    const antes = parsedJson.antes || {};
+    const depois = parsedJson.depois || {};
+    const mudancas: { campo: string; de?: string | null; para?: string | null }[] = [];
+
+    if (antes.nome !== depois.nome && (antes.nome || depois.nome)) {
+      mudancas.push({ campo: "Nome do Consórcio", de: antes.nome, para: depois.nome });
+    }
+    if (antes.finalidade !== depois.finalidade && (antes.finalidade || depois.finalidade)) {
+      mudancas.push({ campo: "Finalidade", de: antes.finalidade, para: depois.finalidade });
+    }
+    const pagAntes = antes.chavePix || antes.dadosPagamento;
+    const pagDepois = depois.chavePix || depois.dadosPagamento;
+    if (pagAntes !== pagDepois && (pagAntes || pagDepois)) {
+      mudancas.push({ campo: "Dados de Pagamento (PIX)", de: pagAntes, para: pagDepois });
+    }
+    if (antes.regras !== depois.regras && (antes.regras || depois.regras)) {
+      mudancas.push({ campo: "Regras Gerais", de: antes.regras, para: depois.regras });
+    }
+
+    if (mudancas.length === 0) {
+      return (
+        <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 text-xs text-slate-700 leading-relaxed shadow-2xs">
+          Dados cadastrais e instruções de pagamento atualizados.
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 space-y-2 text-xs shadow-2xs">
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+          Campos alterados:
+        </p>
+        <div className="space-y-1.5">
+          {mudancas.map((m, idx) => (
+            <div key={idx} className="p-2 bg-slate-50/80 rounded-lg border border-slate-100 text-xs">
+              <span className="text-[10px] font-bold text-slate-500 uppercase block mb-0.5">
+                {m.campo}
+              </span>
+              <div className="flex items-center gap-1.5 flex-wrap text-slate-800">
+                {m.de && (
+                  <>
+                    <span className="text-slate-400 line-through break-all">{m.de}</span>
+                    <span className="text-slate-400">→</span>
+                  </>
+                )}
+                <span className="font-bold text-slate-900 break-all">{m.para || "(vazio)"}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // 6. Caso padrão / texto plano: enriquece menções a "Cota #X" com o nome do participante se possível
+  let textoFinal = a.detalhes;
+  if (typeof textoFinal === "string") {
+    textoFinal = textoFinal.replace(/Cota #(\d+)/gi, (match, numStr) => {
+      const numCota = Number(numStr);
+      const nome = getParticipantesCota(numCota, consorcio);
+      return nome && !textoFinal.includes(nome) ? `${match} (${nome})` : match;
+    });
+  }
+
+  return (
+    <div className="bg-white p-3 rounded-2xl border border-slate-200/80 text-xs text-slate-800 font-medium leading-relaxed break-words shadow-2xs">
+      {textoFinal}
+    </div>
+  );
+}
+
 interface CriadorViewProps {
   consorcio: any;
   currentUser: any;
@@ -855,29 +1182,75 @@ export function CriadorView({
 
           {/* Trilha de Auditoria (Página 83 do PDF: data/hora, responsável, ação e justificativa) */}
           <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <ShieldCheck className="w-4 h-4 text-theme-text" />
-              <div>
-                <h4 className="font-bold text-slate-900 text-sm">Histórico de Auditoria</h4>
-                <p className="text-[11px] text-slate-400">Registro seguro e imutável de ações</p>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3.5">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-theme-light text-theme-text flex items-center justify-center font-bold text-sm">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm">Histórico de Auditoria</h4>
+                  <p className="text-[11px] text-slate-400">Registro seguro e imutável de ações</p>
+                </div>
               </div>
+              <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg">
+                {consorcio.auditorias.length}
+              </span>
             </div>
 
-            <div className="space-y-2.5 text-xs max-h-[460px] overflow-y-auto pr-1">
-              {consorcio.auditorias.map((a: any) => (
-                <div key={a.id} className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                  <div className="flex justify-between items-center text-[10px] text-slate-400">
-                    <span className="font-bold text-theme-text uppercase">{a.tipoAcao}</span>
-                    <span>{new Date(a.createdAt).toLocaleString("pt-BR")}</span>
-                  </div>
-                  <p className="font-medium text-slate-800 mt-1">{a.detalhes}</p>
-                  {a.justificativa && (
-                    <p className="text-[11px] text-slate-500 italic mt-1 bg-white p-2 rounded-lg border border-slate-100">
-                      Motivo: &quot;{a.justificativa}&quot;
-                    </p>
-                  )}
+            <div className="space-y-3 text-xs max-h-[480px] overflow-y-auto overflow-x-hidden pr-1">
+              {consorcio.auditorias.length === 0 ? (
+                <div className="p-6 text-center text-slate-400 bg-slate-50/60 rounded-2xl border border-slate-100">
+                  <ShieldCheck className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                  <p className="text-xs font-medium">Nenhum registro de auditoria até o momento.</p>
                 </div>
-              ))}
+              ) : (
+                consorcio.auditorias.map((a: any) => {
+                  const meta = getAcaoAuditoriaMeta(a.tipoAcao);
+                  const IconComp = meta.icon;
+
+                  return (
+                    <div
+                      key={a.id}
+                      className="p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200/80 space-y-2.5 overflow-hidden transition hover:bg-slate-50"
+                    >
+                      {/* Cabeçalho do Card */}
+                      <div className="flex justify-between items-start gap-2">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wide ${meta.bg}`}
+                        >
+                          <IconComp className="w-3 h-3 flex-shrink-0" />
+                          <span>{meta.label}</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 whitespace-nowrap font-medium">
+                          {formatarDataHoraAuditoria(a.createdAt)}
+                        </span>
+                      </div>
+
+                      {/* Conteúdo Formatado com Participantes em Destaque */}
+                      {renderAuditoriaDetalhes(a, consorcio)}
+
+                      {/* Rodapé: Responsável e Justificativa */}
+                      <div className="space-y-1.5 pt-0.5">
+                        {a.usuarioResponsavel?.name && (
+                          <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                            <span>👤 Por:</span>
+                            <span className="font-semibold text-slate-600">
+                              {a.usuarioResponsavel.name}
+                            </span>
+                          </div>
+                        )}
+
+                        {a.justificativa && (
+                          <div className="p-2 bg-slate-100/70 rounded-xl border border-slate-200/60 text-[11px] text-slate-700 flex items-start gap-1.5 break-words">
+                            <span className="font-bold flex-shrink-0 text-slate-800">Motivo:</span>
+                            <span className="italic leading-relaxed">&ldquo;{a.justificativa}&rdquo;</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

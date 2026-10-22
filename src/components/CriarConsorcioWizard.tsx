@@ -52,10 +52,13 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
 
   const handleAdicionarParticipante = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!novoNome.trim() || !novoEmail.trim()) return;
+    if (!novoNome.trim()) {
+      setErroMsg("Informe o nome do participante.");
+      return;
+    }
 
-    if (isCompartilhada && (!parceiroNome.trim() || !parceiroEmail.trim())) {
-      setErroMsg("Informe os dados do segundo participante para a cota compartilhada.");
+    if (isCompartilhada && !parceiroNome.trim()) {
+      setErroMsg("Informe o nome do segundo participante para a cota compartilhada.");
       return;
     }
 
@@ -63,11 +66,11 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
       ...participantes,
       {
         nome: novoNome.trim(),
-        email: novoEmail.trim(),
+        email: novoEmail.trim() || undefined,
         cotasCount: novasCotas,
         isCompartilhada,
         fraçãoNome: isCompartilhada ? parceiroNome.trim() : undefined,
-        fraçãoEmail: isCompartilhada ? parceiroEmail.trim() : undefined,
+        fraçãoEmail: isCompartilhada ? (parceiroEmail.trim() || undefined) : undefined,
         valorFração1: isCompartilhada ? valorCota / 2 : undefined,
         valorFração2: isCompartilhada ? valorCota / 2 : undefined,
       },
@@ -295,6 +298,9 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
                       {p.nome} {p.isCompartilhada ? `& ${p.fraçãoNome}` : ""}
                     </p>
                     <p className="text-[11px] text-slate-500">
+                      {p.email ? p.email : "Sem e-mail cadastrado"}
+                      {p.isCompartilhada && p.fraçãoEmail ? ` / ${p.fraçãoEmail}` : ""}
+                      {" • "}
                       {p.isCompartilhada
                         ? `${p.cotasCount || 1} cota(s) compartilhada (50% cada)`
                         : `${p.cotasCount} cota(s) individual`}
@@ -303,7 +309,7 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
                   <button
                     type="button"
                     onClick={() => handleRemoverParticipante(idx)}
-                    className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition"
+                    className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition cursor-pointer"
                     title="Remover participante"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -318,21 +324,29 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
             <h4 className="text-xs sm:text-sm font-bold text-slate-800">Adicionar Novo Participante</h4>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input
-                type="text"
-                placeholder="Nome completo"
-                value={novoNome}
-                onChange={(e) => setNovoNome(e.target.value)}
-                className="p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white"
-              />
-              <input
-                type="email"
-                placeholder="E-mail"
-                value={novoEmail}
-                onChange={(e) => setNovoEmail(e.target.value)}
-                className="p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white"
-              />
+              <div>
+                <input
+                  type="text"
+                  placeholder="Nome completo *"
+                  value={novoNome}
+                  onChange={(e) => setNovoNome(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white font-medium"
+                />
+              </div>
+              <div>
+                <input
+                  type="email"
+                  placeholder="E-mail (opcional)"
+                  value={novoEmail}
+                  onChange={(e) => setNovoEmail(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white"
+                />
+              </div>
             </div>
+
+            <p className="text-[11px] text-slate-500 italic mt-0.5">
+              💡 O e-mail é opcional (necessário apenas se o participante for acessar o sistema para acompanhar suas parcelas).
+            </p>
 
             <div className="flex items-center gap-2">
               <label className="text-xs text-slate-600 font-semibold">Quantidade de Cotas:</label>
@@ -353,7 +367,7 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
                   type="checkbox"
                   checked={isCompartilhada}
                   onChange={(e) => setIsCompartilhada(e.target.checked)}
-                  className="rounded text-theme-main focus:ring-0 w-4 h-4"
+                  className="rounded text-theme-main focus:ring-0 w-4 h-4 cursor-pointer"
                 />
                 <span className="text-xs font-bold text-slate-700">
                   Esta é uma Cota Compartilhada (dividida com outra pessoa)
@@ -361,21 +375,23 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
               </label>
 
               {isCompartilhada && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-200">
-                  <input
-                    type="text"
-                    placeholder="Nome do parceiro(a)"
-                    value={parceiroNome}
-                    onChange={(e) => setParceiroNome(e.target.value)}
-                    className="p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white"
-                  />
-                  <input
-                    type="email"
-                    placeholder="E-mail do parceiro"
-                    value={parceiroEmail}
-                    onChange={(e) => setParceiroEmail(e.target.value)}
-                    className="p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white"
-                  />
+                <div className="space-y-2 mt-3 pt-3 border-t border-slate-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      placeholder="Nome do parceiro(a) *"
+                      value={parceiroNome}
+                      onChange={(e) => setParceiroNome(e.target.value)}
+                      className="p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white font-medium"
+                    />
+                    <input
+                      type="email"
+                      placeholder="E-mail do parceiro (opcional)"
+                      value={parceiroEmail}
+                      onChange={(e) => setParceiroEmail(e.target.value)}
+                      className="p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white"
+                    />
+                  </div>
                 </div>
               )}
             </div>

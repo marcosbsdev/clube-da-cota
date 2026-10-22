@@ -189,7 +189,7 @@ export interface CreateConsorcioInput {
   valorAcrescimo?: number;
   participantes: {
     nome: string;
-    email: string;
+    email?: string;
     cotasCount: number;
     isCompartilhada?: boolean;
     fraçãoNome?: string;
@@ -276,32 +276,56 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
 
     for (const part of input.participantes) {
       // Busca ou cria o usuário participante (com role COMUM por padrão)
-      let usuario = await prisma.user.findUnique({ where: { email: part.email.trim().toLowerCase() } });
+      const hasRealEmail = Boolean(part.email && part.email.trim().length > 0);
+      const emailFinal = hasRealEmail
+        ? part.email!.trim().toLowerCase()
+        : `participante_${Date.now()}_${Math.random().toString(36).substring(2, 8)}@clubedacota.local`;
+
+      let usuario = hasRealEmail
+        ? await prisma.user.findUnique({ where: { email: emailFinal } })
+        : null;
+
       if (!usuario) {
         usuario = await prisma.user.create({
           data: {
             name: part.nome,
-            email: part.email.trim().toLowerCase(),
+            email: emailFinal,
             role: "COMUM",
             isActivated: false,
-            inviteToken: `convite-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-            inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 dias conforme PDF
+            inviteToken: hasRealEmail
+              ? `convite-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
+              : null,
+            inviteExpiresAt: hasRealEmail
+              ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 dias conforme PDF
+              : null,
           },
         });
       }
 
       // Se for cota compartilhada
-      if (part.isCompartilhada && part.fraçãoEmail && part.fraçãoNome) {
-        let usuario2 = await prisma.user.findUnique({ where: { email: part.fraçãoEmail.trim().toLowerCase() } });
+      if (part.isCompartilhada && part.fraçãoNome) {
+        const hasRealEmail2 = Boolean(part.fraçãoEmail && part.fraçãoEmail.trim().length > 0);
+        const emailFinal2 = hasRealEmail2
+          ? part.fraçãoEmail!.trim().toLowerCase()
+          : `participante_${Date.now()}_${Math.random().toString(36).substring(2, 8)}@clubedacota.local`;
+
+        let usuario2 = hasRealEmail2
+          ? await prisma.user.findUnique({ where: { email: emailFinal2 } })
+          : null;
+
         if (!usuario2) {
           usuario2 = await prisma.user.create({
             data: {
               name: part.fraçãoNome,
-              email: part.fraçãoEmail.trim().toLowerCase(),
+              email: emailFinal2,
               role: "COMUM",
               isActivated: false,
-              inviteToken: `convite-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-              inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+              inviteToken: hasRealEmail2
+                ? `convite-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
+                : null,
+              inviteExpiresAt: hasRealEmail2
+                ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+                : null,
             },
           });
         }
