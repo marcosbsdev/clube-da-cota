@@ -13,6 +13,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 export async function getConsorcioData(usuarioId?: string, consorcioId?: string) {
   // Verifica se há sessão ativa via cookie ou id fornecido
@@ -339,6 +340,7 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
               numero: numCota,
               ordemSorteio: numCota,
               isCompartilhada: true,
+              tokenAcesso: "cota_" + crypto.randomBytes(6).toString("hex"),
             },
           });
 
@@ -351,6 +353,7 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
               usuarioId: usuario.id,
               percentual: (val1 / input.valorCota) * 100,
               valorParcela: val1,
+              tokenAcesso: "cp_" + crypto.randomBytes(6).toString("hex"),
             },
           });
 
@@ -360,6 +363,7 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
               usuarioId: usuario2.id,
               percentual: (val2 / input.valorCota) * 100,
               valorParcela: val2,
+              tokenAcesso: "cp_" + crypto.randomBytes(6).toString("hex"),
             },
           });
 
@@ -404,6 +408,7 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
               numero: numCota,
               ordemSorteio: numCota,
               isCompartilhada: false,
+              tokenAcesso: "cota_" + crypto.randomBytes(6).toString("hex"),
             },
           });
 
@@ -413,6 +418,7 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
               usuarioId: usuario.id,
               percentual: 100.0,
               valorParcela: input.valorCota,
+              tokenAcesso: "cp_" + crypto.randomBytes(6).toString("hex"),
             },
           });
 
@@ -1184,6 +1190,288 @@ export async function toggleCotaContempladaAction(input: ToggleCotaContempladaIn
   } catch (error: any) {
     console.error("Erro ao alterar contemplação da cota:", error);
     return { success: false, error: error.message || "Erro ao registrar contemplação." };
+  }
+}
+
+export async function getParticipanteByToken(token: string) {
+  try {
+    if (!token) return { success: false, error: "Token não fornecido." };
+
+    // 1. Tenta buscar por CotaParticipante
+    let cotaParticipante = await prisma.cotaParticipante.findUnique({
+      where: { tokenAcesso: token },
+      include: {
+        usuario: {
+          select: { id: true, name: true, email: true, role: true, isActivated: true, passwordHash: true },
+        },
+        cota: {
+          include: {
+            consorcio: {
+              include: {
+                criador: {
+                  select: { id: true, name: true, email: true },
+                },
+              },
+            },
+            participantes: {
+              include: {
+                usuario: { select: { id: true, name: true, email: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // 2. Se não encontrou por participante, tenta buscar por Cota
+    if (!cotaParticipante) {
+      const cota = await prisma.cota.findUnique({
+        where: { tokenAcesso: token },
+        include: {
+          consorcio: {
+            include: {
+              criador: { select: { id: true, name: true, email: true } },
+            },
+          },
+          participantes: {
+            include: {
+              usuario: {
+                select: { id: true, name: true, email: true, role: true, isActivated: true, passwordHash: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (cota && cota.participantes.length > 0) {
+        cotaParticipante = {
+          ...cota.participantes[0],
+          cota: cota as any,
+        } as any;
+      }
+    }
+
+    if (!cotaParticipante) {
+      return { success: false, error: "Acesso não encontrado ou link inválido." };
+    }
+
+    const { cota, usuario } = cotaParticipante;
+    const consorcio = cota.consorcio;
+
+    // Busca contribuições deste usuário neste consórcio
+    const contribuicoes = await prisma.contribuicao.findMany({
+      where: {
+        consorcioId: consorcio.id,
+        cotaId: cota.id,
+        usuarioId: usuario.id,
+      },
+      include: {
+        comprovante: true,
+      },
+      orderBy: { numeroCiclo: "asc" },
+    });
+
+    // Busca todas as cotas ordenadas por ordem de contemplação para transparência
+    const todasCotas = await prisma.cota.findMany({
+      where: { consorcioId: consorcio.id },
+      include: {
+        participantes: {
+          include: {
+            usuario: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { ordemSorteio: "asc" },
+    });
+
+    // Atualiza status se houver parcelas vencidas
+    const hoje = new Date();
+    for (const c of contribuicoes) {
+      if (c.status === "PENDENTE" && hoje > new Date(c.dataVencimento)) {
+        await prisma.contribuicao.update({
+          where: { id: c.id },
+          data: { status: "EM_ATRASO" },
+        });
+        c.status = "EM_ATRASO";
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        participante: {
+          id: usuario.id,
+          nome: usuario.name,
+          email: usuario.email,
+          temSenha: Boolean(usuario.passwordHash),
+          isActivated: usuario.isActivated,
+          percentual: cotaParticipante.percentual,
+          valorParcela: cotaParticipante.valorParcela,
+          tokenAcesso: cotaParticipante.tokenAcesso,
+        },
+        cota: {
+          id: cota.id,
+          numero: cota.numero,
+          ordemSorteio: cota.ordemSorteio || cota.numero,
+          isCompartilhada: cota.isCompartilhada,
+          status: cota.status,
+          participantes: cota.participantes.map((p) => ({
+            id: p.usuarioId,
+            nome: p.usuario.name,
+            percentual: p.percentual,
+          })),
+        },
+        consorcio: {
+          id: consorcio.id,
+          nome: consorcio.nome,
+          finalidade: consorcio.finalidade,
+          status: consorcio.status,
+          frequencia: consorcio.frequencia,
+          modeloContribuicao: consorcio.modeloContribuicao,
+          valorCota: consorcio.valorCota,
+          valorAcrescimo: consorcio.valorAcrescimo,
+          valorTotalBolada: consorcio.valorTotalBolada,
+          totalCotas: consorcio.totalCotas,
+          chavePix: consorcio.chavePix,
+          dadosBancarios: consorcio.dadosBancarios,
+          regras: consorcio.regras,
+          criadorNome: consorcio.criador.name,
+          criadorEmail: consorcio.criador.email,
+        },
+        contribuicoes: contribuicoes.map((cb) => ({
+          id: cb.id,
+          numeroCiclo: cb.numeroCiclo,
+          valorPrevisto: cb.valorPrevisto,
+          dataVencimento: cb.dataVencimento,
+          status: cb.status,
+          dataPagamento: cb.dataPagamento,
+          comprovante: cb.comprovante
+            ? {
+                id: cb.comprovante.id,
+                arquivoNome: cb.comprovante.arquivoNome,
+                status: cb.comprovante.status,
+                motivoRecusa: cb.comprovante.motivoRecusa,
+              }
+            : null,
+        })),
+        ciclosGrupo: todasCotas.map((cot) => ({
+          numeroCota: cot.numero,
+          ordemSorteio: cot.ordemSorteio || cot.numero,
+          status: cot.status,
+          participantes: cot.participantes.map((p) => p.usuario.name).join(" & "),
+        })),
+      },
+    };
+  } catch (error: any) {
+    console.error("Erro ao buscar dados do participante por token:", error);
+    return { success: false, error: "Erro ao carregar dados do participante." };
+  }
+}
+
+export async function submitReceiptByTokenAction(
+  token: string,
+  contribuicaoId: string,
+  arquivoNome: string
+) {
+  try {
+    if (!token || !contribuicaoId || !arquivoNome) {
+      return { success: false, error: "Parâmetros obrigatórios ausentes." };
+    }
+
+    const participanteRes = await getParticipanteByToken(token);
+    if (!participanteRes.success || !participanteRes.data) {
+      return { success: false, error: "Acesso inválido." };
+    }
+
+    const usuarioId = participanteRes.data.participante.id;
+    const consorcioId = participanteRes.data.consorcio.id;
+
+    const contribuicao = await prisma.contribuicao.findFirst({
+      where: {
+        id: contribuicaoId,
+        usuarioId,
+        consorcioId,
+      },
+    });
+
+    if (!contribuicao) {
+      return { success: false, error: "Contribuição não encontrada para este participante." };
+    }
+
+    await prisma.comprovante.upsert({
+      where: { contribuicaoId },
+      create: {
+        contribuicaoId,
+        usuarioId,
+        arquivoUrl: `/uploads/${arquivoNome}`,
+        arquivoNome,
+        tamanhoBytes: 1024,
+        mimeType: arquivoNome.endsWith(".pdf") ? "application/pdf" : "image/jpeg",
+        status: "PENDENTE",
+      },
+      update: {
+        arquivoUrl: `/uploads/${arquivoNome}`,
+        arquivoNome,
+        mimeType: arquivoNome.endsWith(".pdf") ? "application/pdf" : "image/jpeg",
+        status: "PENDENTE",
+        motivoRecusa: null,
+      },
+    });
+
+    await prisma.auditoriaLog.create({
+      data: {
+        consorcioId,
+        usuarioResponsavelId: usuarioId,
+        tipoAcao: "ENVIO_COMPROVANTE",
+        detalhes: JSON.stringify({
+          tipo: "ENVIO_COMPROVANTE_VIA_LINK",
+          contribuicaoId,
+          ciclo: contribuicao.numeroCiclo,
+          valor: contribuicao.valorPrevisto,
+          arquivoNome,
+          participante: participanteRes.data.participante.nome,
+        }),
+        justificativa: `Comprovante '${arquivoNome}' enviado pelo participante via link rápido.`,
+      },
+    });
+
+    revalidatePath("/");
+    return { success: true, message: "Comprovante enviado com sucesso para o organizador!" };
+  } catch (error: any) {
+    console.error("Erro ao enviar comprovante via token:", error);
+    return { success: false, error: error.message || "Erro ao registrar comprovante." };
+  }
+}
+
+export async function ativarContaComSenhaAction(token: string, novaSenha: string) {
+  try {
+    if (!token || !novaSenha || novaSenha.length < 6) {
+      return { success: false, error: "A senha deve ter no mínimo 6 caracteres." };
+    }
+
+    const participanteRes = await getParticipanteByToken(token);
+    if (!participanteRes.success || !participanteRes.data) {
+      return { success: false, error: "Acesso inválido." };
+    }
+
+    const usuarioId = participanteRes.data.participante.id;
+    const passwordHash = await bcrypt.hash(novaSenha, 10);
+
+    await prisma.user.update({
+      where: { id: usuarioId },
+      data: {
+        passwordHash,
+        isActivated: true,
+      },
+    });
+
+    return {
+      success: true,
+      message: "Senha cadastrada com sucesso! Agora você também pode fazer login completo no sistema.",
+    };
+  } catch (error: any) {
+    console.error("Erro ao cadastrar senha para o participante:", error);
+    return { success: false, error: error.message || "Erro ao definir senha." };
   }
 }
 

@@ -64,6 +64,7 @@ model Cota {
   ordemSorteio    Int?
   isCompartilhada Boolean  @default(false)
   status          String   @default("ATIVA") // "ATIVA", "CONTEMPLADA"
+  tokenAcesso     String?  @unique
   createdAt       DateTime @default(now())
 
   participantes CotaParticipante[]
@@ -71,13 +72,14 @@ model Cota {
 }
 
 model CotaParticipante {
-  id           String @id @default(uuid())
+  id           String  @id @default(uuid())
   cotaId       String
-  cota         Cota   @relation(fields: [cotaId], references: [id], onDelete: Cascade)
+  cota         Cota    @relation(fields: [cotaId], references: [id], onDelete: Cascade)
   usuarioId    String
-  usuario      User   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  percentual   Float  @default(100.0) // 100% ou fração (ex: 50.0)
+  usuario      User    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  percentual   Float   @default(100.0) // 100% ou fração (ex: 50.0)
   valorParcela Float
+  tokenAcesso  String? @unique
 
   createdAt DateTime @default(now())
 
