@@ -90,8 +90,8 @@ export function ConsorcioComboSelector({
 
       {/* Gaveta Inferior (Bottom Sheet no Mobile / Modal Centralizado no Desktop) */}
       {modalAberto && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex flex-col justify-end sm:justify-center sm:items-center p-0 sm:p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-t-[32px] sm:rounded-3xl p-5 sm:p-6 w-full sm:max-w-lg max-h-[88vh] sm:max-h-[80vh] flex flex-col shadow-2xl border-t sm:border border-slate-100">
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xs flex flex-col justify-end sm:justify-center sm:items-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-t-[32px] sm:rounded-3xl p-5 sm:p-6 pb-8 sm:pb-6 w-full sm:max-w-lg max-h-[90vh] sm:max-h-[82vh] flex flex-col shadow-2xl border-t sm:border border-slate-100">
             {/* Puxador da gaveta visível apenas no mobile */}
             <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-3 sm:hidden"></div>
 

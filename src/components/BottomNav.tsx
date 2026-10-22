@@ -13,7 +13,7 @@ interface BottomNavProps {
 
 export function BottomNav({ activeTab, onChangeTab, canCreateOrManage = true }: BottomNavProps) {
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-200 px-6 py-2 flex justify-between items-center z-50 shadow-lg">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-200 px-6 py-2 flex justify-between items-center z-40 shadow-lg">
       <button
         onClick={() => onChangeTab("participante")}
         className={`flex flex-col items-center gap-1 transition touch-target ${

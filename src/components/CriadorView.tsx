@@ -697,7 +697,7 @@ export function CriadorView({
 
       {/* Modal de Reversão / Estorno com Justificativa Obrigatória */}
       {modalEstornoAberto && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[100] animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl space-y-4">
             <h3 className="text-base font-bold text-slate-900">Reverter Confirmação de Pagamento</h3>
             <p className="text-xs text-slate-600">
@@ -739,7 +739,7 @@ export function CriadorView({
 
       {/* Modal de Recusa de Comprovante */}
       {modalRecusaAberto && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[100] animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl space-y-4">
             <h3 className="text-base font-bold text-slate-900">Recusar Comprovante de Pagamento</h3>
             <p className="text-xs text-slate-600">
@@ -781,8 +781,8 @@ export function CriadorView({
 
       {/* Modal de Edição de Consórcio */}
       {modalEditarAberto && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-t-[32px] sm:rounded-3xl p-5 sm:p-6 w-full sm:max-w-xl max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl border-t sm:border border-slate-100">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100] animate-in fade-in duration-150">
+          <div className="bg-white rounded-t-[32px] sm:rounded-3xl p-5 sm:p-6 pb-8 sm:pb-6 w-full sm:max-w-xl max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl border-t sm:border border-slate-100">
             {/* Puxador visual para mobile */}
             <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto sm:hidden mb-2"></div>
 
