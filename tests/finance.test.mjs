@@ -10,6 +10,7 @@ import {
   formatarMoedaBRL,
   parseMoedaBRL,
   calcularResumoFinanceiroConsorcio,
+  formatarDataSegura,
 } from "../src/lib/finance.ts";
 
 console.log("🧪 Executando testes das regras financeiras do Clube da Cota...\n");
@@ -195,4 +196,20 @@ console.log("🧪 Executando testes das regras financeiras do Clube da Cota...\n
   console.log("✅ Teste 8: Validação matemática completa dos valores calculados aprovada.");
 }
 
-console.log("\n🎉 Todos os 8 testes de regras financeiras passaram com 100% de sucesso!");
+// Teste 9: Formatação segura de datas contra desvio de fuso horário (ex: GMT-3 / UTC)
+{
+  // Strings puras YYYY-MM-DD
+  assert.strictEqual(formatarDataSegura("2026-11-05"), "05/11/2026", "2026-11-05 deve ser 05/11/2026");
+  assert.strictEqual(formatarDataSegura("2026-11-06"), "06/11/2026", "2026-11-06 deve ser 06/11/2026");
+  assert.strictEqual(formatarDataSegura("2026-01-01"), "01/01/2026", "2026-01-01 deve ser 01/01/2026");
+
+  // Date UTC zero hora
+  assert.strictEqual(formatarDataSegura(new Date("2026-11-05T00:00:00.000Z")), "05/11/2026");
+
+  // Date meio-dia
+  assert.strictEqual(formatarDataSegura(new Date("2026-11-05T12:00:00.000Z")), "05/11/2026");
+
+  console.log("✅ Teste 9: Formatação de data segura contra bugs de fuso horário aprovada.");
+}
+
+console.log("\n🎉 Todos os 9 testes de regras financeiras passaram com 100% de sucesso!");

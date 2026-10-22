@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import {
   calcularIndicadoresConsorcio,
+  formatarDataSegura,
 } from "@/lib/finance";
 import {
   confirmPaymentAction,
@@ -692,7 +693,7 @@ export function CriadorView({
   };
 
   const formatarData = (d: string) => {
-    return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    return formatarDataSegura(d);
   };
 
   const handleSalvarEdicao = async (e: React.FormEvent) => {
@@ -1453,7 +1454,7 @@ export function CriadorView({
                   rows={3}
                   value={editDadosPagamento}
                   onChange={(e) => setEditDadosPagamento(e.target.value)}
-                  placeholder="Ex: Chave Pix CPF: 123.456.789-00 ou Banco Itaú, Agência 1234, Conta 56789-0 - Titular: Marcos"
+                  placeholder="Ex: Chave Pix (CPF, celular, e-mail ou chave aleatória)"
                   className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-medium focus:border-theme-main focus:outline-none bg-slate-50/50"
                 />
                 <p className="text-[11px] text-slate-400 mt-0.5">

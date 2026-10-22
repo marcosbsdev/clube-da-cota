@@ -254,8 +254,8 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
         regras: input.regras || null,
         chavePix: input.chavePix || null,
         dadosBancarios: input.dadosBancarios || null,
-        dataInicio: new Date(input.dataInicio),
-        dataPrimeiroVencimento: new Date(input.dataPrimeiroVencimento),
+        dataInicio: new Date(input.dataInicio.includes("T") ? input.dataInicio : `${input.dataInicio}T12:00:00`),
+        dataPrimeiroVencimento: new Date(input.dataPrimeiroVencimento.includes("T") ? input.dataPrimeiroVencimento : `${input.dataPrimeiroVencimento}T12:00:00`),
         frequencia: input.frequencia,
         modeloContribuicao: modelo,
         valorCota: input.valorCota,
@@ -268,7 +268,7 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
 
     // Gera as datas de vencimento previstas para os ciclos
     const datasVencimento = calcularDatasVencimento({
-      dataPrimeiroVencimento: new Date(input.dataPrimeiroVencimento),
+      dataPrimeiroVencimento: new Date(input.dataPrimeiroVencimento.includes("T") ? input.dataPrimeiroVencimento : `${input.dataPrimeiroVencimento}T12:00:00`),
       frequencia: input.frequencia,
       quantidadeCiclos: totalCotas, // 1 ciclo por cota no modelo padrão
     });

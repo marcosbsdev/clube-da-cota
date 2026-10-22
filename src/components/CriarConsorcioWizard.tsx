@@ -10,6 +10,7 @@ import {
   formatarMoedaBRL,
   parseMoedaBRL,
   calcularResumoFinanceiroConsorcio,
+  formatarDataSegura,
 } from "@/lib/finance";
 
 interface CriarConsorcioWizardProps {
@@ -23,9 +24,10 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
   const [erroMsg, setErroMsg] = useState("");
 
   // Etapa 1: Dados Básicos
+  const dataHojePadrao = new Date().toISOString().split("T")[0];
   const [nome, setNome] = useState("");
   const [finalidade, setFinalidade] = useState("");
-  const [dataInicio, setDataInicio] = useState(new Date().toISOString().split("T")[0]);
+  const [dataInicio, setDataInicio] = useState(dataHojePadrao);
   const [regras, setRegras] = useState("");
   const [dadosPagamento, setDadosPagamento] = useState("");
 
@@ -45,11 +47,25 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
   const [modeloContribuicao, setModeloContribuicao] = useState<"FIXO" | "ACRESCIMO_MENSAL">("FIXO");
   const [valorAcrescimo, setValorAcrescimo] = useState<number>(5);
   const [frequencia, setFrequencia] = useState<"MENSAL" | "QUINZENAL" | "SEMANAL">("MENSAL");
-  const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState(
-    new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-  );
+  const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState(dataHojePadrao);
+  const [vencimentoAlteradoManualmente, setVencimentoAlteradoManualmente] = useState(false);
+
+  const handleDataInicioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setDataInicio(val);
+    // Se o usuário ainda não alterou manualmente o vencimento no Passo 3, sincroniza automaticamente
+    if (!vencimentoAlteradoManualmente) {
+      setDataPrimeiroVencimento(val);
+    }
+  };
+
+  const handleDataVencimentoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDataPrimeiroVencimento(e.target.value);
+    setVencimentoAlteradoManualmente(true);
+  };
 
   const totalCotas = participantes.reduce((acc, p) => acc + (p.cotasCount || 1), 0);
+  const totalMembros = participantes.reduce((acc, p) => acc + (p.isCompartilhada ? 2 : 1), 0);
   const resumoFinanceiro = calcularResumoFinanceiroConsorcio({
     valorCotaBase: valorCota,
     valorAcrescimo: modeloContribuicao === "ACRESCIMO_MENSAL" ? valorAcrescimo : 0,
@@ -242,7 +258,7 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
                 type="date"
                 required
                 value={dataInicio}
-                onChange={(e) => setDataInicio(e.target.value)}
+                onChange={handleDataInicioChange}
                 className="w-full p-3 rounded-xl border border-slate-200 text-sm focus:border-theme-main focus:outline-none"
               />
             </div>
@@ -265,13 +281,13 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
             </label>
             <textarea
               rows={3}
-              placeholder="Informe onde os participantes devem pagar (Ex: Chave Pix CPF: 123.456.789-00 ou Banco Itaú, Agência 1234, Conta 56789-0 - Titular: Marcos)"
+              placeholder="Informe sua Chave Pix (Ex: CPF, celular, e-mail ou chave aleatória)"
               value={dadosPagamento}
               onChange={(e) => setDadosPagamento(e.target.value)}
               className="w-full p-3 rounded-xl border border-slate-200 text-sm focus:border-theme-main focus:outline-none"
             />
             <p className="text-[11px] text-slate-400">
-              Campo livre para chave Pix, dados de conta bancária ou orientações para os participantes realizarem o pagamento.
+              Informe a chave Pix para que os participantes possam copiar e realizar o pagamento das parcelas.
             </p>
           </div>
 
@@ -302,6 +318,57 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
             </p>
           </div>
 
+          {/* Card de Contagem de Cotas Criadas em Tempo Real (Integrado ao Tema do Usuário) */}
+          <div className="p-4 sm:p-5 bg-gradient-to-br from-theme-dark to-theme-main text-white rounded-3xl shadow-sm border border-theme-dark/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-white/15 text-white border border-white/20 flex items-center justify-center text-xl flex-shrink-0 shadow-inner">
+                🎯
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest block">
+                  Total de Cotas do Consórcio
+                </span>
+                <div className="flex items-baseline gap-2 mt-0.5">
+                  <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                    {totalCotas}
+                  </span>
+                  <span className="text-xs font-bold text-white/90">
+                    {totalCotas === 1 ? "cota criada" : "cotas criadas"}
+                  </span>
+                  {totalCotas > 0 && (
+                    <span className="text-[11px] text-white/75 font-medium hidden sm:inline">
+                      • {totalCotas} {totalCotas === 1 ? "ciclo / mês" : "ciclos / meses"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 sm:border-l sm:border-white/20 sm:pl-5 self-start sm:self-auto">
+              <div className="bg-white/15 px-3.5 py-1.5 rounded-xl border border-white/20 text-center min-w-[75px]">
+                <span className="text-[10px] text-white/80 font-bold uppercase block">Pessoas</span>
+                <span className="text-sm font-black text-white">{totalMembros}</span>
+              </div>
+
+              <div
+                className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1 ${
+                  totalMembros >= 2
+                    ? "bg-emerald-500/30 border-emerald-300/50 text-white"
+                    : "bg-amber-400/30 border-amber-300/50 text-white"
+                }`}
+              >
+                {totalMembros >= 2 ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-200" />
+                    <span>Mínimo OK</span>
+                  </>
+                ) : (
+                  <span>Mínimo 2</span>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Atalho opcional para o criador se incluir */}
           {!participantes.some((p) => p.email?.toLowerCase() === currentUser.email?.toLowerCase()) && (
             <button
@@ -317,6 +384,18 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
             </button>
           )}
 
+          {/* Cabeçalho da Lista de Participantes */}
+          {participantes.length > 0 && (
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                Membros Adicionados ({participantes.length})
+              </span>
+              <span className="text-xs font-black text-theme-text bg-theme-light px-2.5 py-1 rounded-xl">
+                Soma: {totalCotas} {totalCotas === 1 ? "cota" : "cotas"}
+              </span>
+            </div>
+          )}
+
           {/* Lista de Participantes já adicionados */}
           {participantes.length === 0 ? (
             <div className="p-4 bg-slate-50 rounded-2xl border border-dashed border-slate-300 text-center text-xs text-slate-500">
@@ -330,14 +409,17 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
                     <p className="font-bold text-slate-800 text-sm">
                       {p.nome} {p.isCompartilhada ? `& ${p.fraçãoNome}` : ""}
                     </p>
-                    <p className="text-[11px] text-slate-500">
-                      {p.email ? p.email : "Sem e-mail cadastrado"}
-                      {p.isCompartilhada && p.fraçãoEmail ? ` / ${p.fraçãoEmail}` : ""}
-                      {" • "}
-                      {p.isCompartilhada
-                        ? `${p.cotasCount || 1} cota(s) compartilhada (50% cada)`
-                        : `${p.cotasCount} cota(s) individual`}
-                    </p>
+                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                      <span className="text-[11px] text-slate-500">
+                        {p.email ? p.email : "Sem e-mail cadastrado"}
+                        {p.isCompartilhada && p.fraçãoEmail ? ` / ${p.fraçãoEmail}` : ""}
+                      </span>
+                      <span className="text-[10px] font-bold text-theme-text bg-theme-light border border-theme-main/20 px-2 py-0.5 rounded-md">
+                        {p.isCompartilhada
+                          ? `${p.cotasCount || 1} cota(s) compartilhada (50% cada)`
+                          : `${p.cotasCount} cota(s) individual`}
+                      </span>
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -545,14 +627,14 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
             </div>
           </div>
 
-          {/* Campo e Simulação para Acréscimo Mensal */}
+          {/* Campo e Simulação para Acréscimo Mensal (Alinhado ao Tema do Usuário) */}
           {modeloContribuicao === "ACRESCIMO_MENSAL" && (
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl space-y-2.5">
+            <div className="p-4 sm:p-5 bg-theme-light/70 border border-theme-main/30 rounded-3xl space-y-3">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-amber-900">
+                <label className="block text-xs font-bold text-slate-800">
                   Acréscimo por Mês/Ciclo (R$) *
                 </label>
-                <span className="text-[10px] bg-amber-200 text-amber-900 font-bold px-2.5 py-0.5 rounded-full">
+                <span className="text-[10px] bg-theme-main/10 text-theme-text font-bold px-2.5 py-0.5 rounded-full border border-theme-main/20">
                   Ex: + R$ 5,00
                 </span>
               </div>
@@ -562,31 +644,31 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
                 value={formatarMoedaBRL(valorAcrescimo)}
                 onChange={handleValorAcrescimoChange}
                 onPaste={(e) => handlePasteMoney(e, setValorAcrescimo)}
-                className="w-full p-3 rounded-xl border border-amber-300 bg-white text-base font-black text-slate-900 focus:outline-none shadow-2xs"
+                className="w-full p-3 rounded-xl border border-slate-200 focus:border-theme-main bg-white text-base font-black text-slate-900 focus:outline-none shadow-2xs"
               />
-              <div className="pt-2 text-xs text-amber-900 space-y-2 border-t border-amber-200/60">
-                <p className="font-bold uppercase tracking-wide text-[10px] text-amber-800">
+              <div className="pt-2 text-xs space-y-2 border-t border-theme-main/15">
+                <p className="font-bold uppercase tracking-wider text-[10px] text-slate-500">
                   Simulação de Parcelas por Cota ({totalCotas} Cotas):
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-                  <div className="bg-white p-2.5 rounded-xl border border-amber-200/80 shadow-2xs">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
                     <span className="text-[10px] text-slate-400 block font-semibold">1º Mês</span>
                     <span className="font-black text-slate-900">{formatarMoedaBRL(resumoFinanceiro.parcelaPrimeiroCiclo)}</span>
                   </div>
-                  <div className="bg-white p-2.5 rounded-xl border border-amber-200/80 shadow-2xs">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
                     <span className="text-[10px] text-slate-400 block font-semibold">2º Mês</span>
                     <span className="font-black text-slate-900">{formatarMoedaBRL(valorCota + valorAcrescimo)}</span>
-                    <span className="text-[10px] text-amber-700 block font-medium">(+ {formatarMoedaBRL(valorAcrescimo)})</span>
+                    <span className="text-[10px] text-theme-text block font-semibold">(+ {formatarMoedaBRL(valorAcrescimo)})</span>
                   </div>
-                  <div className="bg-white p-2.5 rounded-xl border border-amber-200/80 shadow-2xs">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
                     <span className="text-[10px] text-slate-400 block font-semibold">3º Mês</span>
                     <span className="font-black text-slate-900">{formatarMoedaBRL(valorCota + valorAcrescimo * 2)}</span>
-                    <span className="text-[10px] text-amber-700 block font-medium">(+ {formatarMoedaBRL(valorAcrescimo * 2)})</span>
+                    <span className="text-[10px] text-theme-text block font-semibold">(+ {formatarMoedaBRL(valorAcrescimo * 2)})</span>
                   </div>
-                  <div className="bg-amber-100 p-2.5 rounded-xl border border-amber-300 shadow-2xs">
-                    <span className="text-[10px] text-amber-900 block font-bold">{totalCotas}º Mês (Fim)</span>
-                    <span className="font-black text-amber-950">{formatarMoedaBRL(resumoFinanceiro.parcelaUltimoCiclo)}</span>
-                    <span className="text-[10px] text-amber-800 block font-bold">(+ {formatarMoedaBRL((totalCotas - 1) * valorAcrescimo)})</span>
+                  <div className="bg-gradient-to-br from-theme-dark to-theme-main text-white p-2.5 rounded-xl shadow-xs border border-theme-dark/20">
+                    <span className="text-[10px] text-white/80 block font-bold">{totalCotas}º Mês (Fim)</span>
+                    <span className="font-black text-white">{formatarMoedaBRL(resumoFinanceiro.parcelaUltimoCiclo)}</span>
+                    <span className="text-[10px] text-white/90 block font-bold">(+ {formatarMoedaBRL((totalCotas - 1) * valorAcrescimo)})</span>
                   </div>
                 </div>
               </div>
@@ -594,12 +676,17 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
           )}
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Primeiro Vencimento *</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-slate-700">Primeiro Vencimento *</label>
+              <span className="text-[11px] text-slate-400">
+                Data do 1º pagamento e contemplação
+              </span>
+            </div>
             <input
               type="date"
               required
               value={dataPrimeiroVencimento}
-              onChange={(e) => setDataPrimeiroVencimento(e.target.value)}
+              onChange={handleDataVencimentoChange}
               className="w-full p-3 rounded-xl border border-slate-200 text-sm focus:border-theme-main focus:outline-none"
             />
           </div>
@@ -744,9 +831,15 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
               </span>
             </div>
             <div className="flex justify-between border-b border-slate-200 pb-2">
+              <span className="text-slate-500">Data de Início:</span>
+              <span className="font-bold text-slate-900">
+                {formatarDataSegura(dataInicio)}
+              </span>
+            </div>
+            <div className="flex justify-between border-b border-slate-200 pb-2">
               <span className="text-slate-500">1º Vencimento:</span>
               <span className="font-bold text-slate-900">
-                {new Date(dataPrimeiroVencimento).toLocaleDateString("pt-BR")}
+                {formatarDataSegura(dataPrimeiroVencimento)}
               </span>
             </div>
             {dadosPagamento && (

@@ -271,3 +271,28 @@ export function calcularIndicadoresConsorcio(
     percentualRecebido: Math.round(percentualRecebido),
   };
 }
+
+/**
+ * Formata datas de forma segura contra desvios de fuso horário (ex: UTC-3 de Brasília)
+ * Evita que '2026-11-05' seja exibido como '04/11/2026' ou '06/11/2026'.
+ */
+export function formatarDataSegura(data: string | Date | null | undefined): string {
+  if (!data) return "";
+  if (typeof data === "string") {
+    const matchYmd = data.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (matchYmd) {
+      const [, ano, mes, dia] = matchYmd;
+      return `${dia}/${mes}/${ano}`;
+    }
+  }
+  const d = new Date(data);
+  if (isNaN(d.getTime())) return "";
+  const isZeroHoraUtc = d.getUTCHours() === 0 && d.getUTCMinutes() === 0;
+  return d.toLocaleDateString("pt-BR", {
+    timeZone: isZeroHoraUtc ? "UTC" : undefined,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+

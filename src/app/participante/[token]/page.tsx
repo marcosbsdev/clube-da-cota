@@ -24,7 +24,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { formatarMoedaBRL } from "@/lib/finance";
+import { formatarMoedaBRL, formatarDataSegura } from "@/lib/finance";
 
 export default function ParticipanteTokenPage() {
   const params = useParams();
@@ -132,11 +132,7 @@ export default function ParticipanteTokenPage() {
   };
 
   const formatarData = (d: string) => {
-    return new Date(d).toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    return formatarDataSegura(d);
   };
 
   if (loading) {

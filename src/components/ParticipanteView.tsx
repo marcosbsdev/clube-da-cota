@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { CheckCircle2, Clock, AlertCircle, Upload, FileText, Check, ChevronRight } from "lucide-react";
 import { submitReceiptAction } from "@/app/actions";
+import { formatarDataSegura } from "@/lib/finance";
 
 interface ParticipanteViewProps {
   consorcio: any;
@@ -81,7 +82,7 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
   };
 
   const formatarData = (d: string) => {
-    return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    return formatarDataSegura(d);
   };
 
   return (
