@@ -312,59 +312,51 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
         </div>
       </div>
 
-      {/* Modal de Upload de Comprovante */}
+      {/* Modal Informativo: Funcionalidade em Desenvolvimento */}
       {modalUploadAberto && (
-        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-base font-bold text-slate-900">Anexar Comprovante PIX</h3>
-              <button
-                onClick={() => setModalUploadAberto(false)}
-                className="text-slate-400 hover:text-slate-600 text-xl font-bold"
-              >
-                ✕
-              </button>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-t-[32px] sm:rounded-3xl p-6 w-full sm:max-w-md shadow-2xl space-y-4 border-t sm:border border-slate-100">
+            {/* Puxador visual da gaveta no mobile */}
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto sm:hidden mb-1"></div>
+
+            <div className="flex items-start gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-2xl flex-shrink-0 shadow-2xs">
+                🚧
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-center gap-2">
+                  <h3 className="text-base font-black text-slate-900 truncate">
+                    Funcionalidade em Desenvolvimento
+                  </h3>
+                  <button
+                    onClick={() => setModalUploadAberto(false)}
+                    className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-xs transition flex-shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md inline-block mt-1">
+                  Em breve disponível
+                </span>
+              </div>
             </div>
 
-            <p className="text-xs text-slate-500">
-              Formatos aceitos: JPG, PNG ou PDF (até 5MB). O envio não confirma o pagamento automaticamente: o criador irá conferir.
-            </p>
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-2 text-xs text-slate-600 leading-relaxed">
+              <p>
+                O envio e anexo direto de comprovantes via arquivo (JPG, PNG e PDF) está em fase de implementação final e estará disponível nas próximas versões.
+              </p>
+              <p className="font-semibold text-slate-800 pt-1 border-t border-slate-200/60">
+                💡 Por enquanto, você pode realizar o pagamento utilizando a chave PIX do consórcio informada nesta tela e encaminhar o comprovante diretamente ao organizador do grupo.
+              </p>
+            </div>
 
-            <form onSubmit={handleEnviarComprovante} className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Nome do Arquivo / Identificador</label>
-                <input
-                  type="text"
-                  placeholder="Ex: comprovante_pix_250.pdf"
-                  value={nomeArquivo}
-                  onChange={(e) => setNomeArquivo(e.target.value)}
-                  required
-                  className="w-full p-3 rounded-xl border border-slate-200 text-sm focus:border-theme-main focus:outline-none"
-                />
-              </div>
-
-              <div className="p-4 border-2 border-dashed border-slate-200 rounded-2xl text-center bg-slate-50">
-                <FileText className="w-8 h-8 text-slate-400 mx-auto mb-1" />
-                <span className="text-xs text-slate-600 font-medium block">Toque para selecionar imagem ou PDF</span>
-                <span className="text-[10px] text-slate-400">Simulação de upload instantâneo</span>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setModalUploadAberto(false)}
-                  className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-3 bg-theme-main text-white font-bold text-xs rounded-xl shadow-md hover:opacity-90 transition"
-                >
-                  Enviar Arquivo
-                </button>
-              </div>
-            </form>
+            <button
+              type="button"
+              onClick={() => setModalUploadAberto(false)}
+              className="w-full py-3.5 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-2xl shadow-sm transition active:scale-[0.99] cursor-pointer"
+            >
+              Entendi, obrigado!
+            </button>
           </div>
         </div>
       )}
