@@ -63,6 +63,11 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
     };
   });
 
+  // Ordenação de cotas para a Ordem de Contemplação & Sorteio
+  const cotasOrdenadas = [...consorcio.cotas].sort(
+    (a: any, b: any) => (a.ordemSorteio || a.numero) - (b.ordemSorteio || b.numero)
+  );
+
   const handleEnviarComprovante = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contribuicaoSelecionada || !nomeArquivo) return;
@@ -262,6 +267,84 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Ordem de Contemplação & Sorteio (Transparência Coletiva para Participantes) */}
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm sm:text-base flex items-center gap-2">
+                  <span>🎲</span> Ordem de Contemplação & Sorteio
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Sequência e calendário oficial de recebimento da bolada definido pelo grupo
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg">
+                {cotasOrdenadas.length} ciclos
+              </span>
+            </div>
+
+            <div className="space-y-2.5">
+              {cotasOrdenadas.map((cota: any) => {
+                const cicloNum = cota.ordemSorteio || cota.numero;
+                const isMinha = cota.participantes.some((p: any) => p.usuarioId === currentUser.id);
+                const nomes = cota.participantes.map((p: any) => p.usuario.name).join(" & ");
+                const isContemplada = cota.status === "CONTEMPLADA";
+
+                return (
+                  <div
+                    key={cota.id}
+                    className={`p-3.5 rounded-2xl border flex items-center justify-between transition ${
+                      isMinha
+                        ? "bg-theme-light/40 border-theme-main/40 ring-1 ring-theme-main/20"
+                        : "bg-slate-50/80 border-slate-200/70"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shadow-2xs ${
+                          isContemplada
+                            ? "bg-emerald-100 text-emerald-800"
+                            : isMinha
+                            ? "bg-theme-main text-white"
+                            : "bg-white text-slate-700 border border-slate-200"
+                        }`}
+                      >
+                        #{cicloNum}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className={`text-xs sm:text-sm font-bold ${isMinha ? "text-theme-text" : "text-slate-800"}`}>
+                            {nomes}
+                          </p>
+                          {isMinha && (
+                            <span className="text-[10px] bg-theme-main text-white font-extrabold px-2 py-0.5 rounded-full shadow-2xs">
+                              Sua Cota
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Cota #{cota.numero} {cota.isCompartilhada ? "• Compartilhada" : ""}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right flex-shrink-0">
+                      {isContemplada ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                          🏆 Contemplada
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-semibold text-slate-500 bg-white px-2.5 py-1 rounded-xl border border-slate-200">
+                          Ciclo #{cicloNum}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

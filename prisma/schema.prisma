@@ -57,13 +57,14 @@ model Consorcio {
 }
 
 model Cota {
-  id             String   @id @default(uuid())
-  consorcioId    String
-  consorcio      Consorcio @relation(fields: [consorcioId], references: [id], onDelete: Cascade)
-  numero         Int
-  isCompartilhada Boolean @default(false)
-  status         String   @default("ATIVA") // "ATIVA", "CONTEMPLADA"
-  createdAt      DateTime @default(now())
+  id              String   @id @default(uuid())
+  consorcioId     String
+  consorcio       Consorcio @relation(fields: [consorcioId], references: [id], onDelete: Cascade)
+  numero          Int
+  ordemSorteio    Int?
+  isCompartilhada Boolean  @default(false)
+  status          String   @default("ATIVA") // "ATIVA", "CONTEMPLADA"
+  createdAt       DateTime @default(now())
 
   participantes CotaParticipante[]
   contribuicoes Contribuicao[]

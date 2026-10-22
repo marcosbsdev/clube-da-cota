@@ -133,6 +133,7 @@ export async function getConsorcioData(usuarioId?: string, consorcioId?: string)
                 include: { usuario: true },
               },
             },
+            orderBy: { ordemSorteio: "asc" },
           },
           contribuicoes: {
             include: {
@@ -307,10 +308,12 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
 
         const qtdCotasCompartilhadas = part.cotasCount || 1;
         for (let c = 0; c < qtdCotasCompartilhadas; c++) {
+          const numCota = numeroCotaGlobal++;
           const cota = await prisma.cota.create({
             data: {
               consorcioId: novoConsorcio.id,
-              numero: numeroCotaGlobal++,
+              numero: numCota,
+              ordemSorteio: numCota,
               isCompartilhada: true,
             },
           });
@@ -370,10 +373,12 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
       } else {
         // Cota(s) individuais
         for (let c = 0; c < (part.cotasCount || 1); c++) {
+          const numCota = numeroCotaGlobal++;
           const cota = await prisma.cota.create({
             data: {
               consorcioId: novoConsorcio.id,
-              numero: numeroCotaGlobal++,
+              numero: numCota,
+              ordemSorteio: numCota,
               isCompartilhada: false,
             },
           });
@@ -952,4 +957,210 @@ export async function updateConsorcioInfoAction(input: UpdateConsorcioInfoInput)
     return { success: false, error: error.message || "Erro ao atualizar informações do consórcio." };
   }
 }
+
+export interface SwapCotaPositionsInput {
+  consorcioId: string;
+  usuarioId: string;
+  cotaId1: string;
+  cotaId2: string;
+  justificativa?: string;
+}
+
+export async function swapCotaPositionsAction(input: SwapCotaPositionsInput) {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: input.usuarioId } });
+    if (!user) {
+      return { success: false, error: "Usuário não autenticado." };
+    }
+
+    const consorcio = await prisma.consorcio.findUnique({
+      where: { id: input.consorcioId },
+      include: {
+        cotas: {
+          include: {
+            participantes: {
+              include: { usuario: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!consorcio) {
+      return { success: false, error: "Consórcio não encontrado." };
+    }
+
+    const isAdminGeral = user.role === "SUPER_ADMIN" || user.role === "PRO_MASTER";
+    const isCriador = consorcio.criadorId === user.id;
+
+    if (!isCriador && !isAdminGeral) {
+      return {
+        success: false,
+        error: "Somente o criador do consórcio ou administradores estão autorizados a efetivar a troca de posições no sistema.",
+      };
+    }
+
+    if (input.cotaId1 === input.cotaId2) {
+      return { success: false, error: "Selecione duas cotas diferentes para realizar a troca." };
+    }
+
+    const cota1 = consorcio.cotas.find((c) => c.id === input.cotaId1);
+    const cota2 = consorcio.cotas.find((c) => c.id === input.cotaId2);
+
+    if (!cota1 || !cota2) {
+      return { success: false, error: "Uma ou ambas as cotas selecionadas não pertencem a este consórcio." };
+    }
+
+    if (cota1.status === "CONTEMPLADA" || cota2.status === "CONTEMPLADA") {
+      return {
+        success: false,
+        error: "Não é permitido trocar a posição de uma cota que já foi contemplada.",
+      };
+    }
+
+    const pos1 = cota1.ordemSorteio || cota1.numero;
+    const pos2 = cota2.ordemSorteio || cota2.numero;
+
+    const nomesCota1 = cota1.participantes.map((p) => p.usuario.name).join(" & ");
+    const nomesCota2 = cota2.participantes.map((p) => p.usuario.name).join(" & ");
+
+    // Realiza a troca atômica no banco de dados
+    await prisma.$transaction([
+      prisma.cota.update({
+        where: { id: cota1.id },
+        data: { ordemSorteio: pos2 },
+      }),
+      prisma.cota.update({
+        where: { id: cota2.id },
+        data: { ordemSorteio: pos1 },
+      }),
+    ]);
+
+    // Registra na trilha de auditoria oficial
+    await prisma.auditoriaLog.create({
+      data: {
+        consorcioId: consorcio.id,
+        usuarioResponsavelId: user.id,
+        tipoAcao: "TROCA_POSICAO_COTA",
+        detalhes: JSON.stringify({
+          cota1: {
+            id: cota1.id,
+            numero: cota1.numero,
+            participantes: nomesCota1,
+            ordemAnterior: pos1,
+            novaOrdem: pos2,
+          },
+          cota2: {
+            id: cota2.id,
+            numero: cota2.numero,
+            participantes: nomesCota2,
+            ordemAnterior: pos2,
+            novaOrdem: pos1,
+          },
+        }),
+        justificativa:
+          input.justificativa?.trim() ||
+          `Troca de ordem de contemplação entre ${nomesCota1} (Ciclo #${pos1}) e ${nomesCota2} (Ciclo #${pos2}) acordada entre as partes e efetivada pelo criador.`,
+      },
+    });
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message: `Troca de posição entre Cota #${cota1.numero} e Cota #${cota2.numero} efetivada com sucesso!`,
+    };
+  } catch (error: any) {
+    console.error("Erro ao trocar posições de cotas:", error);
+    return { success: false, error: error.message || "Erro ao efetivar troca de posição." };
+  }
+}
+
+export interface ToggleCotaContempladaInput {
+  consorcioId: string;
+  usuarioId: string;
+  cotaId: string;
+  status: "ATIVA" | "CONTEMPLADA";
+  justificativa?: string;
+}
+
+export async function toggleCotaContempladaAction(input: ToggleCotaContempladaInput) {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: input.usuarioId } });
+    if (!user) {
+      return { success: false, error: "Usuário não autenticado." };
+    }
+
+    const consorcio = await prisma.consorcio.findUnique({
+      where: { id: input.consorcioId },
+      include: {
+        cotas: {
+          include: {
+            participantes: { include: { usuario: true } },
+          },
+        },
+      },
+    });
+
+    if (!consorcio) {
+      return { success: false, error: "Consórcio não encontrado." };
+    }
+
+    const isAdminGeral = user.role === "SUPER_ADMIN" || user.role === "PRO_MASTER";
+    const isCriador = consorcio.criadorId === user.id;
+
+    if (!isCriador && !isAdminGeral) {
+      return {
+        success: false,
+        error: "Somente o criador do consórcio ou administradores podem registrar a contemplação de cotas.",
+      };
+    }
+
+    const cota = consorcio.cotas.find((c) => c.id === input.cotaId);
+    if (!cota) {
+      return { success: false, error: "Cota não encontrada." };
+    }
+
+    const nomesParticipantes = cota.participantes.map((p) => p.usuario.name).join(" & ");
+
+    await prisma.cota.update({
+      where: { id: cota.id },
+      data: { status: input.status },
+    });
+
+    // Registra na trilha de auditoria
+    await prisma.auditoriaLog.create({
+      data: {
+        consorcioId: consorcio.id,
+        usuarioResponsavelId: user.id,
+        tipoAcao: input.status === "CONTEMPLADA" ? "CONTEMPLACAO_COTA" : "REVERSAO_CONTEMPLACAO_COTA",
+        detalhes: JSON.stringify({
+          cotaId: cota.id,
+          numero: cota.numero,
+          ordemSorteio: cota.ordemSorteio || cota.numero,
+          participantes: nomesParticipantes,
+          statusAnterior: cota.status,
+          novoStatus: input.status,
+        }),
+        justificativa:
+          input.justificativa ||
+          (input.status === "CONTEMPLADA"
+            ? `Cota #${cota.numero} marcada como contemplada no ciclo correspondente.`
+            : `Contemplação da cota #${cota.numero} revertida pelo criador.`),
+      },
+    });
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message:
+        input.status === "CONTEMPLADA"
+          ? `Cota #${cota.numero} (${nomesParticipantes}) marcada como CONTEMPLADA com sucesso!`
+          : `Cota #${cota.numero} retornou ao status ATIVA.`,
+    };
+  } catch (error: any) {
+    console.error("Erro ao alterar contemplação da cota:", error);
+    return { success: false, error: error.message || "Erro ao registrar contemplação." };
+  }
+}
+
 

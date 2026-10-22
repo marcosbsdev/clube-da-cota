@@ -9,6 +9,8 @@ import {
   revertPaymentAction,
   rejectReceiptAction,
   updateConsorcioInfoAction,
+  swapCotaPositionsAction,
+  toggleCotaContempladaAction,
 } from "@/app/actions";
 import {
   CheckCircle2,
@@ -30,6 +32,7 @@ import {
   Edit3,
   Lock,
   X,
+  ArrowLeftRight,
 } from "lucide-react";
 
 interface CriadorViewProps {
@@ -69,6 +72,14 @@ export function CriadorView({
   );
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
   const [erroEdicao, setErroEdicao] = useState("");
+
+  // Estado da Troca de Posição de Cotas
+  const [modalTrocaAberto, setModalTrocaAberto] = useState(false);
+  const [trocaCotaId1, setTrocaCotaId1] = useState("");
+  const [trocaCotaId2, setTrocaCotaId2] = useState("");
+  const [trocaJustificativa, setTrocaJustificativa] = useState("");
+  const [salvandoTroca, setSalvandoTroca] = useState(false);
+  const [erroTroca, setErroTroca] = useState("");
 
   if (!consorcio && todosConsorcios.length === 0) {
     return (
@@ -372,6 +383,81 @@ export function CriadorView({
     }
   };
 
+  const handleSalvarTroca = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trocaCotaId1 || !trocaCotaId2) {
+      setErroTroca("Selecione as duas cotas para realizar a troca.");
+      return;
+    }
+
+    setSalvandoTroca(true);
+    setErroTroca("");
+
+    const res = await swapCotaPositionsAction({
+      consorcioId: consorcio.id,
+      usuarioId: currentUser.id,
+      cotaId1: trocaCotaId1,
+      cotaId2: trocaCotaId2,
+      justificativa: trocaJustificativa,
+    });
+
+    setSalvandoTroca(false);
+
+    if (res.success) {
+      setMsgSucesso(res.message || "Troca de posição efetivada com sucesso!");
+      setModalTrocaAberto(false);
+      setTrocaCotaId1("");
+      setTrocaCotaId2("");
+      setTrocaJustificativa("");
+      setTimeout(() => setMsgSucesso(""), 3500);
+      if (onAtualizarConsorcio) {
+        onAtualizarConsorcio();
+      }
+    } else {
+      setErroTroca(res.error || "Erro ao trocar posições.");
+    }
+  };
+
+  const handleToggleContemplada = async (cotaId: string, novoStatus: "ATIVA" | "CONTEMPLADA") => {
+    const res = await toggleCotaContempladaAction({
+      consorcioId: consorcio.id,
+      usuarioId: currentUser.id,
+      cotaId,
+      status: novoStatus,
+    });
+
+    if (res.success) {
+      setMsgSucesso(res.message || "Status de contemplação atualizado!");
+      setTimeout(() => setMsgSucesso(""), 3500);
+      if (onAtualizarConsorcio) {
+        onAtualizarConsorcio();
+      }
+    } else {
+      alert(res.error || "Erro ao atualizar contemplação.");
+    }
+  };
+
+  const cotasOrdenadas = [...(consorcio?.cotas || [])].sort((a: any, b: any) => {
+    const posA = a.ordemSorteio || a.numero;
+    const posB = b.ordemSorteio || b.numero;
+    return posA - posB;
+  });
+
+  const cotasDisponiveisParaTroca = cotasOrdenadas.filter((c: any) => c.status !== "CONTEMPLADA");
+
+  const cotaSelecionada1 = consorcio?.cotas?.find((c: any) => c.id === trocaCotaId1);
+  const cotaSelecionada2 = consorcio?.cotas?.find((c: any) => c.id === trocaCotaId2);
+
+  const cotaSelecionada1Nomes =
+    cotaSelecionada1?.participantes?.map((p: any) => p.usuario.name).join(" & ") ||
+    `Cota #${cotaSelecionada1?.numero}`;
+  const cotaSelecionada2Nomes =
+    cotaSelecionada2?.participantes?.map((p: any) => p.usuario.name).join(" & ") ||
+    `Cota #${cotaSelecionada2?.numero}`;
+
+  const cotaSelecionada1Pos = cotaSelecionada1?.ordemSorteio || cotaSelecionada1?.numero;
+  const cotaSelecionada2Pos = cotaSelecionada2?.ordemSorteio || cotaSelecionada2?.numero;
+
   return (
     <div className="space-y-6">
       {msgSucesso && (
@@ -469,6 +555,108 @@ export function CriadorView({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Coluna Principal: Comprovantes & Controle de Parcelas */}
         <div className="lg:col-span-8 space-y-6">
+          {/* Ordem de Contemplação & Sorteio (Posições de Recebimento) */}
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center text-xl flex-shrink-0 shadow-2xs">
+                  🎲
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm sm:text-base">
+                    Ordem de Contemplação & Sorteio
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Cronograma de recebimento da bolada por ciclo
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setErroTroca("");
+                  setTrocaCotaId1("");
+                  setTrocaCotaId2("");
+                  setTrocaJustificativa("");
+                  setModalTrocaAberto(true);
+                }}
+                className="px-3.5 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer self-start sm:self-auto"
+                title="Trocar posição de recebimento entre dois participantes"
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5" />
+                <span>Trocar Posição</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {cotasOrdenadas.map((cota: any) => {
+                const pos = cota.ordemSorteio || cota.numero;
+                const isContemplada = cota.status === "CONTEMPLADA";
+                const nomes = cota.participantes.map((p: any) => p.usuario.name).join(" & ");
+
+                return (
+                  <div
+                    key={cota.id}
+                    className={`p-3 rounded-2xl border transition flex items-center justify-between gap-2.5 ${
+                      isContemplada
+                        ? "bg-emerald-50/70 border-emerald-200"
+                        : "bg-slate-50/80 hover:bg-slate-100/80 border-slate-200/80"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs flex-shrink-0 shadow-2xs ${
+                          isContemplada
+                            ? "bg-emerald-600 text-white"
+                            : "bg-white border border-slate-200 text-slate-700"
+                        }`}
+                      >
+                        #{pos}
+                      </div>
+                      <div className="min-w-0 truncate">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-xs text-slate-900 truncate">
+                            {nomes}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-semibold bg-white border border-slate-200 px-1.5 py-0.2 rounded-md flex-shrink-0">
+                            Cota #{cota.numero}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 block truncate mt-0.5">
+                          Ciclo {pos} • Bolada: R$ {consorcio.valorTotalBolada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleToggleContemplada(cota.id, isContemplada ? "ATIVA" : "CONTEMPLADA")
+                        }
+                        className={`text-[10px] font-bold px-2.5 py-1 rounded-xl border transition cursor-pointer flex items-center gap-1 ${
+                          isContemplada
+                            ? "bg-white text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                        }`}
+                        title={isContemplada ? "Clique para reverter para ativa" : "Marcar como contemplada"}
+                      >
+                        {isContemplada ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            <span>Contemplada</span>
+                          </>
+                        ) : (
+                          <span>Aguardando</span>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
           {/* Comprovantes Aguardando Análise (Páginas 79 e 82 do PDF) */}
           <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm">
             <div className="flex items-center justify-between mb-4">
@@ -911,6 +1099,164 @@ export function CriadorView({
                 >
                   <Check className="w-4 h-4" />
                   <span>{salvandoEdicao ? "Salvando..." : "Salvar Alterações"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Troca de Posição entre Participantes */}
+      {modalTrocaAberto && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100] animate-in fade-in duration-150">
+          <div className="bg-white rounded-t-[32px] sm:rounded-3xl p-5 sm:p-6 pb-8 sm:pb-6 w-full sm:max-w-lg max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl border-t sm:border border-slate-100">
+            {/* Puxador mobile */}
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto sm:hidden mb-2"></div>
+
+            {/* Cabeçalho do Modal */}
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center text-xl flex-shrink-0 shadow-2xs">
+                  <ArrowLeftRight className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    Trocar Ordem de Recebimento
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Permuta de ciclos acordada entre participantes
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalTrocaAberto(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-xs transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Formulário de Troca */}
+            <form onSubmit={handleSalvarTroca} className="space-y-4 overflow-y-auto flex-1 pr-1 py-3">
+              {erroTroca && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold">
+                  {erroTroca}
+                </div>
+              )}
+
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Selecione as duas cotas que combinaram entre si a inversão de seus ciclos de recebimento da bolada:
+              </p>
+
+              {/* Seletor Cota 1 */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  1ª Cota (Quem vai trocar)
+                </label>
+                <select
+                  value={trocaCotaId1}
+                  onChange={(e) => setTrocaCotaId1(e.target.value)}
+                  required
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold focus:border-theme-main focus:outline-none bg-slate-50/50"
+                >
+                  <option value="">Selecione a primeira cota...</option>
+                  {cotasDisponiveisParaTroca.map((c: any) => {
+                    const pos = c.ordemSorteio || c.numero;
+                    const nomes = c.participantes.map((p: any) => p.usuario.name).join(" & ");
+                    return (
+                      <option key={c.id} value={c.id} disabled={c.id === trocaCotaId2}>
+                        Ciclo #{pos} • Cota #{c.numero} — {nomes}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* Ícone de Inversão Visual */}
+              <div className="flex justify-center my-1">
+                <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center border border-slate-200 shadow-2xs">
+                  <ArrowLeftRight className="w-4 h-4" />
+                </div>
+              </div>
+
+              {/* Seletor Cota 2 */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  2ª Cota (Com quem vai trocar)
+                </label>
+                <select
+                  value={trocaCotaId2}
+                  onChange={(e) => setTrocaCotaId2(e.target.value)}
+                  required
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold focus:border-theme-main focus:outline-none bg-slate-50/50"
+                >
+                  <option value="">Selecione a segunda cota...</option>
+                  {cotasDisponiveisParaTroca.map((c: any) => {
+                    const pos = c.ordemSorteio || c.numero;
+                    const nomes = c.participantes.map((p: any) => p.usuario.name).join(" & ");
+                    return (
+                      <option key={c.id} value={c.id} disabled={c.id === trocaCotaId1}>
+                        Ciclo #{pos} • Cota #{c.numero} — {nomes}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* Preview da Troca se ambas selecionadas */}
+              {cotaSelecionada1 && cotaSelecionada2 && (
+                <div className="p-3.5 bg-theme-light border border-theme-main/30 rounded-2xl space-y-2 text-xs">
+                  <span className="font-bold text-theme-text block uppercase tracking-wide text-[10px]">
+                    Resumo do Acordo de Troca:
+                  </span>
+                  <div className="space-y-1 text-slate-800">
+                    <p>
+                      • <strong>{cotaSelecionada1Nomes}</strong>: passa para o <strong>Ciclo #{cotaSelecionada2Pos}</strong>.
+                    </p>
+                    <p>
+                      • <strong>{cotaSelecionada2Nomes}</strong>: passa para o <strong>Ciclo #{cotaSelecionada1Pos}</strong>.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Observação / Justificativa Opcional */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Observação / Justificativa (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={trocaJustificativa}
+                  onChange={(e) => setTrocaJustificativa(e.target.value)}
+                  placeholder="Ex: Acordo direto entre os participantes"
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-medium focus:border-theme-main focus:outline-none bg-slate-50/50"
+                />
+              </div>
+
+              {/* Nota Informativa */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-500 leading-relaxed">
+                ℹ️ Esta troca será registrada na <strong>trilha de auditoria</strong> com data, hora e responsável. Cotas já contempladas não participam de trocas.
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="flex gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setModalTrocaAberto(false)}
+                  disabled={salvandoTroca}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={salvandoTroca || !trocaCotaId1 || !trocaCotaId2}
+                  className="flex-1 py-3 bg-theme-main hover:opacity-90 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{salvandoTroca ? "Efetivando Troca..." : "Confirmar Troca"}</span>
                 </button>
               </div>
             </form>
