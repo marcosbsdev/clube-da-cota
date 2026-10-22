@@ -2,20 +2,60 @@
 
 import React, { useState } from "react";
 import { useTheme, ThemeName } from "./ThemeProvider";
-import { updateUserThemeAction } from "@/app/actions";
-import { Palette, Shield, User, Check, RefreshCw, LogOut } from "lucide-react";
+import { updateUserThemeAction, updateUserRoleAction } from "@/app/actions";
+import { Palette, Shield, User, Check, RefreshCw, LogOut, ShieldCheck, CheckCircle2 } from "lucide-react";
 
 interface PerfilViewProps {
   currentUser: any;
   todosUsuarios: any[];
   onTrocarUsuario: (id: string) => void;
   onLogout?: () => void;
+  onRoleAtualizado?: () => void;
 }
 
-export function PerfilView({ currentUser, todosUsuarios, onTrocarUsuario, onLogout }: PerfilViewProps) {
+export function PerfilView({
+  currentUser,
+  todosUsuarios,
+  onTrocarUsuario,
+  onLogout,
+  onRoleAtualizado,
+}: PerfilViewProps) {
   const { theme, setTheme } = useTheme();
   const [salvando, setSalvando] = useState(false);
   const [msgSucesso, setMsgSucesso] = useState("");
+  const [loadingRole, setLoadingRole] = useState<string | null>(null);
+  const [roleMsg, setRoleMsg] = useState("");
+
+  const getRoleBadge = (role: string) => {
+    switch (role) {
+      case "SUPER_ADMIN":
+        return { text: "Super Admin", color: "bg-purple-100 text-purple-800 border-purple-200" };
+      case "PRO_MASTER":
+        return { text: "Pro-Master", color: "bg-amber-100 text-amber-800 border-amber-200" };
+      case "PRO":
+        return { text: "Pro", color: "bg-blue-100 text-blue-800 border-blue-200" };
+      default:
+        return { text: "Comum", color: "bg-slate-100 text-slate-700 border-slate-200" };
+    }
+  };
+
+  const handleAlterarRole = async (targetUserId: string, newRole: any) => {
+    setLoadingRole(targetUserId);
+    setRoleMsg("");
+    const res = await updateUserRoleAction({
+      adminUserId: currentUser.id,
+      targetUserId,
+      newRole,
+    });
+    setLoadingRole(null);
+    if (res.success) {
+      setRoleMsg(res.message || "Nível de acesso atualizado com sucesso!");
+      setTimeout(() => setRoleMsg(""), 3500);
+      if (onRoleAtualizado) onRoleAtualizado();
+    } else {
+      setRoleMsg(res.error || "Erro ao atualizar nível.");
+    }
+  };
 
   const paletas = [
     { id: "blue", nome: "Azul (Padrão)", cor: "bg-blue-600" },
@@ -143,6 +183,81 @@ export function PerfilView({ currentUser, todosUsuarios, onTrocarUsuario, onLogo
         </div>
       </div>
 
+      {/* Gestão de Níveis de Acesso (Exclusivo Super Admin) */}
+      {currentUser.role === "SUPER_ADMIN" && (
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-purple-200 shadow-sm space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm sm:text-base">
+                  Gestão de Níveis de Acesso (Super Admin)
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Promova ou ajuste as permissões de acesso dos usuários do Clube da Cota:
+                </p>
+              </div>
+            </div>
+
+            <span className="text-[10px] font-bold bg-purple-100 text-purple-800 px-2.5 py-1 rounded-full uppercase">
+              Área Administrativa
+            </span>
+          </div>
+
+          {roleMsg && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-semibold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span>{roleMsg}</span>
+            </div>
+          )}
+
+          <div className="space-y-2.5 pt-2">
+            {todosUsuarios.map((u) => {
+              const badge = getRoleBadge(u.role);
+              const isSelf = u.id === currentUser.id;
+              return (
+                <div
+                  key={u.id}
+                  className="p-3.5 bg-slate-50/70 hover:bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-slate-900 text-sm">{u.name}</span>
+                      {isSelf && (
+                        <span className="text-[10px] font-bold bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-md">
+                          Você
+                        </span>
+                      )}
+                      <span className={`text-[10px] font-bold border px-2 py-0.5 rounded-full ${badge.color}`}>
+                        {badge.text}
+                      </span>
+                    </div>
+                    <span className="text-xs text-slate-400 block truncate mt-0.5">{u.email}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <label className="text-[11px] font-semibold text-slate-500 hidden sm:inline">Alterar Papel:</label>
+                    <select
+                      value={u.role}
+                      disabled={loadingRole === u.id}
+                      onChange={(e) => handleAlterarRole(u.id, e.target.value)}
+                      className="text-xs font-bold p-2.5 rounded-xl border border-slate-200 bg-white hover:border-purple-400 focus:outline-none focus:border-purple-600 cursor-pointer shadow-xs"
+                    >
+                      <option value="COMUM">Comum (1 consórcio, até 10 membros)</option>
+                      <option value="PRO">Pro (até 3 consórcios, até 20 membros)</option>
+                      <option value="PRO_MASTER">Pro-Master (Multiconsórcios avançados)</option>
+                      <option value="SUPER_ADMIN">Super Admin (Acesso total)</option>
+                    </select>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Alternador de Usuários para Teste do MVP */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-3">
         <div className="flex items-center gap-2.5">
@@ -156,25 +271,32 @@ export function PerfilView({ currentUser, todosUsuarios, onTrocarUsuario, onLogo
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-2">
-          {todosUsuarios.map((u) => (
-            <button
-              key={u.id}
-              onClick={() => onTrocarUsuario(u.id)}
-              className={`p-3 rounded-2xl border text-left text-xs flex justify-between items-center transition ${
-                u.id === currentUser.id
-                  ? "bg-slate-800 text-white font-bold border-slate-800 shadow-sm"
-                  : "bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200"
-              }`}
-            >
-              <div className="truncate pr-2">
-                <span className="font-bold block truncate">{u.name}</span>
-                <span className="text-[10px] opacity-70 block truncate">{u.email}</span>
-              </div>
-              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-white/20 flex-shrink-0">
-                {u.role}
-              </span>
-            </button>
-          ))}
+          {todosUsuarios.map((u) => {
+            const badge = getRoleBadge(u.role);
+            return (
+              <button
+                key={u.id}
+                onClick={() => onTrocarUsuario(u.id)}
+                className={`p-3 rounded-2xl border text-left text-xs flex justify-between items-center transition ${
+                  u.id === currentUser.id
+                    ? "bg-slate-800 text-white font-bold border-slate-800 shadow-sm"
+                    : "bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200"
+                }`}
+              >
+                <div className="truncate pr-2">
+                  <span className="font-bold block truncate">{u.name}</span>
+                  <span className={`text-[10px] block truncate ${u.id === currentUser.id ? "text-slate-300" : "text-slate-400"}`}>
+                    {u.email}
+                  </span>
+                </div>
+                <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md flex-shrink-0 border ${
+                  u.id === currentUser.id ? "bg-white/20 text-white border-white/30" : badge.color
+                }`}>
+                  {badge.text}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

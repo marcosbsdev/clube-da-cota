@@ -85,7 +85,30 @@ async function main() {
     },
   });
 
-  console.log("Usuários criados com sucesso.");
+  // Usuários representativos dos níveis PRO e PRO_MASTER
+  const camila = await prisma.user.create({
+    data: {
+      name: "Camila Pro",
+      email: "camila.pro@exemplo.com",
+      passwordHash,
+      role: "PRO",
+      preferredTheme: "purple",
+      isActivated: true,
+    },
+  });
+
+  const renato = await prisma.user.create({
+    data: {
+      name: "Renato Master",
+      email: "renato.master@exemplo.com",
+      passwordHash,
+      role: "PRO_MASTER",
+      preferredTheme: "dark",
+      isActivated: true,
+    },
+  });
+
+  console.log("Usuários criados com sucesso (incluindo SUPER_ADMIN, PRO, PRO_MASTER e COMUM).");
 
   // 3. Criando Consórcio de Exemplo (Família & Amigos 2026)
   const dataInicio = new Date("2026-10-01");

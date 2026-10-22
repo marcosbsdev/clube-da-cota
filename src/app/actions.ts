@@ -816,3 +816,54 @@ export async function quickLoginAction(userId: string) {
     },
   };
 }
+
+export async function updateUserRoleAction(input: {
+  adminUserId: string;
+  targetUserId: string;
+  newRole: "COMUM" | "PRO" | "PRO_MASTER" | "SUPER_ADMIN";
+}) {
+  try {
+    const admin = await prisma.user.findUnique({
+      where: { id: input.adminUserId },
+    });
+
+    if (!admin || admin.role !== "SUPER_ADMIN") {
+      return {
+        success: false,
+        error: "Apenas usuários com nível Super Admin podem alterar papéis de acesso.",
+      };
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: input.targetUserId },
+    });
+
+    if (!targetUser) {
+      return { success: false, error: "Usuário alvo não encontrado." };
+    }
+
+    const validRoles = ["COMUM", "PRO", "PRO_MASTER", "SUPER_ADMIN"];
+    if (!validRoles.includes(input.newRole)) {
+      return { success: false, error: "Nível de acesso inválido." };
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: targetUser.id },
+      data: { role: input.newRole },
+    });
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message: `Nível de acesso de ${updatedUser.name} alterado para ${input.newRole} com sucesso!`,
+      user: {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+      },
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || "Erro ao atualizar nível de acesso." };
+  }
+}

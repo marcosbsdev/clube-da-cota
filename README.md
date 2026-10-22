@@ -71,7 +71,9 @@ node tests/auth.test.mjs
 
 | Nome | E-mail | Senha Padrão | Nível | Papel no MVP |
 | :--- | :--- | :--- | :--- | :--- |
-| **Marcos Batista** | `markos.system@gmail.com` | `123456` | **Super Admin** | Criador dos consórcios, gestão total e auditoria |
+| **Marcos Batista** | `markos.system@gmail.com` | `123456` | **Super Admin** | Criador dos consórcios, gestão global e permissões |
+| **Renato Master** | `renato.master@exemplo.com` | `123456` | **Pro-Master** | Organizador avançado de múltiplos consórcios |
+| **Camila Pro** | `camila.pro@exemplo.com` | `123456` | **Pro** | Criadora intermediária (até 3 consórcios e 20 membros) |
 | **Fábio Augusto** | `fabio@exemplo.com` | `123456` | **Comum** | Participante individual |
 | **Patrick Dias** | `patrick@exemplo.com` | `123456` | **Comum** | Cota compartilhada 50% |
 | **Josivan Costa** | `josivan@exemplo.com` | `123456` | **Comum** | Cota compartilhada 50% |

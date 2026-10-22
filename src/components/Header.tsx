@@ -229,8 +229,8 @@ export function Header({
                         </div>
 
                         <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 uppercase">
-                            {u.role === "SUPER_ADMIN" ? "Admin" : u.role}
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                            {formatRole(u.role)}
                           </span>
                           {isCurrent && <Check className="w-3.5 h-3.5 text-theme-text" />}
                         </div>
