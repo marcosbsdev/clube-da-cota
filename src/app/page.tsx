@@ -135,6 +135,7 @@ export default function Home() {
             todosConsorcios={todosConsorcios}
             onSelecionarConsorcio={handleSelecionarConsorcio}
             onCriarNovoConsorcio={() => setActiveTab("assistente")}
+            onAtualizarConsorcio={() => carregarDados(currentUser.id, consorcio.id)}
           />
         )}
 

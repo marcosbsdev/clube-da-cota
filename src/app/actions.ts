@@ -867,3 +867,89 @@ export async function updateUserRoleAction(input: {
     return { success: false, error: error.message || "Erro ao atualizar nível de acesso." };
   }
 }
+
+export interface UpdateConsorcioInfoInput {
+  consorcioId: string;
+  usuarioId: string;
+  nome: string;
+  finalidade?: string;
+  regras?: string;
+  dadosPagamento?: string;
+}
+
+export async function updateConsorcioInfoAction(input: UpdateConsorcioInfoInput) {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: input.usuarioId } });
+    if (!user) {
+      return { success: false, error: "Usuário não autenticado." };
+    }
+
+    const consorcio = await prisma.consorcio.findUnique({ where: { id: input.consorcioId } });
+    if (!consorcio) {
+      return { success: false, error: "Consórcio não encontrado." };
+    }
+
+    const isAdminGeral = user.role === "SUPER_ADMIN" || user.role === "PRO_MASTER";
+    const isCriador = consorcio.criadorId === user.id;
+
+    if (!isCriador && !isAdminGeral) {
+      return {
+        success: false,
+        error: "Apenas o criador deste consórcio ou administradores podem editar essas informações.",
+      };
+    }
+
+    if (!input.nome || !input.nome.trim()) {
+      return { success: false, error: "O nome do consórcio é obrigatório." };
+    }
+
+    const dadosAnteriores = {
+      nome: consorcio.nome,
+      finalidade: consorcio.finalidade,
+      regras: consorcio.regras,
+      chavePix: consorcio.chavePix,
+      dadosBancarios: consorcio.dadosBancarios,
+    };
+
+    const atualizado = await prisma.consorcio.update({
+      where: { id: input.consorcioId },
+      data: {
+        nome: input.nome.trim(),
+        finalidade: input.finalidade?.trim() || null,
+        regras: input.regras?.trim() || null,
+        chavePix: input.dadosPagamento?.trim() || null,
+        dadosBancarios: input.dadosPagamento?.trim() || null,
+      },
+    });
+
+    // Registra trilha de auditoria oficial
+    await prisma.auditoriaLog.create({
+      data: {
+        consorcioId: consorcio.id,
+        usuarioResponsavelId: user.id,
+        tipoAcao: "EDICAO_DADOS_CONSORCIO",
+        detalhes: JSON.stringify({
+          antes: dadosAnteriores,
+          depois: {
+            nome: atualizado.nome,
+            finalidade: atualizado.finalidade,
+            regras: atualizado.regras,
+            dadosPagamento: atualizado.chavePix,
+          },
+        }),
+        justificativa: "Atualização de dados informativos e de pagamento do consórcio.",
+      },
+    });
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message: "Informações do consórcio atualizadas com sucesso!",
+      consorcio: atualizado,
+    };
+  } catch (error: any) {
+    console.error("Erro ao atualizar dados do consórcio:", error);
+    return { success: false, error: error.message || "Erro ao atualizar informações do consórcio." };
+  }
+}
+

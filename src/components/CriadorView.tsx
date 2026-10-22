@@ -8,6 +8,7 @@ import {
   confirmPaymentAction,
   revertPaymentAction,
   rejectReceiptAction,
+  updateConsorcioInfoAction,
 } from "@/app/actions";
 import {
   CheckCircle2,
@@ -26,6 +27,9 @@ import {
   ArrowRight,
   TrendingUp,
   Users,
+  Edit3,
+  Lock,
+  X,
 } from "lucide-react";
 
 interface CriadorViewProps {
@@ -34,6 +38,7 @@ interface CriadorViewProps {
   todosConsorcios?: any[];
   onSelecionarConsorcio?: (id: string) => void;
   onCriarNovoConsorcio?: () => void;
+  onAtualizarConsorcio?: () => void;
 }
 
 export function CriadorView({
@@ -42,6 +47,7 @@ export function CriadorView({
   todosConsorcios = [],
   onSelecionarConsorcio,
   onCriarNovoConsorcio,
+  onAtualizarConsorcio,
 }: CriadorViewProps) {
   const [modoVisao, setModoVisao] = useState<"DASHBOARD" | "LISTA_CONSORCIOS">(
     consorcio ? "DASHBOARD" : "LISTA_CONSORCIOS"
@@ -52,6 +58,17 @@ export function CriadorView({
   const [itemSelecionado, setItemSelecionado] = useState<any>(null);
   const [motivoTexto, setMotivoTexto] = useState("");
   const [msgSucesso, setMsgSucesso] = useState("");
+
+  // Estado da Edição de Consórcio
+  const [modalEditarAberto, setModalEditarAberto] = useState(false);
+  const [editNome, setEditNome] = useState(consorcio?.nome || "");
+  const [editFinalidade, setEditFinalidade] = useState(consorcio?.finalidade || "");
+  const [editRegras, setEditRegras] = useState(consorcio?.regras || "");
+  const [editDadosPagamento, setEditDadosPagamento] = useState(
+    consorcio?.dadosBancarios || consorcio?.chavePix || ""
+  );
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [erroEdicao, setErroEdicao] = useState("");
 
   if (!consorcio && todosConsorcios.length === 0) {
     return (
@@ -322,6 +339,39 @@ export function CriadorView({
     return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
   };
 
+  const handleSalvarEdicao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editNome.trim()) {
+      setErroEdicao("O nome do consórcio é obrigatório.");
+      return;
+    }
+
+    setSalvandoEdicao(true);
+    setErroEdicao("");
+
+    const res = await updateConsorcioInfoAction({
+      consorcioId: consorcio.id,
+      usuarioId: currentUser.id,
+      nome: editNome,
+      finalidade: editFinalidade,
+      regras: editRegras,
+      dadosPagamento: editDadosPagamento,
+    });
+
+    setSalvandoEdicao(false);
+
+    if (res.success) {
+      setMsgSucesso("Informações do consórcio atualizadas com sucesso!");
+      setModalEditarAberto(false);
+      setTimeout(() => setMsgSucesso(""), 3500);
+      if (onAtualizarConsorcio) {
+        onAtualizarConsorcio();
+      }
+    } else {
+      setErroEdicao(res.error || "Erro ao atualizar consórcio.");
+    }
+  };
+
   return (
     <div className="space-y-6">
       {msgSucesso && (
@@ -344,8 +394,24 @@ export function CriadorView({
 
         <div className="flex items-center gap-2 flex-wrap">
           <button
+            onClick={() => {
+              setEditNome(consorcio?.nome || "");
+              setEditFinalidade(consorcio?.finalidade || "");
+              setEditRegras(consorcio?.regras || "");
+              setEditDadosPagamento(consorcio?.dadosBancarios || consorcio?.chavePix || "");
+              setErroEdicao("");
+              setModalEditarAberto(true);
+            }}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-800 transition flex items-center gap-1.5 border border-slate-200 shadow-2xs cursor-pointer"
+            title="Editar nome, finalidade e dados de pagamento"
+          >
+            <Edit3 className="w-3.5 h-3.5 text-slate-500" />
+            <span>Editar Consórcio</span>
+          </button>
+
+          <button
             onClick={() => setModoVisao("LISTA_CONSORCIOS")}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5"
+            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5 cursor-pointer"
             title="Visualizar todos os consórcios em cards"
           >
             <Layers className="w-3.5 h-3.5 text-slate-500" />
@@ -355,7 +421,7 @@ export function CriadorView({
           {onCriarNovoConsorcio && (
             <button
               onClick={onCriarNovoConsorcio}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-black text-white transition flex items-center gap-1.5 shadow-2xs"
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-black text-white transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Novo Consórcio</span>
@@ -706,6 +772,145 @@ export function CriadorView({
                   className="flex-1 py-3 bg-rose-600 text-white font-bold text-xs rounded-xl shadow-md hover:bg-rose-700 transition"
                 >
                   Recusar Comprovante
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edição de Consórcio */}
+      {modalEditarAberto && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-t-[32px] sm:rounded-3xl p-5 sm:p-6 w-full sm:max-w-xl max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl border-t sm:border border-slate-100">
+            {/* Puxador visual para mobile */}
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto sm:hidden mb-2"></div>
+
+            {/* Cabeçalho do Modal */}
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-theme-light text-theme-text flex items-center justify-center font-bold flex-shrink-0">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    Editar Dados do Consórcio
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Atualize nome, finalidade e dados de pagamento
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalEditarAberto(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-xs transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Conteúdo do Formulário com Scroll Suave */}
+            <form onSubmit={handleSalvarEdicao} className="space-y-4 overflow-y-auto flex-1 pr-1 py-3">
+              {erroEdicao && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold">
+                  {erroEdicao}
+                </div>
+              )}
+
+              {/* Nome do Consórcio */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Nome do Consórcio <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editNome}
+                  onChange={(e) => setEditNome(e.target.value)}
+                  placeholder="Ex: Consórcio Viagem 2026"
+                  required
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold focus:border-theme-main focus:outline-none bg-slate-50/50"
+                />
+              </div>
+
+              {/* Finalidade */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Finalidade / Objetivo
+                </label>
+                <input
+                  type="text"
+                  value={editFinalidade}
+                  onChange={(e) => setEditFinalidade(e.target.value)}
+                  placeholder="Ex: Comprar passagens para o final de ano"
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold focus:border-theme-main focus:outline-none bg-slate-50/50"
+                />
+              </div>
+
+              {/* Dados para Pagamento (Chave Pix / Conta Bancária) */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Dados para Receber Pagamentos (PIX / Conta)
+                  </label>
+                  <span className="text-[10px] text-theme-text font-bold bg-theme-light px-2 py-0.2 rounded-md">
+                    Visível aos participantes
+                  </span>
+                </div>
+                <textarea
+                  rows={3}
+                  value={editDadosPagamento}
+                  onChange={(e) => setEditDadosPagamento(e.target.value)}
+                  placeholder="Ex: Chave Pix CPF: 123.456.789-00 ou Banco Itaú, Agência 1234, Conta 56789-0 - Titular: Marcos"
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-medium focus:border-theme-main focus:outline-none bg-slate-50/50"
+                />
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Esta instrução é exibida diretamente na tela dos participantes para eles realizarem o pagamento.
+                </p>
+              </div>
+
+              {/* Regras Gerais */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Regras Gerais / Avisos
+                </label>
+                <textarea
+                  rows={2}
+                  value={editRegras}
+                  onChange={(e) => setEditRegras(e.target.value)}
+                  placeholder="Ex: Pagamentos até o dia 10 de cada mês. Sorteio todo dia 15."
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-medium focus:border-theme-main focus:outline-none bg-slate-50/50"
+                />
+              </div>
+
+              {/* Caixa Informativa de Proteção Financeira (Imutabilidade após início) */}
+              <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-2">
+                <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                  <Lock className="w-4 h-4 text-amber-700 flex-shrink-0" />
+                  <span>Regras Financeiras Protegidas (Imutáveis após Ativação)</span>
+                </div>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Para garantir a segurança dos participantes e a validade das parcelas geradas, o <strong>valor da cota (R$ {consorcio.valorCota.toFixed(2)})</strong>, a <strong>quantidade de cotas ({consorcio.totalCotas})</strong> e a <strong>frequência ({consorcio.frequencia?.toLowerCase()})</strong> não podem ser alterados após o início do consórcio.
+                </p>
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="flex gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setModalEditarAberto(false)}
+                  disabled={salvandoEdicao}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={salvandoEdicao}
+                  className="flex-1 py-3 bg-theme-main hover:opacity-90 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{salvandoEdicao ? "Salvando..." : "Salvar Alterações"}</span>
                 </button>
               </div>
             </form>
