@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --theme-main: #1d4ed8;       /* Azul Royal Padrão */
+  --theme-dark: #1e3a8a;
+  --theme-light: #eff6ff;
+  --theme-text: #1e40af;
+  --theme-accent: #2563eb;
+}
+
+body.theme-blue {
+  --theme-main: #1d4ed8;
+  --theme-dark: #1e3a8a;
+  --theme-light: #eff6ff;
+  --theme-text: #1e40af;
+  --theme-accent: #2563eb;
+}
+
+body.theme-dark {
+  --theme-main: #0f172a;       /* Grafite / Escuro */
+  --theme-dark: #020617;
+  --theme-light: #f1f5f9;
+  --theme-text: #0f172a;
+  --theme-accent: #334155;
+}
+
+body.theme-purple {
+  --theme-main: #6d28d9;       /* Roxo Moderno */
+  --theme-dark: #4c1d95;
+  --theme-light: #f5f3ff;
+  --theme-text: #5b21b6;
+  --theme-accent: #7c3aed;
+}
+
+body.theme-ocean {
+  --theme-main: #0369a1;       /* Azul Oceano */
+  --theme-dark: #0c4a6e;
+  --theme-light: #f0f9ff;
+  --theme-text: #075985;
+  --theme-accent: #0284c7;
+}
+
+body.theme-coral {
+  --theme-main: #c2410c;       /* Coral / Laranja */
+  --theme-dark: #7c2d12;
+  --theme-light: #fff7ed;
+  --theme-text: #9a3412;
+  --theme-accent: #ea580c;
+}
+
+/* Acessibilidade para idosos e leigos */
+button, input, select, textarea {
+  font-size: 1rem;
+  touch-action: manipulation;
+}
+
+/* Área de toque mínima de 44px */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
