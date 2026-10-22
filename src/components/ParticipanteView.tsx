@@ -94,13 +94,13 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
         {/* Coluna Esquerda: Visão Geral, Próximo Vencimento & Chave Pix */}
         <div className="lg:col-span-5 space-y-6">
           {/* Resumo Financeiro Pessoal */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Resumo da Sua Participação
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm space-y-3.5">
+            <div className="flex justify-between items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">
+                Sua Participação
               </span>
-              <span className="text-xs text-theme-text font-bold bg-theme-light px-2.5 py-0.5 rounded-full">
-                {consorcio.totalCotas} cotas no grupo
+              <span className="text-xs text-theme-text font-bold bg-theme-light px-2.5 py-0.5 rounded-full whitespace-nowrap">
+                {consorcio.totalCotas} cotas
               </span>
             </div>
 
@@ -110,23 +110,40 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
               </p>
             )}
 
-            <div className="grid grid-cols-3 gap-2.5 text-center pt-1">
-              <div className="bg-slate-50/80 p-3 rounded-2xl border border-slate-100">
-                <span className="text-[11px] text-slate-500 font-semibold block">Total Previsto</span>
-                <p className="text-sm sm:text-base font-black text-slate-900 mt-0.5">
-                  R$ {totalDevidoPessoal.toFixed(2)}
+            {/* Destaque Principal: Total Previsto da Cota */}
+            <div className="bg-slate-50/90 rounded-2xl p-3.5 sm:p-4 border border-slate-100 flex items-center justify-between gap-3">
+              <div>
+                <span className="text-[11px] sm:text-xs font-bold text-slate-500 block uppercase tracking-wide">
+                  Total Previsto
+                </span>
+                <p className="text-lg sm:text-2xl font-black text-slate-900 mt-0.5 whitespace-nowrap">
+                  R$ {totalDevidoPessoal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </p>
               </div>
-              <div className="bg-emerald-50/80 p-3 rounded-2xl border border-emerald-100">
-                <span className="text-[11px] text-emerald-700 font-semibold block">Já Pago</span>
-                <p className="text-sm sm:text-base font-black text-emerald-800 mt-0.5">
-                  R$ {totalPagoPessoal.toFixed(2)}
+              <div className="text-right flex-shrink-0">
+                <span className="text-[11px] font-bold text-theme-text bg-white px-2.5 py-1 rounded-xl border border-slate-200 shadow-2xs whitespace-nowrap">
+                  {totalDevidoPessoal > 0 ? Math.round((totalPagoPessoal / totalDevidoPessoal) * 100) : 0}% quitado
+                </span>
+              </div>
+            </div>
+
+            {/* 2 Colunas Espaçosas: Já Pago e Falta Pagar (Sem quebras de linha!) */}
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+              <div className="bg-emerald-50/80 p-3 sm:p-3.5 rounded-2xl border border-emerald-100">
+                <span className="text-[11px] sm:text-xs text-emerald-700 font-bold block whitespace-nowrap">
+                  ✓ Já Pago
+                </span>
+                <p className="text-sm sm:text-lg font-black text-emerald-800 mt-1 whitespace-nowrap">
+                  R$ {totalPagoPessoal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </p>
               </div>
-              <div className="bg-amber-50/80 p-3 rounded-2xl border border-amber-100">
-                <span className="text-[11px] text-amber-800 font-semibold block">Falta Pagar</span>
-                <p className="text-sm sm:text-base font-black text-amber-900 mt-0.5">
-                  R$ {totalFaltaPagarPessoal.toFixed(2)}
+
+              <div className="bg-amber-50/80 p-3 sm:p-3.5 rounded-2xl border border-amber-100">
+                <span className="text-[11px] sm:text-xs text-amber-800 font-bold block whitespace-nowrap">
+                  ⏳ Falta Pagar
+                </span>
+                <p className="text-sm sm:text-lg font-black text-amber-900 mt-1 whitespace-nowrap">
+                  R$ {totalFaltaPagarPessoal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </p>
               </div>
             </div>
@@ -139,12 +156,12 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                 <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">
                   📅
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-amber-900 uppercase tracking-wide">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-amber-900 uppercase tracking-wide whitespace-nowrap">
                       Próxima Parcela
                     </span>
-                    <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                    <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap ${
                       proximaContribuicao.status === "EM_ATRASO"
                         ? "bg-rose-200 text-rose-900"
                         : "bg-amber-200 text-amber-900"
@@ -152,10 +169,10 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                       {proximaContribuicao.status === "EM_ATRASO" ? "Vencida" : "Em aberto"}
                     </span>
                   </div>
-                  <p className="text-2xl font-black text-slate-900 mt-0.5">
-                    R$ {proximaContribuicao.valorPrevisto.toFixed(2)}
+                  <p className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 whitespace-nowrap">
+                    R$ {proximaContribuicao.valorPrevisto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                   </p>
-                  <p className="text-xs text-slate-600 font-medium">
+                  <p className="text-xs text-slate-600 font-medium whitespace-nowrap">
                     Vence em {formatarData(proximaContribuicao.dataVencimento)}
                   </p>
                 </div>
@@ -166,7 +183,7 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                   setContribuicaoSelecionada(proximaContribuicao);
                   setModalUploadAberto(true);
                 }}
-                className="w-full mt-4 py-3.5 px-4 bg-theme-main hover:opacity-95 active:scale-[0.99] text-white font-bold rounded-2xl text-sm shadow-md flex items-center justify-center gap-2 transition touch-target"
+                className="w-full mt-4 py-3.5 px-4 bg-theme-main hover:opacity-95 active:scale-[0.99] text-white font-bold rounded-2xl text-sm shadow-md flex items-center justify-center gap-2 transition touch-target cursor-pointer"
               >
                 <Upload className="w-5 h-5" />
                 <span>Enviar Comprovante PIX</span>

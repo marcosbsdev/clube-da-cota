@@ -43,14 +43,12 @@ export function ConsorcioComboSelector({
     <>
       {/* Card do Seletor Combo em Destaque */}
       <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-sm space-y-2.5 mb-6">
-        <div className="flex justify-between items-center px-1">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-            <span className="text-sm">📁</span> Consórcio Selecionado:
+        <div className="flex justify-between items-center px-1 gap-2">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5 whitespace-nowrap">
+            <span className="text-sm">📁</span> Consórcio Ativo
           </span>
-          <span className="text-xs font-bold text-theme-text bg-theme-light border border-theme-light px-2.5 py-0.5 rounded-full flex items-center gap-1">
-            <span>
-              {todosConsorcios.length} {todosConsorcios.length === 1 ? "consórcio" : "consórcios"}
-            </span>
+          <span className="text-xs font-bold text-theme-text bg-theme-light border border-theme-light/80 px-2.5 py-0.5 rounded-full whitespace-nowrap">
+            {todosConsorcios.length} {todosConsorcios.length === 1 ? "consórcio" : "consórcios"}
           </span>
         </div>
 
@@ -61,26 +59,30 @@ export function ConsorcioComboSelector({
             setTermoBusca("");
             setModalAberto(true);
           }}
-          className="w-full p-3 sm:p-4 bg-slate-50 hover:bg-slate-100/90 active:bg-theme-light/30 border-2 border-slate-200 hover:border-theme-main/60 rounded-2xl flex items-center justify-between gap-3 text-left transition duration-150 group cursor-pointer"
+          className="w-full p-3 sm:p-4 bg-slate-50 hover:bg-slate-100/90 active:bg-theme-light/30 border-2 border-slate-200 hover:border-theme-main/60 rounded-2xl flex items-center justify-between gap-2.5 text-left transition duration-150 group cursor-pointer"
           title="Toque para alternar entre seus consórcios"
         >
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-theme-main text-white flex items-center justify-center text-base flex-shrink-0 shadow-xs">
               <FolderKanban className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div className="truncate">
-              <span className="font-black text-slate-900 text-sm sm:text-base block truncate group-hover:text-theme-text transition">
-                {consorcioAtual?.nome || "Selecione um Consórcio"}
-              </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-black text-slate-900 text-sm sm:text-base truncate group-hover:text-theme-text transition">
+                  {consorcioAtual?.nome || "Selecione um Consórcio"}
+                </span>
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-slate-200 text-slate-700 whitespace-nowrap flex-shrink-0">
+                  {papelAtual}
+                </span>
+              </div>
               <span className="text-xs text-slate-500 font-semibold block truncate mt-0.5">
-                {consorcioAtual?.totalCotas || 0} cotas • {consorcioAtual?.frequencia?.toLowerCase() || "mensal"} • {papelAtual}
+                {consorcioAtual?.totalCotas || 0} cotas • {consorcioAtual?.frequencia?.toLowerCase() || "mensal"}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 text-slate-500 group-hover:text-theme-text flex-shrink-0 font-bold text-xs bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-2xs transition">
-            <span className="hidden sm:inline">Alternar</span>
-            <span className="sm:hidden">Trocar</span>
+          <div className="flex items-center gap-1 text-slate-500 group-hover:text-theme-text flex-shrink-0 font-bold text-xs bg-white px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl border border-slate-200 shadow-2xs transition">
+            <span className="hidden sm:inline">Trocar</span>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-theme-text transition-transform duration-200" />
           </div>
         </button>

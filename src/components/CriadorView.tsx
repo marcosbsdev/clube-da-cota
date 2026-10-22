@@ -366,36 +366,36 @@ export function CriadorView({
 
       {/* 4 Cards de Métricas Principais (Exigidos no PDF: páginas 76 e 82) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-sm transition hover:shadow-md">
-          <span className="text-xs sm:text-sm text-slate-500 font-semibold block">Total Previsto</span>
-          <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
-            R$ {kpis.totalPrevisto.toFixed(2)}
+        <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-sm transition hover:shadow-md">
+          <span className="text-xs sm:text-sm text-slate-500 font-semibold block whitespace-nowrap">Total Previsto</span>
+          <p className="text-lg sm:text-2xl font-black text-slate-900 mt-1 whitespace-nowrap">
+            R$ {kpis.totalPrevisto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
           </p>
-          <span className="text-[11px] sm:text-xs text-slate-400 font-medium mt-0.5 block">{consorcio.totalCotas} cotas ativas</span>
+          <span className="text-[11px] sm:text-xs text-slate-400 font-medium mt-0.5 block whitespace-nowrap">{consorcio.totalCotas} cotas ativas</span>
         </div>
 
-        <div className="bg-theme-light p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-theme-light shadow-sm transition hover:shadow-md">
-          <span className="text-xs sm:text-sm text-theme-text font-bold block">Total Recebido</span>
-          <p className="text-xl sm:text-2xl font-black text-theme-text mt-1">
-            R$ {kpis.totalRecebido.toFixed(2)}
+        <div className="bg-theme-light p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-theme-light shadow-sm transition hover:shadow-md">
+          <span className="text-xs sm:text-sm text-theme-text font-bold block whitespace-nowrap">Total Recebido</span>
+          <p className="text-lg sm:text-2xl font-black text-theme-text mt-1 whitespace-nowrap">
+            R$ {kpis.totalRecebido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
           </p>
-          <span className="text-[11px] sm:text-xs text-theme-text font-semibold mt-0.5 block">{kpis.percentualRecebido}% arrecadado</span>
+          <span className="text-[11px] sm:text-xs text-theme-text font-semibold mt-0.5 block whitespace-nowrap">{kpis.percentualRecebido}% arrecadado</span>
         </div>
 
-        <div className="bg-amber-50/80 p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-amber-200/80 shadow-sm transition hover:shadow-md">
-          <span className="text-xs sm:text-sm text-amber-800 font-bold block">Pendente no Prazo</span>
-          <p className="text-xl sm:text-2xl font-black text-amber-900 mt-1">
-            R$ {kpis.totalPendentePrazo.toFixed(2)}
+        <div className="bg-amber-50/80 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-amber-200/80 shadow-sm transition hover:shadow-md">
+          <span className="text-xs sm:text-sm text-amber-800 font-bold block whitespace-nowrap">Pendente no Prazo</span>
+          <p className="text-lg sm:text-2xl font-black text-amber-900 mt-1 whitespace-nowrap">
+            R$ {kpis.totalPendentePrazo.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
           </p>
-          <span className="text-[11px] sm:text-xs text-amber-700 font-medium mt-0.5 block">Aguardando vencimento</span>
+          <span className="text-[11px] sm:text-xs text-amber-700 font-medium mt-0.5 block whitespace-nowrap">Aguardando vencimento</span>
         </div>
 
-        <div className="bg-rose-50/80 p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-rose-200/80 shadow-sm transition hover:shadow-md">
-          <span className="text-xs sm:text-sm text-rose-700 font-bold block">Em Atraso</span>
-          <p className="text-xl sm:text-2xl font-black text-rose-800 mt-1">
-            R$ {kpis.totalEmAtraso.toFixed(2)}
+        <div className="bg-rose-50/80 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-rose-200/80 shadow-sm transition hover:shadow-md">
+          <span className="text-xs sm:text-sm text-rose-700 font-bold block whitespace-nowrap">Em Atraso</span>
+          <p className="text-lg sm:text-2xl font-black text-rose-800 mt-1 whitespace-nowrap">
+            R$ {kpis.totalEmAtraso.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
           </p>
-          <span className="text-[11px] sm:text-xs text-rose-600 font-bold mt-0.5 block">{kpis.quantidadeAtrasados} cota(s) pendente(s)</span>
+          <span className="text-[11px] sm:text-xs text-rose-600 font-bold mt-0.5 block whitespace-nowrap">{kpis.quantidadeAtrasados} cota(s) pendente(s)</span>
         </div>
       </div>
 
