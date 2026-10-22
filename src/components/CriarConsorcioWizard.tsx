@@ -3,7 +3,14 @@
 import React, { useState } from "react";
 import { createConsorcioAction } from "@/app/actions";
 import { Check, Plus, Trash2, Users, AlertCircle, ArrowRight, ArrowLeft, TrendingUp, User } from "lucide-react";
-import { calcularTotalArrecadacaoConsorcio, calcularValorCiclo, validarMinimoParticipantes } from "@/lib/finance";
+import {
+  calcularTotalArrecadacaoConsorcio,
+  calcularValorCiclo,
+  validarMinimoParticipantes,
+  formatarMoedaBRL,
+  parseMoedaBRL,
+  calcularResumoFinanceiroConsorcio,
+} from "@/lib/finance";
 
 interface CriarConsorcioWizardProps {
   currentUser: any;
@@ -43,12 +50,38 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
   );
 
   const totalCotas = participantes.reduce((acc, p) => acc + (p.cotasCount || 1), 0);
-  const totalBolada = calcularTotalArrecadacaoConsorcio({
+  const resumoFinanceiro = calcularResumoFinanceiroConsorcio({
     valorCotaBase: valorCota,
     valorAcrescimo: modeloContribuicao === "ACRESCIMO_MENSAL" ? valorAcrescimo : 0,
     modeloContribuicao,
     totalCotas,
   });
+  const totalBolada = resumoFinanceiro.volumeTotalMovimentado;
+
+  const handleValorCotaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const numeric = parseMoedaBRL(e.target.value);
+    setValorCota(numeric);
+  };
+
+  const handleValorAcrescimoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const numeric = parseMoedaBRL(e.target.value);
+    setValorAcrescimo(numeric);
+  };
+
+  const handlePasteMoney = (e: React.ClipboardEvent<HTMLInputElement>, setter: (val: number) => void) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text").trim();
+    if (!text) return;
+    if (text.includes(",")) {
+      const clean = text.replace(/\./g, "").replace(",", ".").replace(/[^\d.]/g, "");
+      const val = parseFloat(clean);
+      if (!isNaN(val)) setter(val);
+    } else {
+      const clean = text.replace(/[^\d.]/g, "");
+      const val = parseFloat(clean);
+      if (!isNaN(val)) setter(val);
+    }
+  };
 
   const handleAdicionarParticipante = (e: React.FormEvent) => {
     e.preventDefault();
@@ -487,13 +520,14 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
                 {modeloContribuicao === "ACRESCIMO_MENSAL" ? "Valor Inicial da Cota (1º Mês) *" : "Valor por Cota (R$) *"}
               </label>
               <input
-                type="number"
-                min={10}
-                step={10}
-                value={valorCota}
-                onChange={(e) => setValorCota(Number(e.target.value))}
-                className="w-full p-3 rounded-xl border border-slate-200 text-sm font-extrabold text-slate-900 focus:border-theme-main focus:outline-none"
+                type="text"
+                inputMode="numeric"
+                value={formatarMoedaBRL(valorCota)}
+                onChange={handleValorCotaChange}
+                onPaste={(e) => handlePasteMoney(e, setValorCota)}
+                className="w-full p-3 rounded-xl border border-slate-200 text-base font-black text-slate-900 focus:border-theme-main focus:outline-none bg-white shadow-2xs"
               />
+              <p className="text-[11px] text-slate-400 mt-1">Ex: R$ 100,00 ou R$ 1.200,00</p>
             </div>
 
             <div>
@@ -507,6 +541,7 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
                 <option value="QUINZENAL">Quinzenal (a cada 15 dias)</option>
                 <option value="SEMANAL">Semanal (a cada 7 dias)</option>
               </select>
+              <p className="text-[11px] text-slate-400 mt-1">Periodicidade dos pagamentos e sorteios</p>
             </div>
           </div>
 
@@ -522,23 +557,38 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
                 </span>
               </div>
               <input
-                type="number"
-                min={1}
-                step={1}
-                value={valorAcrescimo}
-                onChange={(e) => setValorAcrescimo(Number(e.target.value))}
-                className="w-full p-3 rounded-xl border border-amber-300 bg-white text-sm font-bold text-slate-900 focus:outline-none"
+                type="text"
+                inputMode="numeric"
+                value={formatarMoedaBRL(valorAcrescimo)}
+                onChange={handleValorAcrescimoChange}
+                onPaste={(e) => handlePasteMoney(e, setValorAcrescimo)}
+                className="w-full p-3 rounded-xl border border-amber-300 bg-white text-base font-black text-slate-900 focus:outline-none shadow-2xs"
               />
-              <div className="pt-2 text-xs text-amber-800 space-y-1 border-t border-amber-200/60">
-                <p className="font-bold">Simulação de Parcelas por Cota:</p>
-                <p className="opacity-90 leading-relaxed">
-                  • 1º Mês: R$ {valorCota.toFixed(2)}<br />
-                  • 2º Mês: R$ {(valorCota + valorAcrescimo).toFixed(2)} (+R$ {valorAcrescimo.toFixed(2)})<br />
-                  • 3º Mês: R$ {(valorCota + valorAcrescimo * 2).toFixed(2)} (+R$ {(valorAcrescimo * 2).toFixed(2)})<br />
-                  {totalCotas > 3 && (
-                    <span>• Último Mês ({totalCotas}º): R$ {(valorCota + (totalCotas - 1) * valorAcrescimo).toFixed(2)}</span>
-                  )}
+              <div className="pt-2 text-xs text-amber-900 space-y-2 border-t border-amber-200/60">
+                <p className="font-bold uppercase tracking-wide text-[10px] text-amber-800">
+                  Simulação de Parcelas por Cota ({totalCotas} Cotas):
                 </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                  <div className="bg-white p-2.5 rounded-xl border border-amber-200/80 shadow-2xs">
+                    <span className="text-[10px] text-slate-400 block font-semibold">1º Mês</span>
+                    <span className="font-black text-slate-900">{formatarMoedaBRL(resumoFinanceiro.parcelaPrimeiroCiclo)}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-amber-200/80 shadow-2xs">
+                    <span className="text-[10px] text-slate-400 block font-semibold">2º Mês</span>
+                    <span className="font-black text-slate-900">{formatarMoedaBRL(valorCota + valorAcrescimo)}</span>
+                    <span className="text-[10px] text-amber-700 block font-medium">(+ {formatarMoedaBRL(valorAcrescimo)})</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-amber-200/80 shadow-2xs">
+                    <span className="text-[10px] text-slate-400 block font-semibold">3º Mês</span>
+                    <span className="font-black text-slate-900">{formatarMoedaBRL(valorCota + valorAcrescimo * 2)}</span>
+                    <span className="text-[10px] text-amber-700 block font-medium">(+ {formatarMoedaBRL(valorAcrescimo * 2)})</span>
+                  </div>
+                  <div className="bg-amber-100 p-2.5 rounded-xl border border-amber-300 shadow-2xs">
+                    <span className="text-[10px] text-amber-900 block font-bold">{totalCotas}º Mês (Fim)</span>
+                    <span className="font-black text-amber-950">{formatarMoedaBRL(resumoFinanceiro.parcelaUltimoCiclo)}</span>
+                    <span className="text-[10px] text-amber-800 block font-bold">(+ {formatarMoedaBRL((totalCotas - 1) * valorAcrescimo)})</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -554,21 +604,53 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
             />
           </div>
 
-          {/* Resumo Automático */}
-          <div className="bg-theme-light p-4 rounded-2xl border border-theme-light space-y-1.5 text-xs sm:text-sm">
-            <div className="flex justify-between">
-              <span className="text-slate-600 font-medium">Total de Cotas:</span>
-              <span className="font-bold text-slate-800">{totalCotas} cotas</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-600 font-medium">
-                {modeloContribuicao === "ACRESCIMO_MENSAL" ? "Bolada Acumulada Total:" : "Bolada Total a Arrecadar:"}
+          {/* Resumo Financeiro Completo e Validado */}
+          <div className="bg-slate-50 p-4 sm:p-5 rounded-3xl border border-slate-200 space-y-3 text-xs sm:text-sm shadow-2xs">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-200/80">
+              <span className="text-slate-500 font-bold uppercase tracking-wider text-[11px]">Resumo Financeiro do Grupo</span>
+              <span className="font-bold text-theme-text bg-theme-light px-2.5 py-0.5 rounded-full text-xs">
+                {totalCotas} cotas • {totalCotas} {frequencia === "MENSAL" ? "meses" : frequencia === "QUINZENAL" ? "quinzenas" : "semanas"}
               </span>
-              <span className="font-black text-theme-text text-base">R$ {totalBolada.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-600 font-medium">Duração Prevista:</span>
-              <span className="font-bold text-slate-800">{totalCotas} {frequencia === "MENSAL" ? "meses" : "ciclos"}</span>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between items-center py-0.5">
+                <div>
+                  <span className="text-slate-700 font-bold block text-xs">Bolada por Contemplação:</span>
+                  <span className="text-[11px] text-slate-400">Valor líquido entregue ao sorteado em cada ciclo</span>
+                </div>
+                <div className="text-right">
+                  <span className="font-black text-slate-900 text-sm sm:text-base">
+                    {modeloContribuicao === "ACRESCIMO_MENSAL"
+                      ? `${formatarMoedaBRL(resumoFinanceiro.boladaPrimeiroCiclo)} a ${formatarMoedaBRL(resumoFinanceiro.boladaUltimoCiclo)}`
+                      : formatarMoedaBRL(resumoFinanceiro.boladaPrimeiroCiclo)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center py-0.5 border-t border-slate-200/60">
+                <div>
+                  <span className="text-slate-700 font-bold block text-xs">Total Pago por Cota (ao final):</span>
+                  <span className="text-[11px] text-slate-400">Soma de todas as parcelas pagas por cada membro</span>
+                </div>
+                <div className="text-right">
+                  <span className="font-black text-slate-900 text-xs sm:text-sm">
+                    {formatarMoedaBRL(resumoFinanceiro.totalPagoPorCota)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center py-0.5 border-t border-slate-200/60">
+                <div>
+                  <span className="text-slate-700 font-bold block text-xs">Volume Total Movimentado:</span>
+                  <span className="text-[11px] text-slate-400">Arrecadação acumulada de todo o consórcio</span>
+                </div>
+                <div className="text-right">
+                  <span className="font-black text-emerald-700 text-sm sm:text-base">
+                    {formatarMoedaBRL(resumoFinanceiro.volumeTotalMovimentado)}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -583,13 +665,21 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
             <button
               onClick={() => {
                 if (valorCota <= 0) {
-                  setErroMsg("Informe um valor válido para a cota.");
+                  setErroMsg("Informe um valor válido para a cota (maior que zero).");
+                  return;
+                }
+                if (modeloContribuicao === "ACRESCIMO_MENSAL" && valorAcrescimo <= 0) {
+                  setErroMsg("Informe um valor de acréscimo progressivo maior que zero.");
+                  return;
+                }
+                if (!dataPrimeiroVencimento) {
+                  setErroMsg("Selecione a data do primeiro vencimento.");
                   return;
                 }
                 setErroMsg("");
                 setEtapa(4);
               }}
-              className="flex-1 py-3.5 bg-theme-main text-white font-bold rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md hover:opacity-90 transition"
+              className="flex-1 py-3.5 bg-theme-main text-white font-bold rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md hover:opacity-90 transition cursor-pointer"
             >
               <span>Revisão Final</span>
               <ArrowRight className="w-4 h-4" />
@@ -617,7 +707,7 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
               <span className="text-slate-500">Modelo de Cobrança:</span>
               <span className="font-bold text-slate-900">
                 {modeloContribuicao === "ACRESCIMO_MENSAL"
-                  ? `Com Acréscimo (+ R$ ${valorAcrescimo.toFixed(2)}/ciclo)`
+                  ? `Com Acréscimo (+ ${formatarMoedaBRL(valorAcrescimo)}/ciclo)`
                   : "Valor Fixo"}
               </span>
             </div>
@@ -625,11 +715,23 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
               <span className="text-slate-500">
                 {modeloContribuicao === "ACRESCIMO_MENSAL" ? "Valor Inicial da Cota:" : "Valor da Cota:"}
               </span>
-              <span className="font-bold text-slate-900">R$ {valorCota.toFixed(2)}</span>
+              <span className="font-bold text-slate-900">{formatarMoedaBRL(valorCota)}</span>
             </div>
             <div className="flex justify-between border-b border-slate-200 pb-2">
-              <span className="text-slate-500">Bolada Prevista:</span>
-              <span className="font-black text-theme-text text-base">R$ {totalBolada.toFixed(2)}</span>
+              <span className="text-slate-500">Bolada por Contemplação:</span>
+              <span className="font-bold text-slate-900">
+                {modeloContribuicao === "ACRESCIMO_MENSAL"
+                  ? `${formatarMoedaBRL(resumoFinanceiro.boladaPrimeiroCiclo)} a ${formatarMoedaBRL(resumoFinanceiro.boladaUltimoCiclo)}`
+                  : formatarMoedaBRL(resumoFinanceiro.boladaPrimeiroCiclo)}
+              </span>
+            </div>
+            <div className="flex justify-between border-b border-slate-200 pb-2">
+              <span className="text-slate-500">Total Pago por Cota (ao final):</span>
+              <span className="font-bold text-slate-900">{formatarMoedaBRL(resumoFinanceiro.totalPagoPorCota)}</span>
+            </div>
+            <div className="flex justify-between border-b border-slate-200 pb-2">
+              <span className="text-slate-500">Volume Total do Consórcio:</span>
+              <span className="font-black text-theme-text text-base">{formatarMoedaBRL(resumoFinanceiro.volumeTotalMovimentado)}</span>
             </div>
             <div className="flex justify-between border-b border-slate-200 pb-2">
               <span className="text-slate-500">Total de Cotas:</span>

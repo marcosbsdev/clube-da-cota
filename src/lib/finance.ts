@@ -12,6 +12,77 @@ export interface DateGenerationParams {
 }
 
 /**
+ * Formata valores numéricos para moeda no padrão brasileiro (BRL)
+ * Separando milhões, milhares, centenas e centavos (ex: R$ 1.200,00)
+ */
+export function formatarMoedaBRL(valor: number): string {
+  if (isNaN(valor) || valor === null || valor === undefined) return "R$ 0,00";
+  return `R$ ${valor.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+/**
+ * Converte string digitada ou com máscara em número float válido
+ */
+export function parseMoedaBRL(valorStr: string): number {
+  if (!valorStr) return 0;
+  const digits = valorStr.replace(/\D/g, "");
+  if (!digits) return 0;
+  return Number(digits) / 100;
+}
+
+export interface ResumoFinanceiroCalculado {
+  parcelaPrimeiroCiclo: number;
+  parcelaUltimoCiclo: number;
+  boladaPrimeiroCiclo: number;
+  boladaUltimoCiclo: number;
+  totalPagoPorCota: number;
+  volumeTotalMovimentado: number;
+}
+
+/**
+ * Realiza a validação e consolidação matemática completa dos valores de um consórcio
+ */
+export function calcularResumoFinanceiroConsorcio({
+  valorCotaBase,
+  valorAcrescimo = 0,
+  modeloContribuicao = "FIXO",
+  totalCotas,
+}: {
+  valorCotaBase: number;
+  valorAcrescimo?: number;
+  modeloContribuicao?: ModeloContribuicao;
+  totalCotas: number;
+}): ResumoFinanceiroCalculado {
+  const isAcrescimo = modeloContribuicao === "ACRESCIMO_MENSAL";
+  const acrescimo = isAcrescimo ? Math.max(0, valorAcrescimo) : 0;
+  const cotas = Math.max(1, totalCotas);
+
+  const parcelaPrimeiroCiclo = valorCotaBase;
+  const parcelaUltimoCiclo = valorCotaBase + (cotas - 1) * acrescimo;
+
+  const boladaPrimeiroCiclo = parcelaPrimeiroCiclo * cotas;
+  const boladaUltimoCiclo = parcelaUltimoCiclo * cotas;
+
+  // Soma de uma PA (Progressão Aritmética) para calcular o total pago por 1 cota ao longo de todos os ciclos
+  const totalPagoPorCota = ((parcelaPrimeiroCiclo + parcelaUltimoCiclo) * cotas) / 2;
+
+  // Volume total movimentado somando todas as cotas
+  const volumeTotalMovimentado = totalPagoPorCota * cotas;
+
+  return {
+    parcelaPrimeiroCiclo,
+    parcelaUltimoCiclo,
+    boladaPrimeiroCiclo,
+    boladaUltimoCiclo,
+    totalPagoPorCota,
+    volumeTotalMovimentado,
+  };
+}
+
+/**
  * Calcula o valor da cota para um ciclo específico (considerando valor fixo ou acréscimo mensal progressivo)
  */
 export function calcularValorCiclo(

@@ -7,6 +7,9 @@ import {
   calcularValorCiclo,
   calcularTotalArrecadacaoConsorcio,
   validarMinimoParticipantes,
+  formatarMoedaBRL,
+  parseMoedaBRL,
+  calcularResumoFinanceiroConsorcio,
 } from "../src/lib/finance.ts";
 
 console.log("🧪 Executando testes das regras financeiras do Clube da Cota...\n");
@@ -144,4 +147,52 @@ console.log("🧪 Executando testes das regras financeiras do Clube da Cota...\n
   console.log("✅ Teste 6: Validação de mínimo obrigatório de 2 participantes aprovado.");
 }
 
-console.log("\n🎉 Todos os 6 testes de regras financeiras passaram com 100% de sucesso!");
+// Teste 7: Formatação e Máscara no Padrão Brasileiro (Milhões, Milhares, Centenas e Centavos)
+{
+  assert.strictEqual(formatarMoedaBRL(100), "R$ 100,00", "Formatação de 100 deve ser R$ 100,00");
+  assert.strictEqual(formatarMoedaBRL(1200), "R$ 1.200,00", "Formatação de 1200 deve ser R$ 1.200,00");
+  assert.strictEqual(formatarMoedaBRL(12250), "R$ 12.250,00", "Formatação de 12250 deve ser R$ 12.250,00");
+  assert.strictEqual(formatarMoedaBRL(1000000), "R$ 1.000.000,00", "Formatação de 1 milhão deve ser R$ 1.000.000,00");
+  assert.strictEqual(formatarMoedaBRL(20000000), "R$ 20.000.000,00", "Formatação de 20 milhões deve ser R$ 20.000.000,00");
+
+  assert.strictEqual(parseMoedaBRL("R$ 1.200,00"), 1200, "Parse de R$ 1.200,00 deve ser 1200");
+  assert.strictEqual(parseMoedaBRL("120000"), 1200, "Parse de digitação contínua 120000 deve ser 1200");
+  assert.strictEqual(parseMoedaBRL("500"), 5, "Parse de 500 centavos deve ser 5");
+
+  console.log("✅ Teste 7: Máscara e formatação monetária no padrão brasileiro BRL aprovado.");
+}
+
+// Teste 8: Validação Completa dos Cálculos Financeiros (Modelo Fixo e Progressivo)
+{
+  // Caso 1: Caso exato do print do usuário (10 cotas, R$ 100 base, + R$ 5 acréscimo)
+  const resumoProgressivo = calcularResumoFinanceiroConsorcio({
+    valorCotaBase: 100,
+    valorAcrescimo: 5,
+    modeloContribuicao: "ACRESCIMO_MENSAL",
+    totalCotas: 10,
+  });
+
+  assert.strictEqual(resumoProgressivo.parcelaPrimeiroCiclo, 100, "1º mês deve ser R$ 100");
+  assert.strictEqual(resumoProgressivo.parcelaUltimoCiclo, 145, "10º mês deve ser R$ 145 (100 + 9 * 5)");
+  assert.strictEqual(resumoProgressivo.boladaPrimeiroCiclo, 1000, "Bolada 1º mês deve ser R$ 1.000 (10 * 100)");
+  assert.strictEqual(resumoProgressivo.boladaUltimoCiclo, 1450, "Bolada 10º mês deve ser R$ 1.450 (10 * 145)");
+  assert.strictEqual(resumoProgressivo.totalPagoPorCota, 1225, "Total pago por cota deve ser R$ 1.225 (PA: (100+145)*10/2)");
+  assert.strictEqual(resumoProgressivo.volumeTotalMovimentado, 12250, "Volume total movimentado deve ser R$ 12.250");
+
+  // Caso 2: Consórcio Fixo (10 cotas de R$ 1.200)
+  const resumoFixo = calcularResumoFinanceiroConsorcio({
+    valorCotaBase: 1200,
+    modeloContribuicao: "FIXO",
+    totalCotas: 10,
+  });
+
+  assert.strictEqual(resumoFixo.parcelaPrimeiroCiclo, 1200);
+  assert.strictEqual(resumoFixo.parcelaUltimoCiclo, 1200);
+  assert.strictEqual(resumoFixo.boladaPrimeiroCiclo, 12000, "Bolada mensal deve ser R$ 12.000 (10 * 1.200)");
+  assert.strictEqual(resumoFixo.totalPagoPorCota, 12000, "Total pago por cota deve ser R$ 12.000");
+  assert.strictEqual(resumoFixo.volumeTotalMovimentado, 120000, "Volume total movimentado deve ser R$ 120.000");
+
+  console.log("✅ Teste 8: Validação matemática completa dos valores calculados aprovada.");
+}
+
+console.log("\n🎉 Todos os 8 testes de regras financeiras passaram com 100% de sucesso!");
