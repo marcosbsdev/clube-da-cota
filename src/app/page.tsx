@@ -10,6 +10,7 @@ import { CriarConsorcioWizard } from "@/components/CriarConsorcioWizard";
 import { PerfilView } from "@/components/PerfilView";
 import { AuthView } from "@/components/AuthView";
 import { useTheme, ThemeName } from "@/components/ThemeProvider";
+import { ConsorcioComboSelector } from "@/components/ConsorcioComboSelector";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabType>("participante");
@@ -113,6 +114,16 @@ export default function Home() {
 
       {/* Conteúdo Principal Responsivo */}
       <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+        {/* Seletor Combo em Destaque (Início e Gestão) */}
+        {(activeTab === "participante" || activeTab === "criador") && consorcio && (
+          <ConsorcioComboSelector
+            consorcioAtual={consorcio}
+            todosConsorcios={todosConsorcios}
+            onSelecionarConsorcio={handleSelecionarConsorcio}
+            onCriarNovoConsorcio={isCriadorOuAdmin ? () => setActiveTab("assistente") : undefined}
+          />
+        )}
+
         {activeTab === "participante" && (
           <ParticipanteView consorcio={consorcio} currentUser={currentUser} />
         )}

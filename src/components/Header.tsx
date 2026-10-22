@@ -36,7 +36,6 @@ export function Header({
   onSelecionarConsorcio,
 }: HeaderProps) {
   const [dropdownAberto, setDropdownAberto] = useState(false);
-  const [modalConsorciosAberto, setModalConsorciosAberto] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -79,28 +78,11 @@ export function Header({
             </div>
             <div>
               <span className="text-[10px] uppercase font-bold tracking-wider text-white/70 block leading-none">
-                {consorcioAtual ? "Consórcio Ativo" : "Consórcio entre Amigos"}
+                Consórcio entre Amigos
               </span>
-              {todosConsorcios && todosConsorcios.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setModalConsorciosAberto(true)}
-                  className="flex items-center gap-1.5 text-left text-white hover:text-white/90 group py-0.5 transition"
-                  title="Clique para alternar entre seus consórcios"
-                >
-                  <h1 className="text-sm sm:text-base font-black tracking-tight leading-tight max-w-[130px] sm:max-w-[200px] truncate">
-                    {consorcioAtual?.nome || "Selecione o Grupo"}
-                  </h1>
-                  <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5 group-hover:bg-white/30 transition">
-                    <span>{todosConsorcios.length}</span>
-                    <ChevronDown className="w-3 h-3 opacity-80" />
-                  </span>
-                </button>
-              ) : (
-                <h1 className="text-base sm:text-lg font-black tracking-tight leading-tight text-white">
-                  Clube da Cota
-                </h1>
-              )}
+              <h1 className="text-base sm:text-lg font-black tracking-tight leading-tight text-white">
+                Clube da Cota
+              </h1>
             </div>
           </div>
 
@@ -265,101 +247,6 @@ export function Header({
           </div>
         </div>
       </div>
-
-      {/* Modal para Alternar entre Consórcios */}
-      {modalConsorciosAberto && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 text-slate-800 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="font-black text-slate-900 text-lg">Seus Consórcios</h3>
-                <p className="text-xs text-slate-500">Selecione o consórcio que deseja acessar no momento:</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setModalConsorciosAberto(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
-              {todosConsorcios.map((c) => {
-                const isSelected = c.id === consorcioAtual?.id;
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => {
-                      if (onSelecionarConsorcio) {
-                        onSelecionarConsorcio(c.id);
-                      }
-                      setModalConsorciosAberto(false);
-                    }}
-                    className={`w-full p-4 rounded-2xl border text-left transition flex items-center justify-between gap-3 ${
-                      isSelected
-                        ? "bg-theme-light border-theme-main/50 shadow-sm"
-                        : "bg-slate-50/80 hover:bg-slate-100 border-slate-200"
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="font-bold text-slate-900 text-sm truncate">{c.nome}</span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                          {c.status}
-                        </span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
-                          {c.papel}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500">
-                        {c.totalCotas} cotas • R$ {c.valorCota.toFixed(2)}/cota • {c.frequencia?.toLowerCase()}
-                      </p>
-                    </div>
-
-                    <div className="flex-shrink-0">
-                      {isSelected ? (
-                        <span className="text-xs font-bold text-theme-text bg-white px-2.5 py-1 rounded-xl shadow-xs border border-theme-main/30 flex items-center gap-1">
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Ativo</span>
-                        </span>
-                      ) : (
-                        <span className="text-xs font-bold text-slate-400 group-hover:text-slate-600">
-                          Acessar →
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="pt-3 border-t border-slate-100 flex gap-2">
-              {canCreateOrManage && onChangeTab && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setModalConsorciosAberto(false);
-                    onChangeTab("assistente");
-                  }}
-                  className="flex-1 py-3 px-4 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  <span>Criar Novo Consórcio</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setModalConsorciosAberto(false)}
-                className="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition"
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </header>
   );
 }

@@ -46,7 +46,6 @@ export function CriadorView({
   const [modoVisao, setModoVisao] = useState<"DASHBOARD" | "LISTA_CONSORCIOS">(
     consorcio ? "DASHBOARD" : "LISTA_CONSORCIOS"
   );
-  const [dropdownConsorcios, setDropdownConsorcios] = useState(false);
   const [filtroStatus, setFiltroStatus] = useState<string>("TODOS");
   const [modalEstornoAberto, setModalEstornoAberto] = useState(false);
   const [modalRecusaAberto, setModalRecusaAberto] = useState(false);
@@ -332,91 +331,34 @@ export function CriadorView({
         </div>
       )}
 
-      {/* Barra Superior do Consórcio em Gestão */}
-      <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-theme-light text-theme-text flex items-center justify-center flex-shrink-0 shadow-sm">
-            <FolderKanban className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Consórcio em Gestão
-              </span>
-              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                {consorcio.status}
-              </span>
-              <span className="bg-theme-light text-theme-text text-[10px] font-bold px-2 py-0.5 rounded-md">
-                {consorcio.totalCotas} cotas
-              </span>
-            </div>
-            <h2 className="text-lg sm:text-xl font-black text-slate-900 mt-0.5">
-              {consorcio.nome}
-            </h2>
-          </div>
+      {/* Barra de Ações Rápidas do Gestor */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/80 backdrop-blur-xs p-4 rounded-3xl border border-slate-200/80 shadow-2xs">
+        <div>
+          <h2 className="text-base font-black text-slate-900">
+            Painel de Gestão & Indicadores
+          </h2>
+          <p className="text-xs text-slate-500">
+            Controle financeiro, arrecadação e conferência de comprovantes
+          </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Alternar para a Lista Geral de Consórcios */}
           <button
             onClick={() => setModoVisao("LISTA_CONSORCIOS")}
-            className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5"
+            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5"
             title="Visualizar todos os consórcios em cards"
           >
             <Layers className="w-3.5 h-3.5 text-slate-500" />
-            <span>Meus Consórcios ({todosConsorcios.length})</span>
+            <span>Ver em Cards ({todosConsorcios.length})</span>
           </button>
 
-          {/* Dropdown Rápido de Consórcios */}
-          {todosConsorcios.length > 1 && (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setDropdownConsorcios(!dropdownConsorcios)}
-                className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5 border border-slate-200"
-              >
-                <span>Trocar</span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-
-              {dropdownConsorcios && (
-                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-30 space-y-1">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 py-1 block">
-                    Alternar para:
-                  </span>
-                  {todosConsorcios.map((c: any) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => {
-                        if (onSelecionarConsorcio) {
-                          onSelecionarConsorcio(c.id);
-                        }
-                        setDropdownConsorcios(false);
-                      }}
-                      className={`w-full p-2.5 rounded-xl text-left text-xs transition flex items-center justify-between ${
-                        c.id === consorcio.id
-                          ? "bg-theme-light text-theme-text font-bold"
-                          : "hover:bg-slate-100 text-slate-700"
-                      }`}
-                    >
-                      <span className="truncate">{c.nome}</span>
-                      {c.id === consorcio.id && <Check className="w-3.5 h-3.5 text-theme-text" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Botão Novo Consórcio */}
           {onCriarNovoConsorcio && (
             <button
               onClick={onCriarNovoConsorcio}
-              className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-black text-white transition flex items-center gap-1.5 shadow-sm"
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-black text-white transition flex items-center gap-1.5 shadow-2xs"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Novo</span>
+              <span>Novo Consórcio</span>
             </button>
           )}
         </div>

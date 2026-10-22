@@ -93,25 +93,24 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Coluna Esquerda: Visão Geral, Próximo Vencimento & Chave Pix */}
         <div className="lg:col-span-5 space-y-6">
-          {/* Cartão Geral do Consórcio */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-theme-text bg-theme-light px-2.5 py-1 rounded-lg">
-                  Consórcio Ativo
-                </span>
-                <h3 className="text-xl font-black text-slate-900 mt-2">{consorcio.nome}</h3>
-                {consorcio.finalidade && (
-                  <p className="text-xs text-slate-500 mt-1">{consorcio.finalidade}</p>
-                )}
-              </div>
-              <span className="text-xs text-slate-400 font-semibold bg-slate-100 px-2.5 py-1 rounded-lg">
-                {consorcio.totalCotas} cotas
+          {/* Resumo Financeiro Pessoal */}
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Resumo da Sua Participação
+              </span>
+              <span className="text-xs text-theme-text font-bold bg-theme-light px-2.5 py-0.5 rounded-full">
+                {consorcio.totalCotas} cotas no grupo
               </span>
             </div>
 
-            {/* Resumo Financeiro Pessoal */}
-            <div className="grid grid-cols-3 gap-2.5 mt-5 pt-4 border-t border-slate-100 text-center">
+            {consorcio.finalidade && (
+              <p className="text-xs text-slate-500 italic pb-1 border-b border-slate-100">
+                &ldquo;{consorcio.finalidade}&rdquo;
+              </p>
+            )}
+
+            <div className="grid grid-cols-3 gap-2.5 text-center pt-1">
               <div className="bg-slate-50/80 p-3 rounded-2xl border border-slate-100">
                 <span className="text-[11px] text-slate-500 font-semibold block">Total Previsto</span>
                 <p className="text-sm sm:text-base font-black text-slate-900 mt-0.5">
