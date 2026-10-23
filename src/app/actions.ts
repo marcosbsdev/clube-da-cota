@@ -165,6 +165,22 @@ export async function getConsorcioData(usuarioId?: string, consorcioId?: string)
         c.status = "EM_ATRASO";
       }
     }
+
+    const lidasAteCookie = cookies().get(`clube_cota_lidas_${consorcio.id}`) || cookies().get(`clube_cota_lidas_global`);
+    const dispensadasCookie = cookies().get(`clube_cota_dispensadas_${consorcio.id}`) || cookies().get(`clube_cota_dispensadas_global`);
+    let dispensadasIds: string[] = [];
+    if (dispensadasCookie?.value) {
+      try {
+        dispensadasIds = JSON.parse(decodeURIComponent(dispensadasCookie.value));
+      } catch {
+        try {
+          dispensadasIds = JSON.parse(dispensadasCookie.value);
+        } catch {}
+      }
+    }
+
+    (consorcio as any).notificacoesLidasAte = lidasAteCookie?.value || null;
+    (consorcio as any).notificacoesDispensadasIds = dispensadasIds;
   }
 
   return {
@@ -173,6 +189,47 @@ export async function getConsorcioData(usuarioId?: string, consorcioId?: string)
     consorcio,
     todosConsorcios,
   };
+}
+
+export async function marcarNotificacoesLidasAction(consorcioId: string) {
+  const agora = new Date().toISOString();
+  cookies().set(`clube_cota_lidas_${consorcioId}`, agora, {
+    maxAge: 60 * 60 * 24 * 365,
+    path: "/",
+  });
+  cookies().set(`clube_cota_lidas_global`, agora, {
+    maxAge: 60 * 60 * 24 * 365,
+    path: "/",
+  });
+  return { success: true, lidasAte: agora };
+}
+
+export async function dispensarNotificacaoAction(consorcioId: string, notificacaoId: string) {
+  const cookieName = `clube_cota_dispensadas_${consorcioId}`;
+  const existing = cookies().get(cookieName)?.value;
+  let ids: string[] = [];
+  if (existing) {
+    try {
+      ids = JSON.parse(decodeURIComponent(existing));
+    } catch {
+      try {
+        ids = JSON.parse(existing);
+      } catch {}
+    }
+  }
+  if (!ids.includes(notificacaoId)) {
+    ids.push(notificacaoId);
+  }
+  const payload = JSON.stringify(ids);
+  cookies().set(cookieName, payload, {
+    maxAge: 60 * 60 * 24 * 365,
+    path: "/",
+  });
+  cookies().set("clube_cota_dispensadas_global", payload, {
+    maxAge: 60 * 60 * 24 * 365,
+    path: "/",
+  });
+  return { success: true };
 }
 
 export interface CreateConsorcioInput {

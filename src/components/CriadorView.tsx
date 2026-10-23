@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   calcularIndicadoresConsorcio,
   formatarDataSegura,
@@ -40,6 +40,7 @@ import {
   Copy,
   ExternalLink,
   MessageCircle,
+  Sparkles,
 } from "lucide-react";
 
 function formatarDataHoraAuditoria(d: string | Date) {
@@ -396,6 +397,28 @@ export function CriadorView({
   const [motivoTexto, setMotivoTexto] = useState("");
   const [msgSucesso, setMsgSucesso] = useState("");
 
+  // Estado da Confirmação de Recebimento de Mensalidade
+  const [modalConfirmarPagamentoAberto, setModalConfirmarPagamentoAberto] = useState(false);
+  const [contribuicaoParaConfirmar, setContribuicaoParaConfirmar] = useState<any>(null);
+  const [justificativaConfirmacao, setJustificativaConfirmacao] = useState("Pagamento conferido e confirmado pelo criador.");
+  const [isConfirmandoPagamento, setIsConfirmandoPagamento] = useState(false);
+  const [toastSucesso, setToastSucesso] = useState<{ titulo: string; mensagem: string } | null>(null);
+
+  // Estado da Confirmação de Contemplação / Reversão
+  const [modalContemplacaoAberto, setModalContemplacaoAberto] = useState(false);
+  const [cotaAlvoContemplacao, setCotaAlvoContemplacao] = useState<any>(null);
+  const [acaoContemplacao, setAcaoContemplacao] = useState<"CONTEMPLADA" | "ATIVA">("CONTEMPLADA");
+  const [justificativaContemplacao, setJustificativaContemplacao] = useState("");
+  const [isSalvandoContemplacao, setIsSalvandoContemplacao] = useState(false);
+
+  // Auto-dismiss do Toast Flutuante de Sucesso após 4.5s
+  useEffect(() => {
+    if (toastSucesso) {
+      const timer = setTimeout(() => setToastSucesso(null), 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastSucesso]);
+
   // Estado da Edição de Consórcio
   const [modalEditarAberto, setModalEditarAberto] = useState(false);
   const [editNome, setEditNome] = useState(consorcio?.nome || "");
@@ -652,10 +675,53 @@ export function CriadorView({
     return c.status === filtroStatus;
   });
 
-  const handleConfirmarPagamento = async (contribuicaoId: string) => {
-    await confirmPaymentAction(contribuicaoId, currentUser.id, "Pagamento conferido e confirmado pelo criador.");
-    setMsgSucesso("Pagamento confirmado com sucesso!");
-    setTimeout(() => setMsgSucesso(""), 3000);
+  const abrirModalConfirmarPagamento = (contribuicao: any) => {
+    setContribuicaoParaConfirmar(contribuicao);
+    setJustificativaConfirmacao("Pagamento conferido e confirmado pelo criador.");
+    setModalConfirmarPagamentoAberto(true);
+  };
+
+  const handleConfirmarPagamento = (contribuicaoId: string) => {
+    const item = consorcio.contribuicoes.find((c: any) => c.id === contribuicaoId);
+    if (item) {
+      abrirModalConfirmarPagamento(item);
+    }
+  };
+
+  const handleExecutarConfirmacaoPagamento = async () => {
+    if (!contribuicaoParaConfirmar) return;
+    setIsConfirmandoPagamento(true);
+    try {
+      const res = await confirmPaymentAction(
+        contribuicaoParaConfirmar.id,
+        currentUser.id,
+        justificativaConfirmacao.trim() || "Pagamento conferido e confirmado pelo criador."
+      );
+      if (res.success) {
+        setModalConfirmarPagamentoAberto(false);
+        const nomeParticipante = contribuicaoParaConfirmar.usuario?.name || "Participante";
+        const cotaNum = contribuicaoParaConfirmar.cota?.numero;
+        const valorFormatado = formatarMoedaBRL(contribuicaoParaConfirmar.valorPrevisto);
+
+        const msg = `Recebimento de ${valorFormatado} da Cota #${cotaNum} (${nomeParticipante}) confirmado com sucesso!`;
+        setMsgSucesso(msg);
+        setToastSucesso({
+          titulo: "Recebimento Confirmado com Sucesso!",
+          mensagem: `A mensalidade de ${valorFormatado} da Cota #${cotaNum} (${nomeParticipante}) foi marcada como PAGA e registrada na auditoria.`,
+        });
+        setTimeout(() => setMsgSucesso(""), 4500);
+
+        if (onAtualizarConsorcio) {
+          await onAtualizarConsorcio();
+        }
+      } else {
+        alert(res.error || "Não foi possível confirmar o recebimento.");
+      }
+    } catch (err: any) {
+      alert("Erro ao confirmar recebimento: " + err.message);
+    } finally {
+      setIsConfirmandoPagamento(false);
+    }
   };
 
   const handleSalvarEstorno = async (e: React.FormEvent) => {
@@ -770,22 +836,78 @@ export function CriadorView({
     }
   };
 
-  const handleToggleContemplada = async (cotaId: string, novoStatus: "ATIVA" | "CONTEMPLADA") => {
-    const res = await toggleCotaContempladaAction({
-      consorcioId: consorcio.id,
-      usuarioId: currentUser.id,
-      cotaId,
-      status: novoStatus,
-    });
-
-    if (res.success) {
-      setMsgSucesso(res.message || "Status de contemplação atualizado!");
-      setTimeout(() => setMsgSucesso(""), 3500);
-      if (onAtualizarConsorcio) {
-        onAtualizarConsorcio();
-      }
+  const abrirModalContemplacao = (cota: any, novoStatus: "CONTEMPLADA" | "ATIVA") => {
+    setCotaAlvoContemplacao(cota);
+    setAcaoContemplacao(novoStatus);
+    const pos = cota.ordemSorteio || cota.numero;
+    if (novoStatus === "CONTEMPLADA") {
+      setJustificativaContemplacao(`Cota #${cota.numero} contemplada no sorteio do Ciclo #${pos}.`);
     } else {
-      alert(res.error || "Erro ao atualizar contemplação.");
+      setJustificativaContemplacao(`Contemplação da cota #${cota.numero} revertida para aguardando pelo criador.`);
+    }
+    setModalContemplacaoAberto(true);
+  };
+
+  const handleToggleContemplada = (cotaId: string, novoStatus: "ATIVA" | "CONTEMPLADA") => {
+    const cota = consorcio.cotas.find((c: any) => c.id === cotaId);
+    if (cota) {
+      abrirModalContemplacao(cota, novoStatus);
+    }
+  };
+
+  const handleConfirmarAcaoContemplacao = async () => {
+    if (!cotaAlvoContemplacao) return;
+    setIsSalvandoContemplacao(true);
+    try {
+      const res = await toggleCotaContempladaAction({
+        consorcioId: consorcio.id,
+        usuarioId: currentUser.id,
+        cotaId: cotaAlvoContemplacao.id,
+        status: acaoContemplacao,
+        justificativa: justificativaContemplacao.trim(),
+      });
+
+      if (res.success) {
+        setModalContemplacaoAberto(false);
+        const pos = cotaAlvoContemplacao.ordemSorteio || cotaAlvoContemplacao.numero;
+        const nomes =
+          cotaAlvoContemplacao.participantes?.map((p: any) => p.usuario.name).join(" & ") ||
+          `Cota #${cotaAlvoContemplacao.numero}`;
+        const boladaDesteCiclo =
+          calcularValorCiclo(
+            pos,
+            consorcio.valorCota,
+            consorcio.modeloContribuicao,
+            consorcio.valorAcrescimo
+          ) * consorcio.totalCotas;
+
+        if (acaoContemplacao === "CONTEMPLADA") {
+          const msg = `🎉 Cota #${cotaAlvoContemplacao.numero} (${nomes}) contemplada com sucesso!`;
+          setMsgSucesso(msg);
+          setToastSucesso({
+            titulo: "🎉 Cota Contemplada com Sucesso!",
+            mensagem: `A Cota #${cotaAlvoContemplacao.numero} (${nomes}) foi contemplada no Ciclo #${pos} com a bolada de ${formatarMoedaBRL(boladaDesteCiclo)}.`,
+          });
+        } else {
+          const msg = `↩️ Contemplação da Cota #${cotaAlvoContemplacao.numero} (${nomes}) revertida para Aguardando.`;
+          setMsgSucesso(msg);
+          setToastSucesso({
+            titulo: "↩️ Contemplação Revertida",
+            mensagem: `A Cota #${cotaAlvoContemplacao.numero} (${nomes}) retornou ao status 'Aguardando Sorteio'.`,
+          });
+        }
+        setTimeout(() => setMsgSucesso(""), 4500);
+
+        if (onAtualizarConsorcio) {
+          await onAtualizarConsorcio();
+        }
+      } else {
+        alert(res.error || "Erro ao atualizar contemplação.");
+      }
+    } catch (err: any) {
+      alert("Erro ao atualizar contemplação: " + err.message);
+    } finally {
+      setIsSalvandoContemplacao(false);
     }
   };
 
@@ -812,6 +934,30 @@ export function CriadorView({
 
   return (
     <div className="space-y-6">
+      {/* Toast Flutuante de Sucesso (Fixo no topo da tela com alta visibilidade) */}
+      {toastSucesso && (
+        <div className="fixed top-20 right-4 sm:right-8 z-[100] max-w-md bg-white border border-emerald-300 rounded-3xl shadow-2xl p-4 sm:p-5 flex items-start gap-3.5 animate-in slide-in-from-top-4 duration-300 border-l-8 border-l-emerald-500">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0 shadow-xs">
+            <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-black text-slate-900 leading-tight">
+              {toastSucesso.titulo}
+            </h4>
+            <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+              {toastSucesso.mensagem}
+            </p>
+          </div>
+          <button
+            onClick={() => setToastSucesso(null)}
+            className="text-slate-400 hover:text-slate-700 p-1 rounded-xl transition cursor-pointer text-xs font-bold"
+            title="Fechar"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {msgSucesso && (
         <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-semibold flex items-center gap-2 shadow-sm">
           <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
@@ -959,7 +1105,7 @@ export function CriadorView({
                     key={cota.id}
                     className={`p-3 rounded-2xl border transition flex items-center justify-between gap-2.5 ${
                       isContemplada
-                        ? "bg-emerald-50/70 border-emerald-200"
+                        ? "bg-gradient-to-r from-emerald-50/90 to-teal-50/60 border-emerald-300 shadow-2xs"
                         : "bg-slate-50/80 hover:bg-slate-100/80 border-slate-200/80"
                     }`}
                   >
@@ -967,7 +1113,7 @@ export function CriadorView({
                       <div
                         className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs flex-shrink-0 shadow-2xs ${
                           isContemplada
-                            ? "bg-emerald-600 text-white"
+                            ? "bg-emerald-600 text-white ring-2 ring-emerald-200"
                             : "bg-white border border-slate-200 text-slate-700"
                         }`}
                       >
@@ -983,7 +1129,7 @@ export function CriadorView({
                           </span>
                         </div>
                         <span className="text-[11px] text-slate-600 font-medium block mt-0.5 whitespace-nowrap">
-                          Ciclo {pos} • Bolada: <strong className="text-slate-900">{formatarMoedaBRL(boladaDesteCiclo)}</strong>
+                          Ciclo {pos} • Bolada: <strong className={isContemplada ? "text-emerald-950 font-black" : "text-slate-900 font-bold"}>{formatarMoedaBRL(boladaDesteCiclo)}</strong>
                         </span>
                       </div>
                     </div>
@@ -1002,27 +1148,28 @@ export function CriadorView({
                         <span className="hidden sm:inline">Acesso</span>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleToggleContemplada(cota.id, isContemplada ? "ATIVA" : "CONTEMPLADA")
-                        }
-                        className={`text-[10px] font-bold px-2.5 py-1 rounded-xl border transition cursor-pointer flex items-center gap-1 ${
-                          isContemplada
-                            ? "bg-white text-emerald-800 border-emerald-300 hover:bg-emerald-100"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                        }`}
-                        title={isContemplada ? "Clique para reverter para ativa" : "Marcar como contemplada"}
-                      >
-                        {isContemplada ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-600" />
-                            <span>Contemplada</span>
-                          </>
-                        ) : (
-                          <span>Aguardando</span>
-                        )}
-                      </button>
+                      {isContemplada ? (
+                        <button
+                          type="button"
+                          onClick={() => abrirModalContemplacao(cota, "ATIVA")}
+                          className="text-xs font-black px-3.5 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-sm shadow-emerald-600/30 border border-emerald-500 active:scale-95"
+                          title="Cota contemplada com sucesso! Clique para reverter para aguardando."
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-amber-300 fill-amber-300 animate-pulse" />
+                          <span>Contemplada</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => abrirModalContemplacao(cota, "CONTEMPLADA")}
+                          className="text-xs font-bold px-3 py-1.5 rounded-xl border border-amber-300/80 bg-amber-50/80 hover:bg-emerald-50 hover:border-emerald-400 text-amber-900 hover:text-emerald-800 transition cursor-pointer flex items-center gap-1.5 shadow-2xs group active:scale-95"
+                          title="Clique para confirmar a contemplação e registrar a entrega da bolada"
+                        >
+                          <Clock className="w-3.5 h-3.5 text-amber-600 group-hover:text-emerald-600 transition" />
+                          <span className="group-hover:hidden">Aguardando</span>
+                          <span className="hidden group-hover:inline font-black text-emerald-700">Contemplar</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -1079,10 +1226,11 @@ export function CriadorView({
 
                     <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-200/60">
                       <button
-                        onClick={() => handleConfirmarPagamento(c.id)}
-                        className="py-2.5 px-3 bg-theme-main hover:opacity-95 text-white font-bold text-xs rounded-xl transition shadow-sm touch-target"
+                        onClick={() => abrirModalConfirmarPagamento(c)}
+                        className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition shadow-sm touch-target cursor-pointer flex items-center justify-center gap-1.5"
                       >
-                        Confirmar
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Confirmar</span>
                       </button>
                       <button
                         onClick={() => {
@@ -1173,10 +1321,11 @@ export function CriadorView({
                       </div>
                     ) : (
                       <button
-                        onClick={() => handleConfirmarPagamento(c.id)}
-                        className="px-3.5 py-2 bg-theme-main text-white text-xs font-bold rounded-xl shadow-sm hover:opacity-90 transition touch-target"
+                        onClick={() => abrirModalConfirmarPagamento(c)}
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition touch-target cursor-pointer flex items-center gap-1.5"
                       >
-                        Confirmar
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Confirmar</span>
                       </button>
                     )}
                   </div>
@@ -1213,10 +1362,11 @@ export function CriadorView({
                     </div>
                     <div className="text-right">
                       <button
-                        onClick={() => handleConfirmarPagamento(c.id)}
-                        className="text-[11px] bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-xl hover:bg-emerald-700 transition shadow-sm"
+                        onClick={() => abrirModalConfirmarPagamento(c)}
+                        className="text-[11px] bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-xl hover:bg-emerald-700 transition shadow-sm cursor-pointer flex items-center gap-1"
                       >
-                        Confirmar
+                        <Check className="w-3 h-3" />
+                        <span>Confirmar</span>
                       </button>
                     </div>
                   </div>
@@ -1226,7 +1376,7 @@ export function CriadorView({
           )}
 
           {/* Trilha de Auditoria (Página 83 do PDF: data/hora, responsável, ação e justificativa) */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm">
+          <div id="historico-auditoria" className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm scroll-mt-24">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3.5">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-theme-light text-theme-text flex items-center justify-center font-bold text-sm">
@@ -1300,6 +1450,323 @@ export function CriadorView({
           </div>
         </div>
       </div>
+
+      {/* Modal de Confirmação de Recebimento de Mensalidade */}
+      {modalConfirmarPagamentoAberto && contribuicaoParaConfirmar && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[100] animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    Confirmar Recebimento
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Conferência e baixa da mensalidade
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalConfirmarPagamentoAberto(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-xs transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Resumo da Parcela */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Participante
+                  </span>
+                  <span className="font-bold text-sm text-slate-900 block mt-0.5">
+                    {contribuicaoParaConfirmar.usuario?.name || "Participante"}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {contribuicaoParaConfirmar.usuario?.email || "Sem e-mail cadastrado"}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Cota
+                  </span>
+                  <span className="text-xs font-mono font-bold bg-theme-light text-theme-text px-2.5 py-1 rounded-lg inline-block mt-0.5">
+                    Cota #{contribuicaoParaConfirmar.cota?.numero}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/60 text-xs">
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Ciclo:</span>
+                  <span className="font-semibold text-slate-700">Ciclo #{contribuicaoParaConfirmar.numeroCiclo}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Vencimento:</span>
+                  <span className="font-semibold text-slate-700">{formatarDataSegura(contribuicaoParaConfirmar.dataVencimento)}</span>
+                </div>
+              </div>
+
+              {/* Destaque do Valor */}
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-900">Valor a Confirmar:</span>
+                <span className="text-lg font-black text-emerald-700">
+                  {formatarMoedaBRL(contribuicaoParaConfirmar.valorPrevisto)}
+                </span>
+              </div>
+
+              {/* Informação do comprovante anexo, se houver */}
+              {contribuicaoParaConfirmar.comprovante && (
+                <div className="p-2.5 bg-blue-50/70 border border-blue-200/70 rounded-xl flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 truncate">
+                    <FileText className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                    <span className="truncate font-medium text-blue-950">
+                      {contribuicaoParaConfirmar.comprovante.arquivoNome}
+                    </span>
+                  </div>
+                  {contribuicaoParaConfirmar.comprovante.arquivoUrl && (
+                    <a
+                      href={contribuicaoParaConfirmar.comprovante.arquivoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] font-bold text-blue-700 hover:underline flex items-center gap-1 shrink-0 ml-2"
+                    >
+                      <span>Ver Anexo</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Campo de Justificativa / Observação */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Observação / Justificativa (Opcional)
+              </label>
+              <textarea
+                rows={2}
+                value={justificativaConfirmacao}
+                onChange={(e) => setJustificativaConfirmacao(e.target.value)}
+                placeholder="Ex: Pagamento conferido e confirmado pelo criador via extrato."
+                className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:border-theme-main focus:outline-none bg-slate-50/50"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                Ficará registrado no histórico de auditoria e no sininho de notificações do consórcio.
+              </p>
+            </div>
+
+            {/* Ações */}
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setModalConfirmarPagamentoAberto(false)}
+                disabled={isConfirmandoPagamento}
+                className="flex-1 py-2.5 px-3 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleExecutarConfirmacaoPagamento}
+                disabled={isConfirmandoPagamento}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {isConfirmandoPagamento ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Confirmando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Sim, Confirmar</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Contemplação / Reversão */}
+      {modalContemplacaoAberto && cotaAlvoContemplacao && (() => {
+        const pos = cotaAlvoContemplacao.ordemSorteio || cotaAlvoContemplacao.numero;
+        const nomes =
+          cotaAlvoContemplacao.participantes?.map((p: any) => p.usuario.name).join(" & ") ||
+          `Cota #${cotaAlvoContemplacao.numero}`;
+        const boladaDesteCiclo =
+          calcularValorCiclo(
+            pos,
+            consorcio.valorCota,
+            consorcio.modeloContribuicao,
+            consorcio.valorAcrescimo
+          ) * consorcio.totalCotas;
+        const isConfirmar = acaoContemplacao === "CONTEMPLADA";
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[100] animate-in fade-in duration-150">
+            <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm ${
+                      isConfirmar
+                        ? "bg-gradient-to-br from-amber-400 to-amber-500 text-white shadow-amber-500/20"
+                        : "bg-amber-100 text-amber-800"
+                    }`}
+                  >
+                    {isConfirmar ? (
+                      <Sparkles className="w-6 h-6 fill-white" />
+                    ) : (
+                      <RotateCcw className="w-5 h-5 text-amber-700" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 leading-tight">
+                      {isConfirmar ? "Confirmar Contemplação" : "Reverter Contemplação"}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {isConfirmar
+                        ? "Entrega da bolada do consórcio"
+                        : "Retornar cota para aguardando"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setModalContemplacaoAberto(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-xs transition cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Card Resumo da Cota & Bolada */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Participante
+                    </span>
+                    <span className="font-bold text-sm text-slate-900 block mt-0.5">
+                      {nomes}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Cota & Sorteio
+                    </span>
+                    <span className="text-xs font-mono font-bold bg-theme-light text-theme-text px-2.5 py-1 rounded-lg inline-block mt-0.5">
+                      Cota #{cotaAlvoContemplacao.numero} • Ciclo #{pos}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Destaque da Bolada */}
+                <div
+                  className={`p-3.5 rounded-xl border flex items-center justify-between ${
+                    isConfirmar
+                      ? "bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200"
+                      : "bg-amber-50/70 border-amber-200"
+                  }`}
+                >
+                  <div>
+                    <span className="text-xs font-bold text-slate-700 block">
+                      {isConfirmar ? "Bolada a Entregar:" : "Valor da Bolada Deste Ciclo:"}
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Ciclo #{pos} de {consorcio.totalCotas}
+                    </span>
+                  </div>
+                  <span
+                    className={`text-xl font-black ${
+                      isConfirmar ? "text-emerald-700" : "text-amber-800"
+                    }`}
+                  >
+                    {formatarMoedaBRL(boladaDesteCiclo)}
+                  </span>
+                </div>
+
+                {isConfirmar ? (
+                  <p className="text-[11px] text-emerald-800 bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200/70 leading-relaxed">
+                    ✨ Ao confirmar, esta cota será marcada como <strong>CONTEMPLADA</strong>, refletirá no portal do participante e registrará o evento na auditoria e no sininho.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-amber-900 bg-amber-50 p-2.5 rounded-xl border border-amber-200 leading-relaxed">
+                    ⚠️ Ao reverter, a cota voltará ao status <strong>Aguardando</strong> e a alteração ficará documentada na trilha de auditoria do sistema.
+                  </p>
+                )}
+              </div>
+
+              {/* Justificativa / Observação */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {isConfirmar
+                    ? "Observação do Sorteio (Opcional)"
+                    : "Motivo da Reversão (Opcional)"}
+                </label>
+                <textarea
+                  rows={2}
+                  value={justificativaContemplacao}
+                  onChange={(e) => setJustificativaContemplacao(e.target.value)}
+                  placeholder={
+                    isConfirmar
+                      ? "Ex: Sorteada no sorteio presencial do dia 22/10."
+                      : "Ex: Ajuste de ordem ou clique acidental."
+                  }
+                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:border-theme-main focus:outline-none bg-slate-50/50"
+                />
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setModalContemplacaoAberto(false)}
+                  disabled={isSalvandoContemplacao}
+                  className="flex-1 py-2.5 px-3 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmarAcaoContemplacao}
+                  disabled={isSalvandoContemplacao}
+                  className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer text-white ${
+                    isConfirmar
+                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
+                      : "bg-amber-600 hover:bg-amber-700"
+                  }`}
+                >
+                  {isSalvandoContemplacao ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Salvando...</span>
+                    </>
+                  ) : isConfirmar ? (
+                    <>
+                      <Sparkles className="w-4 h-4 fill-white" />
+                      <span>Sim, Contemplar</span>
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="w-4 h-4" />
+                      <span>Sim, Voltar para Aguardando</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modal de Reversão / Estorno com Justificativa Obrigatória */}
       {modalEstornoAberto && (

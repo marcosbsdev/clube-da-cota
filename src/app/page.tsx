@@ -26,8 +26,8 @@ export default function Home() {
   const [selectedConsorcioId, setSelectedConsorcioId] = useState<string | undefined>(undefined);
   const { setTheme } = useTheme();
 
-  const carregarDados = async (userId?: string, consorcioId?: string) => {
-    setLoading(true);
+  const carregarDados = async (userId?: string, consorcioId?: string, silent = false) => {
+    if (!silent) setLoading(true);
     const res = await getConsorcioData(userId, consorcioId);
     setData(res);
     if (res.currentUser?.preferredTheme) {
@@ -36,7 +36,7 @@ export default function Home() {
     if (res.consorcio?.id) {
       setSelectedConsorcioId(res.consorcio.id);
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   useEffect(() => {
@@ -96,7 +96,6 @@ export default function Home() {
       <Header
         userName={currentUser.name}
         userRole={currentUser.role}
-        unreadCount={1}
         activeTab={activeTab}
         onChangeTab={setActiveTab}
         canCreateOrManage={isCriadorOuAdmin}
@@ -135,7 +134,7 @@ export default function Home() {
             todosConsorcios={todosConsorcios}
             onSelecionarConsorcio={handleSelecionarConsorcio}
             onCriarNovoConsorcio={() => setActiveTab("assistente")}
-            onAtualizarConsorcio={() => carregarDados(currentUser.id, consorcio.id)}
+            onAtualizarConsorcio={() => carregarDados(currentUser.id, consorcio.id, true)}
           />
         )}
 
