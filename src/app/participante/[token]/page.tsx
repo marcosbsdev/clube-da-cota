@@ -24,7 +24,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { formatarMoedaBRL, formatarDataSegura } from "@/lib/finance";
+import { formatarMoedaBRL, formatarDataSegura, calcularValorCiclo } from "@/lib/finance";
 
 export default function ParticipanteTokenPage() {
   const params = useParams();
@@ -179,6 +179,18 @@ export default function ParticipanteTokenPage() {
     .reduce((acc: number, c: any) => acc + c.valorPrevisto, 0);
   const totalPendente = totalDevido - totalPago;
 
+  // Cálculo da bolada específica do ciclo de contemplação desta cota
+  const cicloContemplacao = cota.ordemSorteio || cota.numero || 1;
+  const valorCotaNoCicloContemplado = calcularValorCiclo(
+    cicloContemplacao,
+    consorcio.valorCota,
+    consorcio.modeloContribuicao,
+    consorcio.valorAcrescimo
+  );
+  const boladaBrutaCiclo = valorCotaNoCicloContemplado * consorcio.totalCotas;
+  const percentualParticipante = participante.percentual || 100;
+  const valorBoladaParticipante = (boladaBrutaCiclo * percentualParticipante) / 100;
+
   const proximaParcela = contribuicoes.find(
     (c: any) => c.status === "PENDENTE" || c.status === "EM_ATRASO"
   );
@@ -288,13 +300,18 @@ export default function ParticipanteTokenPage() {
                 Valor Previsto da Bolada
               </span>
               <p className="text-2xl sm:text-3xl font-black text-slate-900 mt-0.5">
-                {formatarMoedaBRL(consorcio.valorTotalBolada)}
+                {formatarMoedaBRL(valorBoladaParticipante)}
               </p>
               <span className="text-xs text-slate-600 font-medium mt-0.5 block">
                 {cota.status === "CONTEMPLADA"
                   ? "Cota sorteada/contemplada com sucesso!"
-                  : `Você receberá a bolada no Ciclo #${cota.ordemSorteio} do consórcio.`}
+                  : `Você receberá a bolada no Ciclo #${cicloContemplacao} do consórcio.`}
               </span>
+              {percentualParticipante < 100 && (
+                <span className="text-[11px] text-slate-500 font-semibold block mt-1">
+                  Sua cota é compartilhada ({percentualParticipante}% de {formatarMoedaBRL(boladaBrutaCiclo)})
+                </span>
+              )}
             </div>
 
             <div className="sm:text-right flex-shrink-0">
@@ -302,7 +319,7 @@ export default function ParticipanteTokenPage() {
                 Ordem no Sorteio
               </span>
               <span className="text-lg font-black text-slate-800">
-                #{cota.ordemSorteio} de {consorcio.totalCotas}
+                #{cicloContemplacao} de {consorcio.totalCotas}
               </span>
             </div>
           </div>

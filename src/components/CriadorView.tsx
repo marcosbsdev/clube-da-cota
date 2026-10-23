@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import {
   calcularIndicadoresConsorcio,
   formatarDataSegura,
+  calcularValorCiclo,
+  formatarMoedaBRL,
 } from "@/lib/finance";
 import {
   confirmPaymentAction,
@@ -551,8 +553,12 @@ export function CriadorView({
                     </div>
                     <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center">
                       <span className="text-[10px] text-slate-400 font-semibold block">Bolada</span>
-                      <span className="text-xs sm:text-sm font-black text-theme-text">
-                        R$ {c.valorTotalBolada.toFixed(0)}
+                      <span className="text-xs sm:text-sm font-black text-theme-text truncate block">
+                        {c.modeloContribuicao === "ACRESCIMO_MENSAL"
+                          ? `${formatarMoedaBRL(c.valorCota * c.totalCotas)} a ${formatarMoedaBRL(
+                              calcularValorCiclo(c.totalCotas, c.valorCota, c.modeloContribuicao, c.valorAcrescimo) * c.totalCotas
+                            )}`
+                          : formatarMoedaBRL(c.valorCota * c.totalCotas)}
                       </span>
                     </div>
                     <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center">
@@ -940,6 +946,13 @@ export function CriadorView({
                 const pos = cota.ordemSorteio || cota.numero;
                 const isContemplada = cota.status === "CONTEMPLADA";
                 const nomes = cota.participantes.map((p: any) => p.usuario.name).join(" & ");
+                const boladaDesteCiclo =
+                  calcularValorCiclo(
+                    pos,
+                    consorcio.valorCota,
+                    consorcio.modeloContribuicao,
+                    consorcio.valorAcrescimo
+                  ) * consorcio.totalCotas;
 
                 return (
                   <div
@@ -970,7 +983,7 @@ export function CriadorView({
                           </span>
                         </div>
                         <span className="text-[11px] text-slate-500 block truncate mt-0.5">
-                          Ciclo {pos} • Bolada: R$ {consorcio.valorTotalBolada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          Ciclo {pos} • Bolada: {formatarMoedaBRL(boladaDesteCiclo)}
                         </span>
                       </div>
                     </div>
