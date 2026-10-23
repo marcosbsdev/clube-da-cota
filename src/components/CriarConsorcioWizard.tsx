@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { createConsorcioAction } from "@/app/actions";
-import { Check, Plus, Trash2, Users, AlertCircle, ArrowRight, ArrowLeft, TrendingUp, User } from "lucide-react";
+import { Check, Plus, Trash2, Users, AlertCircle, ArrowRight, ArrowLeft, TrendingUp, User, Calendar, Flag, Clock, ChevronDown, ChevronUp } from "lucide-react";
 import {
   calcularTotalArrecadacaoConsorcio,
   calcularValorCiclo,
@@ -11,6 +11,7 @@ import {
   parseMoedaBRL,
   calcularResumoFinanceiroConsorcio,
   formatarDataSegura,
+  calcularDatasVencimento,
 } from "@/lib/finance";
 
 interface CriarConsorcioWizardProps {
@@ -73,6 +74,32 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
     totalCotas,
   });
   const totalBolada = resumoFinanceiro.volumeTotalMovimentado;
+
+  // Estados de expansão do cronograma detalhado
+  const [cronogramaAbertoPasso3, setCronogramaAbertoPasso3] = useState(false);
+  const [cronogramaAbertoPasso4, setCronogramaAbertoPasso4] = useState(false);
+
+  // Cálculo das datas de vencimento de todos os ciclos
+  const datasCiclos = React.useMemo(() => {
+    if (!dataPrimeiroVencimento || totalCotas <= 0) return [];
+    const [ano, mes, dia] = dataPrimeiroVencimento.split("-").map(Number);
+    if (!ano || !mes || !dia) return [];
+    const dataBase = new Date(ano, mes - 1, dia, 12, 0, 0);
+    return calcularDatasVencimento({
+      dataPrimeiroVencimento: dataBase,
+      frequencia,
+      quantidadeCiclos: Math.max(1, totalCotas),
+    });
+  }, [dataPrimeiroVencimento, frequencia, totalCotas]);
+
+  const dataUltimoVencimento = datasCiclos.length > 0 ? datasCiclos[datasCiclos.length - 1] : null;
+
+  const textoFrequencia =
+    frequencia === "MENSAL"
+      ? `${totalCotas} meses`
+      : frequencia === "QUINZENAL"
+      ? `${totalCotas} quinzenas`
+      : `${totalCotas} semanas`;
 
   const handleValorCotaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const numeric = parseMoedaBRL(e.target.value);
@@ -741,6 +768,151 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
             </div>
           </div>
 
+          {/* Cronograma dos Ciclos e Término (Opção 1) */}
+          {datasCiclos.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                  Previsão do Cronograma & Término
+                </span>
+                <span className="text-[11px] font-bold text-theme-text bg-theme-light px-2.5 py-0.5 rounded-full">
+                  {textoFrequencia}
+                </span>
+              </div>
+
+              {/* Cards de Início e Término */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      1º Vencimento (Início)
+                    </span>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md">
+                      Ciclo #1
+                    </span>
+                  </div>
+                  <p className="text-base sm:text-lg font-black text-slate-900 mt-1">
+                    {formatarDataSegura(datasCiclos[0])}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Primeira cobrança e contemplação</span>
+                  </p>
+                </div>
+
+                <div className="p-4 bg-gradient-to-br from-theme-light/80 to-blue-50/70 rounded-2xl border border-theme-main/30 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-theme-text uppercase tracking-wider">
+                      Último Ciclo (Término)
+                    </span>
+                    <span className="text-[10px] bg-theme-main text-white font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
+                      <Flag className="w-3 h-3" />
+                      <span>Ciclo #{totalCotas} 🏁</span>
+                    </span>
+                  </div>
+                  <p className="text-base sm:text-lg font-black text-slate-900 mt-1">
+                    {dataUltimoVencimento ? formatarDataSegura(dataUltimoVencimento) : "-"}
+                  </p>
+                  <p className="text-[11px] text-theme-text font-medium mt-0.5">
+                    Consórcio 100% quitado ({textoFrequencia})
+                  </p>
+                </div>
+              </div>
+
+              {/* Acordeão Expansível Mês a Mês */}
+              <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setCronogramaAbertoPasso3(!cronogramaAbertoPasso3)}
+                  className="w-full flex items-center justify-between p-3.5 bg-slate-50/70 hover:bg-slate-100 transition text-left cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-bold text-xs shadow-2xs">
+                      <Calendar className="w-4 h-4 text-theme-main" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 block">
+                        Ver Cronograma Completo dos {totalCotas} Ciclos
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        {cronogramaAbertoPasso3
+                          ? "Ocultar detalhamento mensal"
+                          : "Clique para inspecionar data, parcela e bolada mês a mês"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-theme-main bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
+                    <span>{cronogramaAbertoPasso3 ? "Recolher" : "Expandir"}</span>
+                    {cronogramaAbertoPasso3 ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
+                  </div>
+                </button>
+
+                {cronogramaAbertoPasso3 && (
+                  <div className="p-3.5 bg-slate-50/50 border-t border-slate-200 space-y-1.5 text-xs max-h-72 overflow-y-auto">
+                    <div className="grid grid-cols-4 font-bold text-[10px] uppercase text-slate-400 px-2 pb-1 border-b border-slate-200">
+                      <span>Ciclo</span>
+                      <span>Vencimento</span>
+                      <span>Valor Cota</span>
+                      <span className="text-right">Bolada Entregue</span>
+                    </div>
+                    {datasCiclos.map((data, index) => {
+                      const numCiclo = index + 1;
+                      const valorNesseCiclo = calcularValorCiclo(
+                        numCiclo,
+                        valorCota,
+                        modeloContribuicao,
+                        valorAcrescimo
+                      );
+                      const boladaNesseCiclo = valorNesseCiclo * totalCotas;
+                      const isUltimo = numCiclo === totalCotas;
+                      const isPrimeiro = numCiclo === 1;
+
+                      return (
+                        <div
+                          key={numCiclo}
+                          className={`grid grid-cols-4 items-center p-2 rounded-xl transition ${
+                            isUltimo
+                              ? "bg-theme-main text-white font-bold shadow-xs"
+                              : isPrimeiro
+                              ? "bg-emerald-50/60 border border-emerald-200 text-slate-800 font-semibold"
+                              : "bg-white border border-slate-100 text-slate-700"
+                          }`}
+                        >
+                          <div className="flex items-center gap-1">
+                            <span className={isUltimo ? "text-white font-black" : "font-bold text-slate-900"}>
+                              #{numCiclo}
+                            </span>
+                            {isPrimeiro && (
+                              <span className="text-[9px] bg-emerald-200/80 text-emerald-900 px-1 py-0.2 rounded font-bold">
+                                Início
+                              </span>
+                            )}
+                            {isUltimo && (
+                              <span className="text-[9px] bg-white/20 text-white px-1 py-0.2 rounded font-bold">
+                                Fim 🏁
+                              </span>
+                            )}
+                          </div>
+                          <span>{formatarDataSegura(data)}</span>
+                          <span className={isUltimo ? "text-white" : "font-medium text-slate-800"}>
+                            {formatarMoedaBRL(valorNesseCiclo)}
+                          </span>
+                          <span className={`text-right font-black ${isUltimo ? "text-white" : "text-slate-900"}`}>
+                            {formatarMoedaBRL(boladaNesseCiclo)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2">
             <button
               onClick={() => setEtapa(2)}
@@ -837,9 +1009,26 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
               </span>
             </div>
             <div className="flex justify-between border-b border-slate-200 pb-2">
-              <span className="text-slate-500">1º Vencimento:</span>
+              <span className="text-slate-500">1º Vencimento (Início):</span>
               <span className="font-bold text-slate-900">
                 {formatarDataSegura(dataPrimeiroVencimento)}
+              </span>
+            </div>
+            <div className="flex justify-between border-b border-slate-200 pb-2">
+              <span className="text-slate-500">Último Ciclo (Término):</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-slate-900">
+                  {dataUltimoVencimento ? formatarDataSegura(dataUltimoVencimento) : "-"}
+                </span>
+                <span className="text-[10px] bg-theme-main text-white font-bold px-2 py-0.5 rounded-md shadow-2xs">
+                  Ciclo #{totalCotas} 🏁
+                </span>
+              </div>
+            </div>
+            <div className="flex justify-between border-b border-slate-200 pb-2">
+              <span className="text-slate-500">Duração Total:</span>
+              <span className="font-bold text-theme-text bg-theme-light px-2.5 py-0.5 rounded-full text-xs">
+                {textoFrequencia}
               </span>
             </div>
             {dadosPagamento && (
@@ -849,6 +1038,100 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
               </div>
             )}
           </div>
+
+          {/* Acordeão do Cronograma Completo na Revisão Final */}
+          {datasCiclos.length > 0 && (
+            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setCronogramaAbertoPasso4(!cronogramaAbertoPasso4)}
+                className="w-full flex items-center justify-between p-3.5 bg-slate-50/70 hover:bg-slate-100 transition text-left cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-bold text-xs shadow-2xs">
+                    <Calendar className="w-4 h-4 text-theme-main" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 block">
+                      Cronograma Completo dos {totalCotas} Ciclos
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {cronogramaAbertoPasso4
+                        ? "Ocultar detalhamento dos ciclos"
+                        : "Clique para inspecionar as datas de vencimento e contemplação"}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-theme-main bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
+                  <span>{cronogramaAbertoPasso4 ? "Recolher" : "Expandir"}</span>
+                  {cronogramaAbertoPasso4 ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
+                  )}
+                </div>
+              </button>
+
+              {cronogramaAbertoPasso4 && (
+                <div className="p-3.5 bg-slate-50/50 border-t border-slate-200 space-y-1.5 text-xs max-h-64 overflow-y-auto">
+                  <div className="grid grid-cols-4 font-bold text-[10px] uppercase text-slate-400 px-2 pb-1 border-b border-slate-200">
+                    <span>Ciclo</span>
+                    <span>Vencimento</span>
+                    <span>Valor Cota</span>
+                    <span className="text-right">Bolada Entregue</span>
+                  </div>
+                  {datasCiclos.map((data, index) => {
+                    const numCiclo = index + 1;
+                    const valorNesseCiclo = calcularValorCiclo(
+                      numCiclo,
+                      valorCota,
+                      modeloContribuicao,
+                      valorAcrescimo
+                    );
+                    const boladaNesseCiclo = valorNesseCiclo * totalCotas;
+                    const isUltimo = numCiclo === totalCotas;
+                    const isPrimeiro = numCiclo === 1;
+
+                    return (
+                      <div
+                        key={numCiclo}
+                        className={`grid grid-cols-4 items-center p-2 rounded-xl transition ${
+                          isUltimo
+                            ? "bg-theme-main text-white font-bold shadow-xs"
+                            : isPrimeiro
+                            ? "bg-emerald-50/60 border border-emerald-200 text-slate-800 font-semibold"
+                            : "bg-white border border-slate-100 text-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span className={isUltimo ? "text-white font-black" : "font-bold text-slate-900"}>
+                            #{numCiclo}
+                          </span>
+                          {isPrimeiro && (
+                            <span className="text-[9px] bg-emerald-200/80 text-emerald-900 px-1 py-0.2 rounded font-bold">
+                              Início
+                            </span>
+                          )}
+                          {isUltimo && (
+                            <span className="text-[9px] bg-white/20 text-white px-1 py-0.2 rounded font-bold">
+                              Fim 🏁
+                            </span>
+                          )}
+                        </div>
+                        <span>{formatarDataSegura(data)}</span>
+                        <span className={isUltimo ? "text-white" : "font-medium text-slate-800"}>
+                          {formatarMoedaBRL(valorNesseCiclo)}
+                        </span>
+                        <span className={`text-right font-black ${isUltimo ? "text-white" : "text-slate-900"}`}>
+                          {formatarMoedaBRL(boladaNesseCiclo)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-3 pt-2">
             <button
