@@ -6,6 +6,7 @@ import {
   formatarDataSegura,
   calcularValorCiclo,
   formatarMoedaBRL,
+  formatarMesAnoCiclo,
 } from "@/lib/finance";
 import {
   confirmPaymentAction,
@@ -41,6 +42,7 @@ import {
   ExternalLink,
   MessageCircle,
   Sparkles,
+  Calendar,
 } from "lucide-react";
 
 function formatarDataHoraAuditoria(d: string | Date) {
@@ -911,10 +913,20 @@ export function CriadorView({
     }
   };
 
+  const [filtroSorteioCriador, setFiltroSorteioCriador] = useState<"TODAS" | "AGUARDANDO" | "CONTEMPLADAS">("TODAS");
+
   const cotasOrdenadas = [...(consorcio?.cotas || [])].sort((a: any, b: any) => {
     const posA = a.ordemSorteio || a.numero;
     const posB = b.ordemSorteio || b.numero;
     return posA - posB;
+  });
+
+  const cotasAguardandoCriador = cotasOrdenadas.filter((c: any) => c.status !== "CONTEMPLADA");
+  const cotasContempladasCriador = cotasOrdenadas.filter((c: any) => c.status === "CONTEMPLADA");
+  const cotasExibidasCriador = cotasOrdenadas.filter((c: any) => {
+    if (filtroSorteioCriador === "AGUARDANDO") return c.status !== "CONTEMPLADA";
+    if (filtroSorteioCriador === "CONTEMPLADAS") return c.status === "CONTEMPLADA";
+    return true;
   });
 
   const cotasDisponiveisParaTroca = cotasOrdenadas.filter((c: any) => c.status !== "CONTEMPLADA");
@@ -1070,25 +1082,100 @@ export function CriadorView({
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setErroTroca("");
-                  setTrocaCotaId1("");
-                  setTrocaCotaId2("");
-                  setTrocaJustificativa("");
-                  setModalTrocaAberto(true);
-                }}
-                className="px-3.5 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer self-start sm:self-auto"
-                title="Trocar posição de recebimento entre dois participantes"
-              >
-                <ArrowLeftRight className="w-3.5 h-3.5" />
-                <span>Trocar Posição</span>
-              </button>
+              <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+                {/* Filtros Rápidos Harmonizados com a Paleta */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setFiltroSorteioCriador("TODAS")}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                      filtroSorteioCriador === "TODAS"
+                        ? "bg-theme-main text-white shadow-2xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <span>Todas</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                        filtroSorteioCriador === "TODAS"
+                          ? "bg-white/20 text-white"
+                          : "bg-slate-200 text-slate-700"
+                      }`}
+                    >
+                      {cotasOrdenadas.length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFiltroSorteioCriador("AGUARDANDO")}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                      filtroSorteioCriador === "AGUARDANDO"
+                        ? "bg-theme-main text-white shadow-2xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <span>Aguardando</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                        filtroSorteioCriador === "AGUARDANDO"
+                          ? "bg-white/20 text-white"
+                          : "bg-slate-200 text-slate-700"
+                      }`}
+                    >
+                      {cotasAguardandoCriador.length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFiltroSorteioCriador("CONTEMPLADAS")}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                      filtroSorteioCriador === "CONTEMPLADAS"
+                        ? "bg-theme-main text-white shadow-2xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <span>Contempladas</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                        filtroSorteioCriador === "CONTEMPLADAS"
+                          ? "bg-white/20 text-white"
+                          : "bg-slate-200 text-slate-700"
+                      }`}
+                    >
+                      {cotasContempladasCriador.length}
+                    </span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErroTroca("");
+                    setTrocaCotaId1("");
+                    setTrocaCotaId2("");
+                    setTrocaJustificativa("");
+                    setModalTrocaAberto(true);
+                  }}
+                  className="px-3 py-2 bg-theme-main hover:opacity-90 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                  title="Trocar posição de recebimento entre dois participantes"
+                >
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Trocar Posição</span>
+                  <span className="sm:hidden">Trocar</span>
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {cotasOrdenadas.map((cota: any) => {
+            <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+              {cotasExibidasCriador.length === 0 ? (
+                <div className="py-10 px-4 text-center rounded-2xl bg-slate-50 border border-slate-100 text-slate-400 space-y-1">
+                  <p className="text-xs font-bold text-slate-700">Nenhuma cota encontrada neste filtro.</p>
+                  <p className="text-[11px] text-slate-500">Selecione &ldquo;Todas&rdquo; para ver todas as cotas.</p>
+                </div>
+              ) : (
+                cotasExibidasCriador.map((cota: any) => {
                 const pos = cota.ordemSorteio || cota.numero;
                 const isContemplada = cota.status === "CONTEMPLADA";
                 const nomes = cota.participantes.map((p: any) => p.usuario.name).join(" & ");
@@ -1099,81 +1186,96 @@ export function CriadorView({
                     consorcio.modeloContribuicao,
                     consorcio.valorAcrescimo
                   ) * consorcio.totalCotas;
+                const mesAnoCiclo = formatarMesAnoCiclo(consorcio, pos);
 
                 return (
                   <div
                     key={cota.id}
-                    className={`p-3 rounded-2xl border transition flex items-center justify-between gap-2.5 ${
+                    className={`p-3.5 sm:p-4 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 shadow-2xs ${
                       isContemplada
-                        ? "bg-gradient-to-r from-emerald-50/90 to-teal-50/60 border-emerald-300 shadow-2xs"
-                        : "bg-slate-50/80 hover:bg-slate-100/80 border-slate-200/80"
+                        ? "bg-theme-light/60 border-theme-main/30 hover:border-theme-main/50 ring-1 ring-theme-main/10"
+                        : "bg-white hover:bg-slate-50/80 border-slate-200/90"
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs flex-shrink-0 shadow-2xs ${
+                        className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-black text-xs sm:text-sm shrink-0 shadow-2xs ${
                           isContemplada
-                            ? "bg-emerald-600 text-white ring-2 ring-emerald-200"
-                            : "bg-white border border-slate-200 text-slate-700"
+                            ? "bg-theme-main text-white ring-2 ring-theme-main/20"
+                            : "bg-slate-100 border border-slate-200 text-slate-700"
                         }`}
                       >
                         #{pos}
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-bold text-xs text-slate-900 truncate">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-bold text-xs sm:text-sm text-slate-900">
                             {nomes}
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-semibold bg-white border border-slate-200 px-1.5 py-0.2 rounded-md flex-shrink-0">
-                            Cota #{cota.numero}
+                          </h4>
+                          <span className="text-[10px] sm:text-[11px] text-slate-600 font-semibold bg-white border border-slate-200 px-2 py-0.5 rounded-md shrink-0">
+                            Cota #{cota.numero} • Ciclo #{pos}
                           </span>
                         </div>
-                        <span className="text-[11px] text-slate-600 font-medium block mt-0.5 whitespace-nowrap">
-                          Ciclo {pos} • Bolada: <strong className={isContemplada ? "text-emerald-950 font-black" : "text-slate-900 font-bold"}>{formatarMoedaBRL(boladaDesteCiclo)}</strong>
-                        </span>
+                        <div className="text-[11px] sm:text-xs text-slate-600 font-medium mt-1 flex items-center gap-2 flex-wrap">
+                          {isContemplada ? (
+                            <span className="inline-flex items-center gap-1 font-bold text-theme-text">
+                              <Calendar className="w-3.5 h-3.5 shrink-0 text-theme-main" />
+                              <span>Contemplado em <strong>{mesAnoCiclo}</strong></span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 font-semibold text-slate-600">
+                              <Calendar className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                              <span>Recebe em: <strong className="text-slate-900">{mesAnoCiclo}</strong></span>
+                            </span>
+                          )}
+                          <span className="text-slate-300 hidden sm:inline">•</span>
+                          <span className="text-slate-500">
+                            Bolada: <strong className={isContemplada ? "text-theme-text font-black" : "text-slate-900 font-bold"}>{formatarMoedaBRL(boladaDesteCiclo)}</strong>
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex-shrink-0 flex items-center gap-1.5">
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                       <button
                         type="button"
                         onClick={() => {
                           setCotaCompartilhar(cota);
                           setModalCompartilharAberto(true);
                         }}
-                        className="text-[10px] font-bold px-2 py-1 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                        className="text-xs font-bold px-3 py-1.5 sm:py-2 rounded-xl border border-slate-200 bg-white hover:bg-theme-light hover:border-theme-main/30 text-slate-700 hover:text-theme-text transition cursor-pointer flex items-center gap-1.5 shadow-2xs group"
                         title="Compartilhar link de acesso com o participante via WhatsApp"
                       >
-                        <Share2 className="w-3 h-3 text-emerald-600" />
-                        <span className="hidden sm:inline">Acesso</span>
+                        <Share2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-theme-text transition shrink-0" />
+                        <span>Acesso</span>
                       </button>
 
                       {isContemplada ? (
                         <button
                           type="button"
                           onClick={() => abrirModalContemplacao(cota, "ATIVA")}
-                          className="text-xs font-black px-3.5 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-sm shadow-emerald-600/30 border border-emerald-500 active:scale-95"
+                          className="text-xs font-black px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 bg-theme-main hover:opacity-90 text-white shadow-sm shadow-theme-main/20 border border-theme-main active:scale-95"
                           title="Cota contemplada com sucesso! Clique para reverter para aguardando."
                         >
-                          <Sparkles className="w-3.5 h-3.5 text-amber-300 fill-amber-300 animate-pulse" />
+                          <Sparkles className="w-3.5 h-3.5 text-amber-300 fill-amber-300 animate-pulse shrink-0" />
                           <span>Contemplada</span>
                         </button>
                       ) : (
                         <button
                           type="button"
                           onClick={() => abrirModalContemplacao(cota, "CONTEMPLADA")}
-                          className="text-xs font-bold px-3 py-1.5 rounded-xl border border-amber-300/80 bg-amber-50/80 hover:bg-emerald-50 hover:border-emerald-400 text-amber-900 hover:text-emerald-800 transition cursor-pointer flex items-center gap-1.5 shadow-2xs group active:scale-95"
+                          className="text-xs font-bold px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-theme-light hover:border-theme-main/40 text-slate-700 hover:text-theme-text transition cursor-pointer flex items-center gap-1.5 shadow-2xs group active:scale-95"
                           title="Clique para confirmar a contemplação e registrar a entrega da bolada"
                         >
-                          <Clock className="w-3.5 h-3.5 text-amber-600 group-hover:text-emerald-600 transition" />
+                          <Clock className="w-3.5 h-3.5 text-slate-400 group-hover:text-theme-text transition shrink-0" />
                           <span className="group-hover:hidden">Aguardando</span>
-                          <span className="hidden group-hover:inline font-black text-emerald-700">Contemplar</span>
+                          <span className="hidden group-hover:inline font-black text-theme-text">Contemplar</span>
                         </button>
                       )}
                     </div>
                   </div>
                 );
-              })}
+              }))}
             </div>
           </div>
           {/* Comprovantes Aguardando Análise (Páginas 79 e 82 do PDF) */}
@@ -1215,7 +1317,7 @@ export function CriadorView({
 
                       <div className="mt-3 bg-white p-2.5 rounded-xl border border-slate-100 flex items-center justify-between">
                         <span className="text-xs text-slate-500 font-medium">Valor:</span>
-                        <span className="text-sm font-black text-slate-900">R$ {c.valorPrevisto.toFixed(2)}</span>
+                        <span className="text-sm font-black text-slate-900">{formatarMoedaBRL(c.valorPrevisto)}</span>
                       </div>
 
                       <p className="text-[11px] text-slate-500 mt-2 flex items-center gap-1.5 truncate">
@@ -1227,7 +1329,7 @@ export function CriadorView({
                     <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-200/60">
                       <button
                         onClick={() => abrirModalConfirmarPagamento(c)}
-                        className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition shadow-sm touch-target cursor-pointer flex items-center justify-center gap-1.5"
+                        className="py-2.5 px-3 bg-theme-main hover:opacity-90 text-white font-bold text-xs rounded-xl transition shadow-2xs touch-target cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
                       >
                         <Check className="w-3.5 h-3.5" />
                         <span>Confirmar</span>
@@ -1264,73 +1366,106 @@ export function CriadorView({
               </button>
             </div>
 
-            {/* Filtros por Status */}
+            {/* Filtros por Status Harmonizados com a Paleta */}
             <div className="flex gap-2 overflow-x-auto pb-2 border-b border-slate-100">
-              {["TODOS", "PENDENTE", "PAGO", "EM_ATRASO"].map((st) => (
+              {[
+                { id: "TODOS", label: "Todos os Ciclos", count: consorcio?.contribuicoes?.length || 0 },
+                { id: "PENDENTE", label: "Pendentes", count: consorcio?.contribuicoes?.filter((c: any) => c.status === "PENDENTE").length || 0 },
+                { id: "PAGO", label: "Confirmados (Pagos)", count: consorcio?.contribuicoes?.filter((c: any) => c.status === "PAGO").length || 0 },
+                { id: "EM_ATRASO", label: "Em Atraso", count: consorcio?.contribuicoes?.filter((c: any) => c.status === "EM_ATRASO").length || 0 },
+              ].map((st) => (
                 <button
-                  key={st}
-                  onClick={() => setFiltroStatus(st)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 ${
-                    filtroStatus === st
-                      ? "bg-slate-800 text-white shadow-sm"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  key={st.id}
+                  onClick={() => setFiltroStatus(st.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                    filtroStatus === st.id
+                      ? "bg-theme-main text-white shadow-2xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                   }`}
                 >
-                  {st === "TODOS" ? "Todos os Ciclos" : st === "PAGO" ? "Confirmados (Pagos)" : st === "PENDENTE" ? "Pendentes" : "Em Atraso"}
+                  <span>{st.label}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                      filtroStatus === st.id
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-200 text-slate-700"
+                    }`}
+                  >
+                    {st.count}
+                  </span>
                 </button>
               ))}
             </div>
 
-            {/* Lista em Grid de Cards Responsivos */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 mt-4">
-              {listaFiltrada.map((c: any) => (
-                <div key={c.id} className="p-3.5 bg-slate-50/70 hover:bg-slate-50 rounded-2xl border border-slate-200/70 flex items-center justify-between transition">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-800 text-xs sm:text-sm">
-                        {c.usuario?.name}
-                      </span>
-                      <span className="text-[10px] text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200 font-semibold">
-                        Cota #{c.cota?.numero} • Ciclo {c.numeroCiclo}
-                      </span>
-                    </div>
-                    <p className="text-base font-black text-slate-900 mt-1">
-                      R$ {c.valorPrevisto.toFixed(2)}
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      Vencimento: {formatarData(c.dataVencimento)}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {c.status === "PAGO" ? (
-                      <div className="flex items-center gap-1.5">
-                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                          Pago
-                        </span>
-                        <button
-                          onClick={() => {
-                            setItemSelecionado(c);
-                            setModalEstornoAberto(true);
-                          }}
-                          title="Estornar ou desfazer confirmação com justificativa"
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition"
-                        >
-                          <RotateCcw className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => abrirModalConfirmarPagamento(c)}
-                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition touch-target cursor-pointer flex items-center gap-1.5"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Confirmar</span>
-                      </button>
-                    )}
-                  </div>
+            {/* Lista em Grid de Cards com Rolagem Interna Compacta */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 mt-4 max-h-[480px] overflow-y-auto pr-1">
+              {listaFiltrada.length === 0 ? (
+                <div className="col-span-full py-10 px-4 text-center rounded-2xl bg-slate-50 border border-slate-100 text-slate-400 space-y-1">
+                  <p className="text-xs font-bold text-slate-700">Nenhuma contribuição encontrada neste filtro.</p>
+                  <p className="text-[11px] text-slate-500">Selecione &ldquo;Todos os Ciclos&rdquo; para ver todas as parcelas.</p>
                 </div>
-              ))}
+              ) : (
+                listaFiltrada.map((c: any) => (
+                  <div
+                    key={c.id}
+                    className={`p-3.5 rounded-2xl border flex items-center justify-between transition shadow-2xs ${
+                      c.status === "PAGO"
+                        ? "bg-theme-light/40 border-theme-main/30 hover:border-theme-main/50"
+                        : c.status === "EM_ATRASO"
+                        ? "bg-rose-50/60 border-rose-200/80 hover:bg-rose-50"
+                        : "bg-slate-50/80 hover:bg-slate-100/80 border-slate-200/80"
+                    }`}
+                  >
+                    <div className="min-w-0 pr-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-slate-800 text-xs sm:text-sm truncate">
+                          {c.usuario?.name}
+                        </span>
+                        <span className="text-[10px] text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200 font-semibold shrink-0">
+                          Cota #{c.cota?.numero} • Ciclo {c.numeroCiclo}
+                        </span>
+                      </div>
+                      <p className={`text-base font-black mt-1 ${c.status === "PAGO" ? "text-theme-text" : c.status === "EM_ATRASO" ? "text-rose-700" : "text-slate-900"}`}>
+                        {formatarMoedaBRL(c.valorPrevisto)}
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        Vencimento: <strong className="text-slate-700 font-bold">{formatarData(c.dataVencimento)}</strong>
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {c.status === "PAGO" ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-3 py-1 rounded-full text-xs font-bold bg-theme-light text-theme-text border border-theme-main/30 inline-flex items-center gap-1 shadow-2xs">
+                            <Check className="w-3.5 h-3.5 text-theme-main" />
+                            <span>Pago</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setItemSelecionado(c);
+                              setModalEstornoAberto(true);
+                            }}
+                            title="Estornar ou desfazer confirmação com justificativa"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => abrirModalConfirmarPagamento(c)}
+                          className="px-3.5 py-2 bg-theme-main hover:opacity-90 text-white text-xs font-bold rounded-xl shadow-2xs transition touch-target cursor-pointer flex items-center gap-1.5 active:scale-95"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Confirmar</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -1358,12 +1493,12 @@ export function CriadorView({
                       <p className="text-[11px] text-slate-500">
                         Cota #{c.cota?.numero} • Venceu em {formatarData(c.dataVencimento)}
                       </p>
-                      <span className="font-black text-rose-700 text-sm block mt-0.5">R$ {c.valorPrevisto.toFixed(2)}</span>
+                      <span className="font-black text-rose-700 text-sm block mt-0.5">{formatarMoedaBRL(c.valorPrevisto)}</span>
                     </div>
                     <div className="text-right">
                       <button
                         onClick={() => abrirModalConfirmarPagamento(c)}
-                        className="text-[11px] bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-xl hover:bg-emerald-700 transition shadow-sm cursor-pointer flex items-center gap-1"
+                        className="text-[11px] bg-theme-main hover:opacity-90 text-white font-bold px-3 py-1.5 rounded-xl transition shadow-2xs cursor-pointer flex items-center gap-1 active:scale-95"
                       >
                         <Check className="w-3 h-3" />
                         <span>Confirmar</span>
@@ -1457,8 +1592,8 @@ export function CriadorView({
           <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
-                  <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                <div className="w-10 h-10 rounded-2xl bg-theme-light text-theme-text flex items-center justify-center flex-shrink-0">
+                  <CheckCircle2 className="w-6 h-6 text-theme-main" />
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900">
@@ -1514,9 +1649,9 @@ export function CriadorView({
               </div>
 
               {/* Destaque do Valor */}
-              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between">
-                <span className="text-xs font-bold text-emerald-900">Valor a Confirmar:</span>
-                <span className="text-lg font-black text-emerald-700">
+              <div className="p-3 bg-theme-light rounded-xl border border-theme-main/30 flex items-center justify-between">
+                <span className="text-xs font-bold text-theme-text">Valor a Confirmar:</span>
+                <span className="text-lg font-black text-theme-text">
                   {formatarMoedaBRL(contribuicaoParaConfirmar.valorPrevisto)}
                 </span>
               </div>
@@ -1576,7 +1711,7 @@ export function CriadorView({
                 type="button"
                 onClick={handleExecutarConfirmacaoPagamento}
                 disabled={isConfirmandoPagamento}
-                className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                className="flex-1 py-2.5 px-3 rounded-xl bg-theme-main hover:opacity-90 text-white font-bold text-xs transition shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
               >
                 {isConfirmandoPagamento ? (
                   <>
@@ -1673,7 +1808,7 @@ export function CriadorView({
                 <div
                   className={`p-3.5 rounded-xl border flex items-center justify-between ${
                     isConfirmar
-                      ? "bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200"
+                      ? "bg-theme-light border-theme-main/30"
                       : "bg-amber-50/70 border-amber-200"
                   }`}
                 >
@@ -1682,12 +1817,12 @@ export function CriadorView({
                       {isConfirmar ? "Bolada a Entregar:" : "Valor da Bolada Deste Ciclo:"}
                     </span>
                     <span className="text-[11px] text-slate-500">
-                      Ciclo #{pos} de {consorcio.totalCotas}
+                      Ciclo #{pos} de {consorcio.totalCotas} • Previsão: <strong className="text-slate-800">{formatarMesAnoCiclo(consorcio, pos)}</strong>
                     </span>
                   </div>
                   <span
                     className={`text-xl font-black ${
-                      isConfirmar ? "text-emerald-700" : "text-amber-800"
+                      isConfirmar ? "text-theme-text" : "text-amber-800"
                     }`}
                   >
                     {formatarMoedaBRL(boladaDesteCiclo)}
@@ -1695,7 +1830,7 @@ export function CriadorView({
                 </div>
 
                 {isConfirmar ? (
-                  <p className="text-[11px] text-emerald-800 bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200/70 leading-relaxed">
+                  <p className="text-[11px] text-theme-text bg-theme-light/80 p-2.5 rounded-xl border border-theme-main/20 leading-relaxed">
                     ✨ Ao confirmar, esta cota será marcada como <strong>CONTEMPLADA</strong>, refletirá no portal do participante e registrará o evento na auditoria e no sininho.
                   </p>
                 ) : (
@@ -1741,7 +1876,7 @@ export function CriadorView({
                   disabled={isSalvandoContemplacao}
                   className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer text-white ${
                     isConfirmar
-                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
+                      ? "bg-theme-main hover:opacity-90 shadow-theme-main/20"
                       : "bg-amber-600 hover:bg-amber-700"
                   }`}
                 >
@@ -2163,7 +2298,7 @@ export function CriadorView({
                     Link de Acesso do Participante
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Cota #{cotaCompartilhar.numero} • Ciclo #{cotaCompartilhar.ordemSorteio || cotaCompartilhar.numero}
+                    Cota #{cotaCompartilhar.numero} • Ciclo #{cotaCompartilhar.ordemSorteio || cotaCompartilhar.numero} ({formatarMesAnoCiclo(consorcio, cotaCompartilhar.ordemSorteio || cotaCompartilhar.numero)})
                   </p>
                 </div>
               </div>
@@ -2185,7 +2320,9 @@ export function CriadorView({
                 const tokenEfetivo = p.tokenAcesso || cotaCompartilhar.tokenAcesso || "";
                 const origin = typeof window !== "undefined" ? window.location.origin : "";
                 const linkUrl = `${origin}/participante/${tokenEfetivo}`;
-                const mensagemWhatsapp = `Olá ${p.usuario.name}!\n\nAcompanhe sua cota #${cotaCompartilhar.numero} no consórcio *${consorcio.nome}* pelo seu link exclusivo:\n\n${linkUrl}\n\nLá você pode ver as parcelas, copiar o PIX e acompanhar a data da sua bolada!`;
+                const cicloPos = cotaCompartilhar.ordemSorteio || cotaCompartilhar.numero;
+                const mesAnoPrevisao = formatarMesAnoCiclo(consorcio, cicloPos);
+                const mensagemWhatsapp = `Olá ${p.usuario.name}!\n\nAcompanhe sua cota #${cotaCompartilhar.numero} no consórcio *${consorcio.nome}* pelo seu link exclusivo:\n\n${linkUrl}\n\nLá você pode ver as parcelas, copiar o PIX e acompanhar o recebimento da sua bolada previsto para *${mesAnoPrevisao}*!`;
                 const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(mensagemWhatsapp)}`;
                 const isCopiado = linkCopiadoIdx === idx;
 

@@ -25,7 +25,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
-import { formatarMoedaBRL, formatarDataSegura, calcularValorCiclo, formatarMesEAnoSeguro } from "@/lib/finance";
+import { formatarMoedaBRL, formatarDataSegura, calcularValorCiclo, formatarMesEAnoSeguro, formatarMesAnoCiclo } from "@/lib/finance";
 
 export default function ParticipanteTokenPage() {
   const params = useParams();
@@ -621,6 +621,7 @@ export default function ParticipanteTokenPage() {
               {ciclosGrupo.map((cg: any, idx: number) => {
                 const isMinhaCota = cg.numeroCota === cota.numero;
                 const isContemplada = cg.status === "CONTEMPLADA";
+                const mesAnoCg = formatarMesAnoCiclo(consorcio, cg.ordemSorteio);
 
                 return (
                   <div
@@ -640,15 +641,20 @@ export default function ParticipanteTokenPage() {
                       </span>
                     </div>
 
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                        isContemplada
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-slate-200 text-slate-600"
-                      }`}
-                    >
-                      {isContemplada ? "Contemplada" : "Aguardando"}
-                    </span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-[11px] text-slate-500 font-semibold hidden sm:inline">
+                        {mesAnoCg}
+                      </span>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                          isContemplada
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-slate-200 text-slate-600"
+                        }`}
+                      >
+                        {isContemplada ? "Contemplada" : "Aguardando"}
+                      </span>
+                    </div>
                   </div>
                 );
               })}

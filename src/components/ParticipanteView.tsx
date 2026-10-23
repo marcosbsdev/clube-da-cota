@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { CheckCircle2, Clock, AlertCircle, Upload, FileText, Check, ChevronRight } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, Upload, FileText, Check, ChevronRight, Calendar, Sparkles } from "lucide-react";
 import { submitReceiptAction } from "@/app/actions";
-import { formatarDataSegura } from "@/lib/finance";
+import { formatarDataSegura, formatarMoedaBRL, calcularValorCiclo, formatarMesAnoCiclo } from "@/lib/finance";
 
 interface ParticipanteViewProps {
   consorcio: any;
@@ -73,6 +73,51 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
   const cotasOrdenadas = [...consorcio.cotas].sort(
     (a: any, b: any) => (a.ordemSorteio || a.numero) - (b.ordemSorteio || b.numero)
   );
+
+  // Filtros de visualização para evitar telas excessivamente longas
+  const parcelasPendentes = minhasContribuicoes.filter(
+    (c: any) => c.status === "PENDENTE" || c.status === "EM_ATRASO"
+  );
+  const parcelasPagas = minhasContribuicoes.filter((c: any) => c.status === "PAGO");
+
+  const [filtroParcelas, setFiltroParcelas] = useState<"PENDENTES" | "PAGAS" | "TODAS">(
+    parcelasPendentes.length > 0 ? "PENDENTES" : "TODAS"
+  );
+
+  const parcelasFiltradas = minhasContribuicoes.filter((c: any) => {
+    if (filtroParcelas === "PENDENTES") {
+      return c.status === "PENDENTE" || c.status === "EM_ATRASO";
+    }
+    if (filtroParcelas === "PAGAS") {
+      return c.status === "PAGO";
+    }
+    return true;
+  });
+
+  const [filtroContemplacao, setFiltroContemplacao] = useState<
+    "TODAS" | "AGUARDANDO" | "CONTEMPLADAS" | "MINHA_COTA"
+  >("TODAS");
+
+  const cotasAguardando = cotasOrdenadas.filter((c: any) => c.status !== "CONTEMPLADA");
+  const cotasContempladas = cotasOrdenadas.filter((c: any) => c.status === "CONTEMPLADA");
+  const minhasCotasSorteio = cotasOrdenadas.filter((c: any) =>
+    c.participantes.some((p: any) => p.usuarioId === currentUser.id || p.usuario?.id === currentUser.id)
+  );
+
+  const cotasExibidas = cotasOrdenadas.filter((c: any) => {
+    if (filtroContemplacao === "AGUARDANDO") {
+      return c.status !== "CONTEMPLADA";
+    }
+    if (filtroContemplacao === "CONTEMPLADAS") {
+      return c.status === "CONTEMPLADA";
+    }
+    if (filtroContemplacao === "MINHA_COTA") {
+      return c.participantes.some(
+        (p: any) => p.usuarioId === currentUser.id || p.usuario?.id === currentUser.id
+      );
+    }
+    return true;
+  });
 
   const handleEnviarComprovante = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,66 +264,156 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
 
         {/* Coluna Direita: Minhas Parcelas & Acompanhamento Coletivo */}
         <div className="lg:col-span-7 space-y-6">
-          {/* Minhas Contribuições Detalhadas */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm">
-            <div className="flex justify-between items-center mb-4">
+          {/* Minhas Contribuições Detalhadas com Filtros Rápidos e Scroll Interno */}
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
                 <h4 className="font-bold text-slate-900 text-sm sm:text-base">Minhas Parcelas</h4>
                 <p className="text-xs text-slate-500">Histórico de todas as suas contribuições por ciclo</p>
               </div>
-              <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg">
-                {minhasContribuicoes.length} parcelas
-              </span>
+
+              {/* Filtros Rápidos de Status */}
+              <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl self-start sm:self-auto flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setFiltroParcelas("PENDENTES")}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    filtroParcelas === "PENDENTES"
+                      ? "bg-white text-slate-900 shadow-2xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <span>Pendentes</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                      filtroParcelas === "PENDENTES"
+                        ? "bg-amber-100 text-amber-900"
+                        : "bg-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {parcelasPendentes.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFiltroParcelas("PAGAS")}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    filtroParcelas === "PAGAS"
+                      ? "bg-white text-slate-900 shadow-2xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <span>Pagas</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                      filtroParcelas === "PAGAS"
+                        ? "bg-emerald-100 text-emerald-900"
+                        : "bg-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {parcelasPagas.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFiltroParcelas("TODAS")}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    filtroParcelas === "TODAS"
+                      ? "bg-white text-slate-900 shadow-2xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <span>Todas</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                      filtroParcelas === "TODAS"
+                        ? "bg-slate-200 text-slate-800"
+                        : "bg-slate-200/60 text-slate-500"
+                    }`}
+                  >
+                    {minhasContribuicoes.length}
+                  </span>
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-2.5">
-              {minhasContribuicoes.map((c: any) => (
-                <div key={c.id} className="p-3.5 bg-slate-50/80 hover:bg-slate-50 rounded-2xl border border-slate-200/70 flex items-center justify-between transition">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-800">
-                        Ciclo #{c.numeroCiclo} • Cota #{c.cota?.numero}
-                      </span>
-                      {c.comprovante && (
-                        <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-semibold">
-                          {c.comprovante.status === "PENDENTE" ? "Comprovante em análise" : "Comprovante aprovado"}
+            {/* Container com Scroll Interno Elegante */}
+            <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+              {parcelasFiltradas.length === 0 ? (
+                <div className="py-10 px-4 text-center rounded-2xl bg-slate-50 border border-slate-100 text-slate-400 space-y-1.5">
+                  <p className="text-xs font-bold text-slate-700">
+                    {filtroParcelas === "PENDENTES"
+                      ? "🎉 Nenhuma parcela pendente ou em atraso!"
+                      : filtroParcelas === "PAGAS"
+                      ? "Nenhuma parcela paga até o momento."
+                      : "Nenhuma parcela encontrada."}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    {filtroParcelas === "PENDENTES"
+                      ? "Todas as suas contribuições estão em dia."
+                      : "Alterne os filtros acima para ver outras parcelas."}
+                  </p>
+                </div>
+              ) : (
+                parcelasFiltradas.map((c: any) => (
+                  <div
+                    key={c.id}
+                    className={`p-3.5 rounded-2xl border flex items-center justify-between transition shadow-2xs ${
+                      c.status === "PAGO"
+                        ? "bg-theme-light/40 border-theme-main/30"
+                        : "bg-slate-50/80 hover:bg-slate-50 border-slate-200/70"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-800">
+                          Ciclo #{c.numeroCiclo} • Cota #{c.cota?.numero}
+                        </span>
+                        {c.comprovante && (
+                          <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-semibold">
+                            {c.comprovante.status === "PENDENTE"
+                              ? "Comprovante em análise"
+                              : "Comprovante aprovado"}
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-base font-black mt-1 ${c.status === "PAGO" ? "text-theme-text" : "text-slate-900"}`}>
+                        {formatarMoedaBRL(c.valorPrevisto)}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Vencimento: {formatarData(c.dataVencimento)}
+                      </p>
+                    </div>
+
+                    <div>
+                      {c.status === "PAGO" ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-theme-light text-theme-text border border-theme-main/30 shadow-2xs">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-theme-main" />
+                          Pago
+                        </span>
+                      ) : c.status === "EM_ATRASO" ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          Em atraso
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+                          <Clock className="w-3.5 h-3.5" />
+                          Pendente
                         </span>
                       )}
                     </div>
-                    <p className="text-base font-black text-slate-900 mt-1">
-                      R$ {c.valorPrevisto.toFixed(2)}
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      Vencimento: {formatarData(c.dataVencimento)}
-                    </p>
                   </div>
-
-                  <div>
-                    {c.status === "PAGO" ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        Pago
-                      </span>
-                    ) : c.status === "EM_ATRASO" ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800">
-                        <AlertCircle className="w-3.5 h-3.5" />
-                        Em atraso
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
-                        <Clock className="w-3.5 h-3.5" />
-                        Pendente
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
-          {/* Ordem de Contemplação & Sorteio (Transparência Coletiva para Participantes) */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm">
-            <div className="flex justify-between items-center mb-4">
+          {/* Ordem de Contemplação & Sorteio com Filtros e Scroll Interno */}
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
                 <h4 className="font-bold text-slate-900 text-sm sm:text-base flex items-center gap-2">
                   <span>🎲</span> Ordem de Contemplação & Sorteio
@@ -287,74 +422,188 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                   Sequência e calendário oficial de recebimento da bolada definido pelo grupo
                 </p>
               </div>
-              <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg">
-                {cotasOrdenadas.length} ciclos
-              </span>
-            </div>
 
-            <div className="space-y-2.5">
-              {cotasOrdenadas.map((cota: any) => {
-                const cicloNum = cota.ordemSorteio || cota.numero;
-                const isMinha = cota.participantes.some((p: any) => p.usuarioId === currentUser.id);
-                const nomes = cota.participantes.map((p: any) => p.usuario.name).join(" & ");
-                const isContemplada = cota.status === "CONTEMPLADA";
+              {/* Filtros Rápidos de Contemplação */}
+              <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl self-start sm:self-auto flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setFiltroContemplacao("TODAS")}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    filtroContemplacao === "TODAS"
+                      ? "bg-white text-slate-900 shadow-2xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <span>Todas</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 font-extrabold">
+                    {cotasOrdenadas.length}
+                  </span>
+                </button>
 
-                return (
-                  <div
-                    key={cota.id}
-                    className={`p-3.5 rounded-2xl border flex items-center justify-between transition ${
-                      isMinha
-                        ? "bg-theme-light/40 border-theme-main/40 ring-1 ring-theme-main/20"
-                        : "bg-slate-50/80 border-slate-200/70"
+                <button
+                  type="button"
+                  onClick={() => setFiltroContemplacao("AGUARDANDO")}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    filtroContemplacao === "AGUARDANDO"
+                      ? "bg-white text-slate-900 shadow-2xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <span>Aguardando</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 font-extrabold">
+                    {cotasAguardando.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFiltroContemplacao("CONTEMPLADAS")}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    filtroContemplacao === "CONTEMPLADAS"
+                      ? "bg-white text-slate-900 shadow-2xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <span>Contempladas</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-900 font-extrabold">
+                    {cotasContempladas.length}
+                  </span>
+                </button>
+
+                {minhasCotasSorteio.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setFiltroContemplacao("MINHA_COTA")}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                      filtroContemplacao === "MINHA_COTA"
+                        ? "bg-theme-main text-white shadow-2xs"
+                        : "text-theme-text hover:bg-theme-light/40"
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shadow-2xs ${
-                          isContemplada
-                            ? "bg-emerald-100 text-emerald-800"
-                            : isMinha
-                            ? "bg-theme-main text-white"
-                            : "bg-white text-slate-700 border border-slate-200"
-                        }`}
-                      >
-                        #{cicloNum}
+                    <span>Sua Cota</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                        filtroContemplacao === "MINHA_COTA"
+                          ? "bg-white/30 text-white"
+                          : "bg-theme-light text-theme-text"
+                      }`}
+                    >
+                      {minhasCotasSorteio.length}
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Container com Scroll Interno Elegante */}
+            <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
+              {cotasExibidas.length === 0 ? (
+                <div className="py-10 px-4 text-center rounded-2xl bg-slate-50 border border-slate-100 text-slate-400 space-y-1.5">
+                  <p className="text-xs font-bold text-slate-700">Nenhuma cota encontrada neste filtro.</p>
+                  <p className="text-[11px] text-slate-500">
+                    Selecione &ldquo;Todas&rdquo; para visualizar todo o cronograma.
+                  </p>
+                </div>
+              ) : (
+                cotasExibidas.map((cota: any) => {
+                  const cicloNum = cota.ordemSorteio || cota.numero;
+                  const isMinha = cota.participantes.some((p: any) => p.usuarioId === currentUser.id);
+                  const nomes = cota.participantes.map((p: any) => p.usuario.name).join(" & ");
+                  const isContemplada = cota.status === "CONTEMPLADA";
+                  const boladaDesteCiclo =
+                    calcularValorCiclo(
+                      cicloNum,
+                      consorcio.valorCota,
+                      consorcio.modeloContribuicao,
+                      consorcio.valorAcrescimo
+                    ) * consorcio.totalCotas;
+                  const mesAnoCiclo = formatarMesAnoCiclo(consorcio, cicloNum);
+
+                  return (
+                    <div
+                      key={cota.id}
+                      className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
+                        isMinha
+                          ? "bg-theme-light/40 border-theme-main/40 ring-1 ring-theme-main/20"
+                          : "bg-slate-50/80 hover:bg-slate-50 border-slate-200/70"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shadow-2xs flex-shrink-0 ${
+                            isContemplada || isMinha
+                              ? "bg-theme-main text-white ring-2 ring-theme-main/20"
+                              : "bg-white text-slate-700 border border-slate-200"
+                          }`}
+                        >
+                          #{cicloNum}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p
+                              className={`text-xs sm:text-sm font-bold truncate ${
+                                isMinha ? "text-theme-text" : "text-slate-800"
+                              }`}
+                            >
+                              {nomes}
+                            </p>
+                            {isMinha && (
+                              <span className="text-[10px] bg-theme-main text-white font-extrabold px-2 py-0.5 rounded-full shadow-2xs">
+                                Sua Cota
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-500 mt-0.5 font-medium">
+                            <span>
+                              Cota #{cota.numero}
+                              {cota.isCompartilhada ? " (Compartilhada)" : ""}
+                            </span>
+                            <span>•</span>
+                            <span>
+                              Bolada:{" "}
+                              <strong
+                                className={
+                                  isContemplada || isMinha ? "text-theme-text font-bold" : "text-slate-900 font-bold"
+                                }
+                              >
+                                {formatarMoedaBRL(boladaDesteCiclo)}
+                              </strong>
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className={`text-xs sm:text-sm font-bold ${isMinha ? "text-theme-text" : "text-slate-800"}`}>
-                            {nomes}
-                          </p>
-                          {isMinha && (
-                            <span className="text-[10px] bg-theme-main text-white font-extrabold px-2 py-0.5 rounded-full shadow-2xs">
-                              Sua Cota
+
+                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1.5 flex-shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-200/60">
+                        <div>
+                          {isContemplada ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-theme-main text-white shadow-2xs">
+                              <Sparkles className="w-3 h-3 text-amber-300 fill-amber-300" />
+                              <span>Contemplada</span>
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-bold text-slate-700 bg-white px-2.5 py-0.5 rounded-xl border border-slate-200 shadow-2xs inline-block">
+                              Ciclo #{cicloNum}
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          Cota #{cota.numero} {cota.isCompartilhada ? "• Compartilhada" : ""}
+                        <p className="text-[11px] font-semibold text-slate-600 flex items-center gap-1">
+                          <Calendar className={`w-3.5 h-3.5 flex-shrink-0 ${isContemplada || isMinha ? "text-theme-main" : "text-slate-400"}`} />
+                          <span>
+                            {isContemplada ? "Contemplado em " : "Recebe em: "}
+                            <strong className={isMinha ? "text-theme-text font-black" : "text-slate-900 font-bold"}>
+                              {mesAnoCiclo}
+                            </strong>
+                          </span>
                         </p>
                       </div>
                     </div>
-
-                    <div className="text-right flex-shrink-0">
-                      {isContemplada ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                          🏆 Contemplada
-                        </span>
-                      ) : (
-                        <span className="text-[11px] font-semibold text-slate-500 bg-white px-2.5 py-1 rounded-xl border border-slate-200">
-                          Ciclo #{cicloNum}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
 
-          {/* Acompanhamento Coletivo Seguro (Páginas 76 e 77 do PDF: apenas nome e status, SEM valores de terceiros) */}
+          {/* Acompanhamento Coletivo Seguro com Altura Otimizada */}
           <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm">
             <div className="flex justify-between items-center mb-4">
               <div>
@@ -366,7 +615,7 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
               <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg">Ciclo 1</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[320px] overflow-y-auto pr-1">
               {statusPorCota.map((item: any, idx: number) => (
                 <div key={idx} className="flex items-center justify-between p-3 bg-slate-50/80 rounded-2xl border border-slate-100">
                   <div>

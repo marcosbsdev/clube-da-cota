@@ -324,3 +324,70 @@ export function formatarMesEAnoSeguro(data: string | Date | null | undefined): s
   return `${meses[mesIndex]} de ${ano}`;
 }
 
+/**
+ * Retorna a data prevista para um ciclo específico do consórcio,
+ * considerando a data do primeiro vencimento, frequência e quantidade de ciclos.
+ */
+export function calcularDataCiclo(
+  consorcio: {
+    dataPrimeiroVencimento?: string | Date | null;
+    dataInicio?: string | Date | null;
+    frequencia?: string | null;
+    contribuicoes?: { numeroCiclo: number; dataVencimento: string | Date }[];
+  },
+  numeroCiclo: number
+): Date {
+  // 1. Tenta buscar primeiro nas contribuições reais já geradas
+  const contrib = consorcio?.contribuicoes?.find((c) => c.numeroCiclo === numeroCiclo);
+  if (contrib?.dataVencimento) {
+    return new Date(contrib.dataVencimento);
+  }
+
+  // 2. Calcula matematicamente com base no primeiro vencimento ou início
+  const baseRaw = consorcio?.dataPrimeiroVencimento || consorcio?.dataInicio || new Date();
+  const base = new Date(baseRaw);
+  const freq = consorcio?.frequencia || "MENSAL";
+  const offset = Math.max(0, numeroCiclo - 1);
+  const data = new Date(base);
+
+  if (freq === "SEMANAL") {
+    data.setDate(base.getDate() + offset * 7);
+  } else if (freq === "QUINZENAL") {
+    data.setDate(base.getDate() + offset * 14);
+  } else {
+    // Padrão Mensal com proteção UTC / Fuso
+    const isZeroUtc = base.getUTCHours() === 0 && base.getUTCMinutes() === 0;
+    if (isZeroUtc) {
+      const diaOriginal = base.getUTCDate();
+      data.setUTCMonth(base.getUTCMonth() + offset);
+      if (data.getUTCDate() !== diaOriginal) {
+        data.setUTCDate(0);
+      }
+    } else {
+      const diaOriginal = base.getDate();
+      data.setMonth(base.getMonth() + offset);
+      if (data.getDate() !== diaOriginal) {
+        data.setDate(0);
+      }
+    }
+  }
+
+  return data;
+}
+
+/**
+ * Retorna o mês e ano formatado por extenso (ex: "Outubro de 2026") para um ciclo específico
+ */
+export function formatarMesAnoCiclo(
+  consorcio: {
+    dataPrimeiroVencimento?: string | Date | null;
+    dataInicio?: string | Date | null;
+    frequencia?: string | null;
+    contribuicoes?: { numeroCiclo: number; dataVencimento: string | Date }[];
+  },
+  numeroCiclo: number
+): string {
+  const data = calcularDataCiclo(consorcio, numeroCiclo);
+  return formatarMesEAnoSeguro(data);
+}
+

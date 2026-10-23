@@ -12,6 +12,8 @@ import {
   calcularResumoFinanceiroConsorcio,
   formatarDataSegura,
   formatarMesEAnoSeguro,
+  calcularDataCiclo,
+  formatarMesAnoCiclo,
 } from "../src/lib/finance.ts";
 
 console.log("🧪 Executando testes das regras financeiras do Clube da Cota...\n");
@@ -236,4 +238,24 @@ console.log("🧪 Executando testes das regras financeiras do Clube da Cota...\n
   console.log("✅ Teste 10: Formatação de Mês/Ano e cálculo de lucro sobre bolada inicial aprovados.");
 }
 
-console.log("\n🎉 Todos os 10 testes de regras financeiras passaram com 100% de sucesso!");
+// Teste 11: Cálculo de data e Mês/Ano previsto para cada ciclo de contemplação
+{
+  const consorcioMock = {
+    dataPrimeiroVencimento: "2026-10-15T00:00:00.000Z",
+    frequencia: "MENSAL",
+    contribuicoes: [
+      { numeroCiclo: 1, dataVencimento: "2026-10-15T00:00:00.000Z" }
+    ]
+  };
+
+  assert.strictEqual(formatarMesAnoCiclo(consorcioMock, 1), "Outubro de 2026");
+  assert.strictEqual(formatarMesAnoCiclo(consorcioMock, 2), "Novembro de 2026");
+  assert.strictEqual(formatarMesAnoCiclo(consorcioMock, 3), "Dezembro de 2026");
+  assert.strictEqual(formatarMesAnoCiclo(consorcioMock, 4), "Janeiro de 2027");
+  assert.strictEqual(formatarMesAnoCiclo(consorcioMock, 5), "Fevereiro de 2027");
+  assert.strictEqual(formatarMesAnoCiclo(consorcioMock, 15), "Dezembro de 2027");
+
+  console.log("✅ Teste 11: Cálculo de data e Mês/Ano para cada ciclo de contemplação aprovados.");
+}
+
+console.log("\n🎉 Todos os 11 testes de regras financeiras passaram com 100% de sucesso!");

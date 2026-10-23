@@ -562,9 +562,6 @@ export function Header({
                       <p className="text-[11px] text-slate-500 leading-relaxed max-w-[240px] mx-auto">
                         Você não tem nenhuma notificação nova pendente.
                       </p>
-                      <p className="text-[10px] text-slate-400 pt-1">
-                        Para consultar alterações anteriores, acesse o <strong>Histórico de Auditoria</strong> abaixo.
-                      </p>
                     </div>
                   ) : (
                     unreadAuditorias.map((a: any) => {
