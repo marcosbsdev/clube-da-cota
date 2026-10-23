@@ -22,6 +22,7 @@ import {
   CheckCheck,
   X,
   ExternalLink,
+  ShieldCheck,
 } from "lucide-react";
 import { TabType } from "./BottomNav";
 import { marcarNotificacoesLidasAction, dispensarNotificacaoAction } from "@/app/actions";
@@ -625,20 +626,34 @@ export function Header({
                 {/* Rodapé: Link para Gestão / Auditoria */}
                 {onChangeTab && canCreateOrManage && (
                   <div className="pt-2 mt-2 border-t border-slate-100">
-                    <button
-                      onClick={() => {
-                        setNotificacoesAberto(false);
-                        onChangeTab("criador");
-                        setTimeout(() => {
-                          const elem = document.getElementById("historico-auditoria");
-                          if (elem) elem.scrollIntoView({ behavior: "smooth" });
-                        }, 150);
-                      }}
-                      className="w-full p-2 rounded-xl text-xs font-bold text-theme-text hover:bg-slate-50 flex items-center justify-center gap-1.5 transition cursor-pointer"
-                    >
-                      <span>Ver Trilha de Auditoria Completa</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </button>
+                    {(userRole === "PRO_MASTER" || userRole === "SUPER_ADMIN") ? (
+                      <button
+                        onClick={() => {
+                          setNotificacoesAberto(false);
+                          onChangeTab("criador");
+                          setTimeout(() => {
+                            window.dispatchEvent(new CustomEvent("abrir-auditoria"));
+                            const elem = document.getElementById("historico-auditoria");
+                            if (elem) elem.scrollIntoView({ behavior: "smooth" });
+                          }, 150);
+                        }}
+                        className="w-full p-2 rounded-xl text-xs font-bold text-theme-text hover:bg-slate-50 flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>Ver Trilha de Auditoria (Governança)</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setNotificacoesAberto(false);
+                          onChangeTab("criador");
+                        }}
+                        className="w-full p-2 rounded-xl text-xs font-bold text-theme-text hover:bg-slate-50 flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      >
+                        <span>Ir para Gestão do Grupo</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

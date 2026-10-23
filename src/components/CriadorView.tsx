@@ -43,6 +43,7 @@ import {
   MessageCircle,
   Sparkles,
   Calendar,
+  Search,
 } from "lucide-react";
 
 function formatarDataHoraAuditoria(d: string | Date) {
@@ -392,6 +393,34 @@ export function CriadorView({
   const [modoVisao, setModoVisao] = useState<"DASHBOARD" | "LISTA_CONSORCIOS">(
     consorcio ? "DASHBOARD" : "LISTA_CONSORCIOS"
   );
+
+  // Sub-abas de Gestão: Operacional vs Trilha de Auditoria (Exclusivo Pro Master e Super Admin)
+  const isPrivilegiadoAuditoria = currentUser?.role === "PRO_MASTER" || currentUser?.role === "SUPER_ADMIN";
+  const [abaGestao, setAbaGestao] = useState<"OPERACIONAL" | "AUDITORIA">("OPERACIONAL");
+  const [buscaAuditoria, setBuscaAuditoria] = useState("");
+  const [filtroTipoAuditoria, setFiltroTipoAuditoria] = useState<string>("TODOS");
+
+  // Listener para abrir a aba de auditoria via evento ou hash
+  useEffect(() => {
+    const handleAbrirAuditoria = () => {
+      if (isPrivilegiadoAuditoria) {
+        setAbaGestao("AUDITORIA");
+        setTimeout(() => {
+          const elem = document.getElementById("historico-auditoria");
+          if (elem) elem.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+      }
+    };
+
+    window.addEventListener("abrir-auditoria", handleAbrirAuditoria);
+    if (window.location.hash === "#historico-auditoria" && isPrivilegiadoAuditoria) {
+      setAbaGestao("AUDITORIA");
+    }
+
+    return () => {
+      window.removeEventListener("abrir-auditoria", handleAbrirAuditoria);
+    };
+  }, [isPrivilegiadoAuditoria]);
   const [filtroStatus, setFiltroStatus] = useState<string>("TODOS");
   const [modalEstornoAberto, setModalEstornoAberto] = useState(false);
   const [modalRecusaAberto, setModalRecusaAberto] = useState(false);
@@ -944,6 +973,29 @@ export function CriadorView({
   const cotaSelecionada1Pos = cotaSelecionada1?.ordemSorteio || cotaSelecionada1?.numero;
   const cotaSelecionada2Pos = cotaSelecionada2?.ordemSorteio || cotaSelecionada2?.numero;
 
+  const auditoriasFiltradas = (consorcio?.auditorias || []).filter((a: any) => {
+    if (filtroTipoAuditoria === "PAGAMENTO") {
+      if (!a.tipoAcao.includes("PAGAMENTO") && a.tipoAcao !== "RECUSA_COMPROVANTE") return false;
+    } else if (filtroTipoAuditoria === "CONTEMPLACAO") {
+      if (!a.tipoAcao.includes("CONTEMPLACAO")) return false;
+    } else if (filtroTipoAuditoria === "TROCA") {
+      if (!a.tipoAcao.includes("TROCA")) return false;
+    } else if (filtroTipoAuditoria === "EDICAO") {
+      if (!a.tipoAcao.includes("EDICAO") && !a.tipoAcao.includes("CRIACAO")) return false;
+    }
+
+    if (buscaAuditoria.trim()) {
+      const q = buscaAuditoria.toLowerCase();
+      const resp = (a.usuarioResponsavel?.name || "").toLowerCase();
+      const detalhes = (typeof a.detalhes === "string" ? a.detalhes : JSON.stringify(a.detalhes)).toLowerCase();
+      const justificativa = (a.justificativa || "").toLowerCase();
+      const tipo = (a.tipoAcao || "").toLowerCase();
+      return resp.includes(q) || detalhes.includes(q) || justificativa.includes(q) || tipo.includes(q);
+    }
+
+    return true;
+  });
+
   return (
     <div className="space-y-6">
       {/* Toast Flutuante de Sucesso (Fixo no topo da tela com alta visibilidade) */}
@@ -1026,45 +1078,131 @@ export function CriadorView({
         </div>
       </div>
 
-      {/* 4 Cards de Métricas Principais (Exigidos no PDF: páginas 76 e 82) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-sm transition hover:shadow-md">
-          <span className="text-xs sm:text-sm text-slate-500 font-semibold block whitespace-nowrap">Total Previsto</span>
-          <p className="text-lg sm:text-2xl font-black text-slate-900 mt-1 whitespace-nowrap">
-            R$ {kpis.totalPrevisto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-          </p>
-          <span className="text-[11px] sm:text-xs text-slate-400 font-medium mt-0.5 block whitespace-nowrap">{consorcio.totalCotas} cotas ativas</span>
-        </div>
+      {/* Sub-Abas de Gestão: Operacional vs Trilha de Auditoria (Exclusivo Pro Master e Super Admin) */}
+      {isPrivilegiadoAuditoria && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-3 sm:p-3.5 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-2xs">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setAbaGestao("OPERACIONAL")}
+              className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                abaGestao === "OPERACIONAL"
+                  ? "bg-theme-main text-white shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              <span>Painel Operacional</span>
+            </button>
 
-        <div className="bg-theme-light p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-theme-light shadow-sm transition hover:shadow-md">
-          <span className="text-xs sm:text-sm text-theme-text font-bold block whitespace-nowrap">Total Recebido</span>
-          <p className="text-lg sm:text-2xl font-black text-theme-text mt-1 whitespace-nowrap">
-            R$ {kpis.totalRecebido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-          </p>
-          <span className="text-[11px] sm:text-xs text-theme-text font-semibold mt-0.5 block whitespace-nowrap">{kpis.percentualRecebido}% arrecadado</span>
-        </div>
+            <button
+              type="button"
+              onClick={() => setAbaGestao("AUDITORIA")}
+              className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                abaGestao === "AUDITORIA"
+                  ? "bg-theme-main text-white shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Trilha de Auditoria</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                  abaGestao === "AUDITORIA"
+                    ? "bg-white/20 text-white"
+                    : "bg-slate-200 text-slate-700"
+                }`}
+              >
+                {consorcio.auditorias.length}
+              </span>
+            </button>
+          </div>
 
-        <div className="bg-amber-50/80 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-amber-200/80 shadow-sm transition hover:shadow-md">
-          <span className="text-xs sm:text-sm text-amber-800 font-bold block whitespace-nowrap">Pendente no Prazo</span>
-          <p className="text-lg sm:text-2xl font-black text-amber-900 mt-1 whitespace-nowrap">
-            R$ {kpis.totalPendentePrazo.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-          </p>
-          <span className="text-[11px] sm:text-xs text-amber-700 font-medium mt-0.5 block whitespace-nowrap">Aguardando vencimento</span>
+          <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 font-semibold bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-xl">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Acesso Governança: <strong className="text-slate-800 font-bold">{currentUser?.role === "SUPER_ADMIN" ? "Super Admin" : "Pro Master"}</strong></span>
+          </div>
         </div>
+      )}
 
-        <div className="bg-rose-50/80 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-rose-200/80 shadow-sm transition hover:shadow-md">
-          <span className="text-xs sm:text-sm text-rose-700 font-bold block whitespace-nowrap">Em Atraso</span>
-          <p className="text-lg sm:text-2xl font-black text-rose-800 mt-1 whitespace-nowrap">
-            R$ {kpis.totalEmAtraso.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-          </p>
-          <span className="text-[11px] sm:text-xs text-rose-600 font-bold mt-0.5 block whitespace-nowrap">{kpis.quantidadeAtrasados} cota(s) pendente(s)</span>
-        </div>
-      </div>
+      {/* 1. ABA OPERACIONAL: Largura Total para todas as tabelas e controles */}
+      {(abaGestao === "OPERACIONAL" || !isPrivilegiadoAuditoria) && (
+        <div className="space-y-6">
+          {/* 4 Cards de Métricas Principais (Exigidos no PDF: páginas 76 e 82) */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-sm transition hover:shadow-md">
+              <span className="text-xs sm:text-sm text-slate-500 font-semibold block whitespace-nowrap">Total Previsto</span>
+              <p className="text-lg sm:text-2xl font-black text-slate-900 mt-1 whitespace-nowrap">
+                R$ {kpis.totalPrevisto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </p>
+              <span className="text-[11px] sm:text-xs text-slate-400 font-medium mt-0.5 block whitespace-nowrap">{consorcio.totalCotas} cotas ativas</span>
+            </div>
 
-      {/* Grid Principal Responsivo: Esquerda (Operacional) e Direita (Alertas & Auditoria) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Coluna Principal: Comprovantes & Controle de Parcelas */}
-        <div className="lg:col-span-8 space-y-6">
+            <div className="bg-theme-light p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-theme-light shadow-sm transition hover:shadow-md">
+              <span className="text-xs sm:text-sm text-theme-text font-bold block whitespace-nowrap">Total Recebido</span>
+              <p className="text-lg sm:text-2xl font-black text-theme-text mt-1 whitespace-nowrap">
+                R$ {kpis.totalRecebido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </p>
+              <span className="text-[11px] sm:text-xs text-theme-text font-semibold mt-0.5 block whitespace-nowrap">{kpis.percentualRecebido}% arrecadado</span>
+            </div>
+
+            <div className="bg-amber-50/80 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-amber-200/80 shadow-sm transition hover:shadow-md">
+              <span className="text-xs sm:text-sm text-amber-800 font-bold block whitespace-nowrap">Pendente no Prazo</span>
+              <p className="text-lg sm:text-2xl font-black text-amber-900 mt-1 whitespace-nowrap">
+                R$ {kpis.totalPendentePrazo.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </p>
+              <span className="text-[11px] sm:text-xs text-amber-700 font-medium mt-0.5 block whitespace-nowrap">Aguardando vencimento</span>
+            </div>
+
+            <div className="bg-rose-50/80 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-rose-200/80 shadow-sm transition hover:shadow-md">
+              <span className="text-xs sm:text-sm text-rose-700 font-bold block whitespace-nowrap">Em Atraso</span>
+              <p className="text-lg sm:text-2xl font-black text-rose-800 mt-1 whitespace-nowrap">
+                R$ {kpis.totalEmAtraso.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </p>
+              <span className="text-[11px] sm:text-xs text-rose-600 font-bold mt-0.5 block whitespace-nowrap">{kpis.quantidadeAtrasados} cota(s) pendente(s)</span>
+            </div>
+          </div>
+
+          {/* Alerta de Contribuições Vencidas e Não Pagas (Largura Total) */}
+          {contribuicoesAtrasadas.length > 0 && (
+            <div className="bg-rose-50/90 border-2 border-rose-300 rounded-3xl p-5 sm:p-6 shadow-sm space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-rose-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-rose-900 text-sm sm:text-base">
+                      Alerta de Contribuições em Atraso ({contribuicoesAtrasadas.length})
+                    </h4>
+                    <p className="text-xs text-rose-700">Parcelas com vencimento expirado que aguardam pagamento</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {contribuicoesAtrasadas.map((c: any) => (
+                  <div key={c.id} className="bg-white p-3.5 rounded-2xl border border-rose-200 flex justify-between items-center text-xs shadow-2xs">
+                    <div>
+                      <p className="font-bold text-slate-800 text-sm">{c.usuario.name}</p>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        Cota #{c.cota?.numero} • Venceu em {formatarData(c.dataVencimento)}
+                      </p>
+                      <span className="font-black text-rose-700 text-sm block mt-0.5">{formatarMoedaBRL(c.valorPrevisto)}</span>
+                    </div>
+                    <button
+                      onClick={() => abrirModalConfirmarPagamento(c)}
+                      className="text-xs bg-theme-main hover:opacity-90 text-white font-bold px-3 py-2 rounded-xl transition shadow-2xs cursor-pointer flex items-center gap-1 active:scale-95 shrink-0"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Confirmar</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Ordem de Contemplação & Sorteio (Posições de Recebimento) */}
           <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
@@ -1469,80 +1607,131 @@ export function CriadorView({
             </div>
           </div>
         </div>
+      )}
 
-        {/* Coluna Lateral: Alertas de Atraso e Auditoria */}
-        <div className="lg:col-span-4 space-y-6">
-          {/* Alerta de Contribuições Vencidas e Não Pagas (Página 75 do PDF) */}
-          {contribuicoesAtrasadas.length > 0 && (
-            <div className="bg-rose-50/90 border-2 border-rose-300 rounded-3xl p-5 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0" />
-                <div>
-                  <h4 className="font-bold text-rose-900 text-sm">
-                    Alerta de Atraso ({contribuicoesAtrasadas.length})
-                  </h4>
-                  <p className="text-[11px] text-rose-700">Parcelas vencidas aguardando pagamento</p>
-                </div>
+      {/* 2. ABA TRILHA DE AUDITORIA: Exclusiva para Pro Master e Super Admin */}
+      {isPrivilegiadoAuditoria && abaGestao === "AUDITORIA" && (
+        <div id="historico-auditoria" className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/80 shadow-sm space-y-6 scroll-mt-24">
+          {/* Cabeçalho da Trilha de Auditoria */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-theme-light text-theme-text flex items-center justify-center font-bold text-lg shadow-2xs shrink-0">
+                <ShieldCheck className="w-6 h-6 text-theme-main" />
               </div>
-
-              <div className="space-y-2.5">
-                {contribuicoesAtrasadas.map((c: any) => (
-                  <div key={c.id} className="bg-white p-3 rounded-2xl border border-rose-200 flex justify-between items-center text-xs shadow-sm">
-                    <div>
-                      <p className="font-bold text-slate-800">{c.usuario.name}</p>
-                      <p className="text-[11px] text-slate-500">
-                        Cota #{c.cota?.numero} • Venceu em {formatarData(c.dataVencimento)}
-                      </p>
-                      <span className="font-black text-rose-700 text-sm block mt-0.5">{formatarMoedaBRL(c.valorPrevisto)}</span>
-                    </div>
-                    <div className="text-right">
-                      <button
-                        onClick={() => abrirModalConfirmarPagamento(c)}
-                        className="text-[11px] bg-theme-main hover:opacity-90 text-white font-bold px-3 py-1.5 rounded-xl transition shadow-2xs cursor-pointer flex items-center gap-1 active:scale-95"
-                      >
-                        <Check className="w-3 h-3" />
-                        <span>Confirmar</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-black text-slate-900 text-base sm:text-lg">
+                    Trilha de Auditoria & Governança
+                  </h3>
+                  <span className="text-[10px] sm:text-[11px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                    <Lock className="w-3 h-3" />
+                    <span>Exclusivo Pro Master & Super Admin</span>
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Registro cronológico detalhado e imutável de todas as ações executadas neste consórcio.
+                </p>
               </div>
             </div>
-          )}
 
-          {/* Trilha de Auditoria (Página 83 do PDF: data/hora, responsável, ação e justificativa) */}
-          <div id="historico-auditoria" className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm scroll-mt-24">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3.5">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-theme-light text-theme-text flex items-center justify-center font-bold text-sm">
-                  <ShieldCheck className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-slate-900 text-sm">Histórico de Auditoria</h4>
-                  <p className="text-[11px] text-slate-400">Registro seguro e imutável de ações</p>
-                </div>
-              </div>
-              <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg">
-                {consorcio.auditorias.length}
+            <div className="flex items-center gap-2 self-end sm:self-center">
+              <span className="text-xs font-bold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
+                {consorcio.auditorias.length} evento(s) no total
               </span>
             </div>
+          </div>
 
-            <div className="space-y-3 text-xs max-h-[480px] overflow-y-auto overflow-x-hidden pr-1">
-              {consorcio.auditorias.length === 0 ? (
-                <div className="p-6 text-center text-slate-400 bg-slate-50/60 rounded-2xl border border-slate-100">
-                  <ShieldCheck className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                  <p className="text-xs font-medium">Nenhum registro de auditoria até o momento.</p>
-                </div>
-              ) : (
-                consorcio.auditorias.map((a: any) => {
-                  const meta = getAcaoAuditoriaMeta(a.tipoAcao);
-                  const IconComp = meta.icon;
+          {/* Cards de Resumo da Auditoria */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/70">
+              <span className="text-[11px] font-semibold text-slate-500 block">Total de Eventos</span>
+              <span className="text-xl font-black text-slate-900 mt-0.5 block">{consorcio.auditorias.length}</span>
+            </div>
+            <div className="p-3.5 bg-theme-light/50 rounded-2xl border border-theme-main/20">
+              <span className="text-[11px] font-semibold text-theme-text block">Pagamentos Baixados</span>
+              <span className="text-xl font-black text-theme-text mt-0.5 block">
+                {consorcio.auditorias.filter((a: any) => a.tipoAcao === "CONFIRMACAO_PAGAMENTO").length}
+              </span>
+            </div>
+            <div className="p-3.5 bg-amber-50/70 rounded-2xl border border-amber-200/60">
+              <span className="text-[11px] font-semibold text-amber-800 block">Contemplações & Trocas</span>
+              <span className="text-xl font-black text-amber-900 mt-0.5 block">
+                {consorcio.auditorias.filter((a: any) => a.tipoAcao.includes("CONTEMPLACAO") || a.tipoAcao.includes("TROCA")).length}
+              </span>
+            </div>
+            <div className="p-3.5 bg-slate-100/70 rounded-2xl border border-slate-200/60">
+              <span className="text-[11px] font-semibold text-slate-600 block">Edições & Estornos</span>
+              <span className="text-xl font-black text-slate-800 mt-0.5 block">
+                {consorcio.auditorias.filter((a: any) => !a.tipoAcao.includes("CONFIRMACAO_PAGAMENTO") && !a.tipoAcao.includes("CONTEMPLACAO") && !a.tipoAcao.includes("TROCA")).length}
+              </span>
+            </div>
+          </div>
 
-                  return (
-                    <div
-                      key={a.id}
-                      className="p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200/80 space-y-2.5 overflow-hidden transition hover:bg-slate-50"
-                    >
+          {/* Barra de Filtros e Busca de Auditoria */}
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between pt-1">
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              {[
+                { id: "TODOS", label: "Todos os Eventos" },
+                { id: "PAGAMENTO", label: "Pagamentos" },
+                { id: "CONTEMPLACAO", label: "Contemplações" },
+                { id: "TROCA", label: "Trocas de Posição" },
+                { id: "EDICAO", label: "Edição de Dados" },
+              ].map((tipo) => (
+                <button
+                  key={tipo.id}
+                  type="button"
+                  onClick={() => setFiltroTipoAuditoria(tipo.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 cursor-pointer ${
+                    filtroTipoAuditoria === tipo.id
+                      ? "bg-theme-main text-white shadow-2xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                  }`}
+                >
+                  {tipo.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative min-w-[240px]">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={buscaAuditoria}
+                onChange={(e) => setBuscaAuditoria(e.target.value)}
+                placeholder="Buscar por responsável, participante..."
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:border-theme-main focus:outline-none"
+              />
+              {buscaAuditoria && (
+                <button
+                  type="button"
+                  onClick={() => setBuscaAuditoria("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Lista em Grid 2 Colunas da Trilha de Auditoria */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 max-h-[600px] overflow-y-auto pr-1">
+            {auditoriasFiltradas.length === 0 ? (
+              <div className="col-span-full py-12 px-4 text-center rounded-2xl bg-slate-50 border border-slate-100 text-slate-400 space-y-2">
+                <ShieldCheck className="w-10 h-10 text-slate-300 mx-auto" />
+                <p className="text-xs font-bold text-slate-700">Nenhum evento encontrado para este filtro.</p>
+                <p className="text-[11px] text-slate-500">Tente selecionar outro filtro ou limpar o campo de busca.</p>
+              </div>
+            ) : (
+              auditoriasFiltradas.map((a: any) => {
+                const meta = getAcaoAuditoriaMeta(a.tipoAcao);
+                const IconComp = meta.icon;
+
+                return (
+                  <div
+                    key={a.id}
+                    className="p-4 bg-slate-50/90 hover:bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5 transition shadow-2xs flex flex-col justify-between"
+                  >
+                    <div>
                       {/* Cabeçalho do Card */}
                       <div className="flex justify-between items-start gap-2">
                         <span
@@ -1556,35 +1745,36 @@ export function CriadorView({
                         </span>
                       </div>
 
-                      {/* Conteúdo Formatado com Participantes em Destaque */}
-                      {renderAuditoriaDetalhes(a, consorcio)}
-
-                      {/* Rodapé: Responsável e Justificativa */}
-                      <div className="space-y-1.5 pt-0.5">
-                        {a.usuarioResponsavel?.name && (
-                          <div className="flex items-center gap-1 text-[11px] text-slate-400">
-                            <span>👤 Por:</span>
-                            <span className="font-semibold text-slate-600">
-                              {a.usuarioResponsavel.name}
-                            </span>
-                          </div>
-                        )}
-
-                        {a.justificativa && (
-                          <div className="p-2 bg-slate-100/70 rounded-xl border border-slate-200/60 text-[11px] text-slate-700 flex items-start gap-1.5 break-words">
-                            <span className="font-bold flex-shrink-0 text-slate-800">Motivo:</span>
-                            <span className="italic leading-relaxed">&ldquo;{a.justificativa}&rdquo;</span>
-                          </div>
-                        )}
+                      {/* Detalhes Formatados */}
+                      <div className="mt-2.5">
+                        {renderAuditoriaDetalhes(a, consorcio)}
                       </div>
                     </div>
-                  );
-                })
-              )}
-            </div>
+
+                    {/* Rodapé: Responsável e Justificativa */}
+                    <div className="space-y-1.5 pt-2 border-t border-slate-200/60 mt-1">
+                      {a.usuarioResponsavel?.name && (
+                        <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                          <span>👤 Por:</span>
+                          <span className="font-bold text-slate-700">
+                            {a.usuarioResponsavel.name}
+                          </span>
+                        </div>
+                      )}
+
+                      {a.justificativa && (
+                        <p className="text-[11px] text-slate-600 bg-white/80 p-2 rounded-xl border border-slate-200/60 italic leading-snug">
+                          &ldquo;{a.justificativa}&rdquo;
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
-      </div>
+      )}
 
       {/* Modal de Confirmação de Recebimento de Mensalidade */}
       {modalConfirmarPagamentoAberto && contribuicaoParaConfirmar && (
