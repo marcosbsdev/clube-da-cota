@@ -11,6 +11,7 @@ import {
   parseMoedaBRL,
   calcularResumoFinanceiroConsorcio,
   formatarDataSegura,
+  formatarMesEAnoSeguro,
 } from "../src/lib/finance.ts";
 
 console.log("🧪 Executando testes das regras financeiras do Clube da Cota...\n");
@@ -212,4 +213,27 @@ console.log("🧪 Executando testes das regras financeiras do Clube da Cota...\n
   console.log("✅ Teste 9: Formatação de data segura contra bugs de fuso horário aprovada.");
 }
 
-console.log("\n🎉 Todos os 9 testes de regras financeiras passaram com 100% de sucesso!");
+// Teste 10: Formatação de Mês e Ano por extenso e cálculo de lucro sobre a bolada inicial
+{
+  assert.strictEqual(formatarMesEAnoSeguro("2026-11-05"), "Novembro de 2026");
+  assert.strictEqual(formatarMesEAnoSeguro("2027-01-05"), "Janeiro de 2027");
+  assert.strictEqual(formatarMesEAnoSeguro("2028-08-15T12:00:00.000Z"), "Agosto de 2028");
+
+  // Caso do usuário: 15 cotas, R$ 200 base, + R$ 5 acréscimo
+  // Ciclo 1: R$ 3.000,00 (bolada inicial)
+  // Ciclo 15: R$ 4.050,00 (bolada do último ciclo)
+  // Lucro: R$ 1.050,00 (35% de lucro)
+  const boladaInicial = calcularValorCiclo(1, 200, "ACRESCIMO_MENSAL", 5) * 15;
+  const boladaFinal = calcularValorCiclo(15, 200, "ACRESCIMO_MENSAL", 5) * 15;
+  const lucroValor = boladaFinal - boladaInicial;
+  const lucroPercentual = (lucroValor / boladaInicial) * 100;
+
+  assert.strictEqual(boladaInicial, 3000, "Bolada inicial deve ser 3000");
+  assert.strictEqual(boladaFinal, 4050, "Bolada final deve ser 4050");
+  assert.strictEqual(lucroValor, 1050, "Lucro deve ser 1050");
+  assert.strictEqual(lucroPercentual, 35, "Percentual de lucro deve ser 35%");
+
+  console.log("✅ Teste 10: Formatação de Mês/Ano e cálculo de lucro sobre bolada inicial aprovados.");
+}
+
+console.log("\n🎉 Todos os 10 testes de regras financeiras passaram com 100% de sucesso!");

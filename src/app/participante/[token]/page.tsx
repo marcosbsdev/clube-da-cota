@@ -22,9 +22,10 @@ import {
   ChevronDown,
   ChevronUp,
   MessageCircle,
+  TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
-import { formatarMoedaBRL, formatarDataSegura, calcularValorCiclo } from "@/lib/finance";
+import { formatarMoedaBRL, formatarDataSegura, calcularValorCiclo, formatarMesEAnoSeguro } from "@/lib/finance";
 
 export default function ParticipanteTokenPage() {
   const params = useParams();
@@ -191,6 +192,19 @@ export default function ParticipanteTokenPage() {
   const percentualParticipante = participante.percentual || 100;
   const valorBoladaParticipante = (boladaBrutaCiclo * percentualParticipante) / 100;
 
+  // Comparação com a Bolada Inicial (Ciclo #1) e Lucro/Rendimento para contemplados posteriores
+  const valorCotaCiclo1 = consorcio.valorCota;
+  const boladaInicialBruta = valorCotaCiclo1 * consorcio.totalCotas;
+  const boladaInicialParticipante = (boladaInicialBruta * percentualParticipante) / 100;
+  const lucroValor = valorBoladaParticipante - boladaInicialParticipante;
+  const lucroPercentual = boladaInicialParticipante > 0 ? (lucroValor / boladaInicialParticipante) * 100 : 0;
+
+  // Data e Mês de contemplação (realizada ou prevista)
+  const contribuicaoCicloContemplado = contribuicoes.find((cb: any) => cb.numeroCiclo === cicloContemplacao);
+  const dataEfetivaContemplacao = cota.dataContemplacao || contribuicaoCicloContemplado?.dataVencimento;
+  const mesAnoContemplacao = formatarMesEAnoSeguro(dataEfetivaContemplacao);
+  const dataContemplacaoFormatada = formatarDataSegura(dataEfetivaContemplacao);
+
   const proximaParcela = contribuicoes.find(
     (c: any) => c.status === "PENDENTE" || c.status === "EM_ATRASO"
   );
@@ -294,34 +308,67 @@ export default function ParticipanteTokenPage() {
             </span>
           </div>
 
-          <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/80 backdrop-blur-xs p-4 rounded-2xl border border-white/60">
-            <div>
-              <span className="text-[11px] font-bold text-slate-500 uppercase block">
-                Valor Previsto da Bolada
-              </span>
-              <p className="text-2xl sm:text-3xl font-black text-slate-900 mt-0.5">
-                {formatarMoedaBRL(valorBoladaParticipante)}
-              </p>
-              <span className="text-xs text-slate-600 font-medium mt-0.5 block">
-                {cota.status === "CONTEMPLADA"
-                  ? "Cota sorteada/contemplada com sucesso!"
-                  : `Você receberá a bolada no Ciclo #${cicloContemplacao} do consórcio.`}
-              </span>
-              {percentualParticipante < 100 && (
-                <span className="text-[11px] text-slate-500 font-semibold block mt-1">
-                  Sua cota é compartilhada ({percentualParticipante}% de {formatarMoedaBRL(boladaBrutaCiclo)})
+          <div className="mt-4 bg-white/80 backdrop-blur-xs p-4 sm:p-5 rounded-2xl border border-white/60 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold text-slate-500 uppercase block">
+                  Valor Previsto da Bolada
                 </span>
-              )}
+                <div className="flex items-baseline gap-2.5 flex-wrap">
+                  <p className="text-2xl sm:text-3xl font-black text-slate-900">
+                    {formatarMoedaBRL(valorBoladaParticipante)}
+                  </p>
+
+                  {/* Badge de Lucro / Rendimento sobre a bolada inicial */}
+                  {lucroValor > 0 && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full shadow-2xs">
+                      <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>+{formatarMoedaBRL(lucroValor)} (+{lucroPercentual.toFixed(1).replace(".0", "")}% de lucro)</span>
+                    </span>
+                  )}
+                </div>
+
+                {/* Indicação clara do mês e data de contemplação */}
+                <p className="text-xs text-slate-700 font-medium pt-1 flex items-center gap-1.5 flex-wrap">
+                  <Calendar className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                  <span>
+                    {cota.status === "CONTEMPLADA" ? (
+                      <>Contemplado em <strong>{dataContemplacaoFormatada}</strong> ({mesAnoContemplacao})</>
+                    ) : (
+                      <>Recebimento previsto para <strong>{mesAnoContemplacao}</strong> ({dataContemplacaoFormatada})</>
+                    )}
+                  </span>
+                </p>
+
+                {percentualParticipante < 100 && (
+                  <span className="text-[11px] text-slate-500 font-semibold block pt-0.5">
+                    Sua cota é compartilhada ({percentualParticipante}% de {formatarMoedaBRL(boladaBrutaCiclo)})
+                  </span>
+                )}
+              </div>
+
+              <div className="sm:text-right flex-shrink-0 bg-slate-50/80 sm:bg-transparent p-2.5 sm:p-0 rounded-xl border sm:border-0 border-slate-100">
+                <span className="text-[11px] font-bold text-slate-500 uppercase block">
+                  Ordem no Sorteio
+                </span>
+                <span className="text-lg sm:text-xl font-black text-slate-800">
+                  #{cicloContemplacao} de {consorcio.totalCotas}
+                </span>
+                <span className="text-[11px] text-slate-400 block mt-0.5 font-medium">
+                  {cota.status === "CONTEMPLADA" ? "Sorteio já realizado" : "Ciclo agendado"}
+                </span>
+              </div>
             </div>
 
-            <div className="sm:text-right flex-shrink-0">
-              <span className="text-[11px] font-bold text-slate-500 uppercase block">
-                Ordem no Sorteio
-              </span>
-              <span className="text-lg font-black text-slate-800">
-                #{cicloContemplacao} de {consorcio.totalCotas}
-              </span>
-            </div>
+            {/* Explicação pedagógica do Lucro para participantes que recebem mais tarde */}
+            {lucroValor > 0 && (
+              <div className="p-3 bg-emerald-50/70 border border-emerald-200/80 rounded-xl text-xs text-emerald-950 flex items-start gap-2">
+                <span className="text-base shrink-0">📈</span>
+                <p className="leading-relaxed">
+                  Por ser contemplado no <strong>Ciclo #{cicloContemplacao}</strong>, você recebe <strong>+{formatarMoedaBRL(lucroValor)}</strong> a mais do que a bolada do 1º ciclo ({formatarMoedaBRL(boladaInicialParticipante)}), garantindo <strong>+{lucroPercentual.toFixed(1).replace(".0", "")}% de lucro</strong> pela espera no modelo com acréscimo progressivo.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

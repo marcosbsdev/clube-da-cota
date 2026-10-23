@@ -24,6 +24,11 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
     );
   }
 
+  // Cotas que este usuário participa
+  const minhasCotas = consorcio.cotas.filter((c: any) =>
+    c.participantes.some((p: any) => p.usuarioId === currentUser.id || p.usuario?.id === currentUser.id)
+  );
+
   // Contribuições deste usuário
   const minhasContribuicoes = consorcio.contribuicoes.filter(
     (c: any) => c.usuarioId === currentUser.id
@@ -106,7 +111,7 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                 Sua Participação
               </span>
               <span className="text-xs text-theme-text font-bold bg-theme-light px-2.5 py-0.5 rounded-full whitespace-nowrap">
-                {consorcio.totalCotas} cotas
+                {minhasCotas.length} {minhasCotas.length === 1 ? "cota" : "cotas"} ({consorcio.totalCotas} no grupo)
               </span>
             </div>
 

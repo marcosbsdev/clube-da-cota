@@ -973,7 +973,7 @@ export function CriadorView({
                       >
                         #{pos}
                       </div>
-                      <div className="min-w-0 truncate">
+                      <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-bold text-xs text-slate-900 truncate">
                             {nomes}
@@ -982,8 +982,8 @@ export function CriadorView({
                             Cota #{cota.numero}
                           </span>
                         </div>
-                        <span className="text-[11px] text-slate-500 block truncate mt-0.5">
-                          Ciclo {pos} • Bolada: {formatarMoedaBRL(boladaDesteCiclo)}
+                        <span className="text-[11px] text-slate-600 font-medium block mt-0.5 whitespace-nowrap">
+                          Ciclo {pos} • Bolada: <strong className="text-slate-900">{formatarMoedaBRL(boladaDesteCiclo)}</strong>
                         </span>
                       </div>
                     </div>

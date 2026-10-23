@@ -296,3 +296,31 @@ export function formatarDataSegura(data: string | Date | null | undefined): stri
   });
 }
 
+/**
+ * Retorna o mês e ano por extenso no padrão brasileiro (ex: "Janeiro de 2027")
+ * Seguro contra desvios de fuso horário.
+ */
+export function formatarMesEAnoSeguro(data: string | Date | null | undefined): string {
+  if (!data) return "";
+  const meses = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+  ];
+  if (typeof data === "string") {
+    const matchYmd = data.match(/^(\d{4})-(\d{2})/);
+    if (matchYmd) {
+      const [, ano, mes] = matchYmd;
+      const mesNum = parseInt(mes, 10);
+      if (mesNum >= 1 && mesNum <= 12) {
+        return `${meses[mesNum - 1]} de ${ano}`;
+      }
+    }
+  }
+  const d = new Date(data);
+  if (isNaN(d.getTime())) return "";
+  const isZeroHoraUtc = d.getUTCHours() === 0 && d.getUTCMinutes() === 0;
+  const mesIndex = isZeroHoraUtc ? d.getUTCMonth() : d.getMonth();
+  const ano = isZeroHoraUtc ? d.getUTCFullYear() : d.getFullYear();
+  return `${meses[mesIndex]} de ${ano}`;
+}
+
