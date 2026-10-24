@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { createConsorcioAction } from "@/app/actions";
 import { Check, Plus, Trash2, Users, AlertCircle, ArrowRight, ArrowLeft, TrendingUp, User, Calendar, Flag, Clock, ChevronDown, ChevronUp, Crown, Copy, MessageCircle, CheckCircle2 } from "lucide-react";
 import { ModalUpgradePlanos } from "./ModalUpgradePlanos";
-import { DADOS_PAGAMENTO_UPGRADE, PLANOS_INFO } from "@/lib/plans";
+import { DADOS_PAGAMENTO_UPGRADE, PLANOS_INFO, getVigenciaPlano } from "@/lib/plans";
 import {
   calcularTotalArrecadacaoConsorcio,
   calcularValorCiclo,
@@ -50,10 +50,13 @@ export function CriarConsorcioWizard({
     (c: any) => c.criadorId === currentUser.id && c.status === "ATIVO"
   ).length;
 
+  const vigencia = getVigenciaPlano(currentUser);
+  const planoEfetivo = vigencia.isAtivo ? currentUser.role : "COMUM";
+
   const maxConsorciosPlano =
-    currentUser.role === "COMUM" ? 1 : currentUser.role === "PRO" ? 3 : Infinity;
+    planoEfetivo === "COMUM" ? 1 : planoEfetivo === "PRO" ? 3 : Infinity;
   const maxParticipantesPlano =
-    currentUser.role === "COMUM" ? 10 : currentUser.role === "PRO" ? 20 : Infinity;
+    planoEfetivo === "COMUM" ? 10 : planoEfetivo === "PRO" ? 20 : Infinity;
 
   const atingiuLimiteConsorcios = consorciosAtivosDoCriador >= maxConsorciosPlano;
 
@@ -1522,6 +1525,7 @@ export function CriarConsorcioWizard({
         onFechar={() => setModalUpgradeAberto(false)}
         motivo={upgradeMotivo}
         planoRecomendado={planoRecomendado}
+        userId={currentUser.id}
       />
     </div>
   );

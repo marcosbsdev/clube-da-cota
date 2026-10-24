@@ -17,6 +17,11 @@ import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { sanitizarParaCliente } from "@/lib/sanitize";
+import {
+  getVigenciaPlano,
+  calcularNovaDataExpiracao,
+  PLANOS_INFO,
+} from "@/lib/plans";
 
 export async function getConsorcioData(usuarioId?: string, consorcioId?: string) {
   // Verifica se há sessão ativa via cookie ou id fornecido
@@ -35,6 +40,7 @@ export async function getConsorcioData(usuarioId?: string, consorcioId?: string)
       receberPixDireto: true,
       tipoChavePix: true,
       chavePix: true,
+      planoExpiraEm: true,
     },
   });
 
@@ -282,6 +288,15 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
   try {
     const criador = await prisma.user.findUnique({ where: { id: input.criadorId } });
     if (!criador) throw new Error("Criador não encontrado.");
+
+    // Verifica se a assinatura do plano PRO ou PRO_MASTER está expirada
+    const vigencia = getVigenciaPlano(criador);
+    if (!vigencia.isAtivo && (criador.role === "PRO" || criador.role === "PRO_MASTER")) {
+      return {
+        success: false,
+        error: `Sua assinatura do ${PLANOS_INFO[criador.role as "PRO" | "PRO_MASTER"].nome} expirou em ${vigencia.dataExpiracaoFormatada}. Para gerenciar novos grupos, realize a renovação via Pix para Marcos Batista (markos.system@gmail.com).`,
+      };
+    }
 
     // Validação de limites por nível de acesso (Páginas 2, 8 e 83 do PDF)
     const consorciosAtivos = await prisma.consorcio.count({
@@ -1004,9 +1019,19 @@ export async function updateUserRoleAction(input: {
       return { success: false, error: "Nível de acesso inválido." };
     }
 
+    let novoPlanoExpiraEm = targetUser.planoExpiraEm;
+    if (input.newRole === "PRO" || input.newRole === "PRO_MASTER") {
+      novoPlanoExpiraEm = calcularNovaDataExpiracao(targetUser.planoExpiraEm, 30);
+    } else if (input.newRole === "COMUM" || input.newRole === "SUPER_ADMIN") {
+      novoPlanoExpiraEm = null;
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: targetUser.id },
-      data: { role: input.newRole },
+      data: {
+        role: input.newRole,
+        planoExpiraEm: novoPlanoExpiraEm,
+      },
     });
 
     revalidatePath("/");
@@ -2007,5 +2032,413 @@ export async function ativarContaComSenhaAction(
     return { success: false, error: error.message || "Erro ao definir senha." };
   }
 }
+
+// ==========================================
+// MÓDULO DE GESTÃO DE ASSINATURAS & PLANOS SAAS
+// ==========================================
+
+export async function solicitarAssinaturaAction(input: {
+  usuarioId: string;
+  plano: "PRO" | "PRO_MASTER";
+  comprovanteNome?: string;
+  comprovanteUrl?: string;
+  observacoes?: string;
+}) {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: input.usuarioId } });
+    if (!user) return { success: false, error: "Usuário não encontrado." };
+
+    if (input.plano !== "PRO" && input.plano !== "PRO_MASTER") {
+      return { success: false, error: "Plano inválido selecionado." };
+    }
+
+    const valor = input.plano === "PRO" ? 19.9 : 29.9;
+
+    // Se já houver solicitação pendente para esse usuário, atualiza com o novo comprovante
+    const pendente = await prisma.assinaturaPlano.findFirst({
+      where: { usuarioId: user.id, status: "PENDENTE" },
+      orderBy: { solicitadoEm: "desc" },
+    });
+
+    let assinatura;
+    if (pendente) {
+      assinatura = await prisma.assinaturaPlano.update({
+        where: { id: pendente.id },
+        data: {
+          plano: input.plano,
+          valor,
+          comprovanteNome: input.comprovanteNome || pendente.comprovanteNome,
+          comprovanteUrl: input.comprovanteUrl || pendente.comprovanteUrl,
+          observacoes: input.observacoes,
+          solicitadoEm: new Date(),
+          status: "PENDENTE",
+          motivoRecusa: null,
+        },
+      });
+    } else {
+      assinatura = await prisma.assinaturaPlano.create({
+        data: {
+          usuarioId: user.id,
+          plano: input.plano,
+          valor,
+          mesesVigencia: 1,
+          status: "PENDENTE",
+          comprovanteNome: input.comprovanteNome,
+          comprovanteUrl: input.comprovanteUrl,
+          observacoes: input.observacoes,
+        },
+      });
+    }
+
+    // Registrar log de auditoria
+    await prisma.auditoriaLog.create({
+      data: {
+        usuarioResponsavelId: user.id,
+        usuarioAfetadoId: user.id,
+        tipoAcao: "SOLICITACAO_UPGRADE_PLANO",
+        detalhes: `Usuário ${user.name} solicitou ativação do Plano ${input.plano} (R$ ${valor.toFixed(2)}/mês).`,
+        justificativa: input.observacoes || "Envio de comprovante Pix para aprovação.",
+      },
+    });
+
+    revalidatePath("/");
+    return {
+      success: true,
+      assinaturaId: assinatura.id,
+      message: "Solicitação enviada com sucesso! O administrador Marcos Batista analisará seu comprovante.",
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao registrar solicitação de upgrade." };
+  }
+}
+
+export async function aprovarAssinaturaAction(input: {
+  assinaturaId: string;
+  adminId: string;
+  diasAdicionais?: number;
+}) {
+  try {
+    const admin = await prisma.user.findUnique({ where: { id: input.adminId } });
+    if (!admin || admin.role !== "SUPER_ADMIN") {
+      return { success: false, error: "Apenas Super Admin pode aprovar assinaturas." };
+    }
+
+    const assinatura = await prisma.assinaturaPlano.findUnique({
+      where: { id: input.assinaturaId },
+      include: { usuario: true },
+    });
+
+    if (!assinatura) return { success: false, error: "Solicitação de assinatura não encontrada." };
+
+    const dias = input.diasAdicionais || 30;
+    const agora = new Date();
+    const novaDataFim = calcularNovaDataExpiracao(assinatura.usuario.planoExpiraEm, dias);
+
+    await prisma.$transaction([
+      prisma.assinaturaPlano.update({
+        where: { id: assinatura.id },
+        data: {
+          status: "APROVADO",
+          dataInicio: agora,
+          dataFim: novaDataFim,
+          aprovadoPorId: admin.id,
+          motivoRecusa: null,
+        },
+      }),
+      prisma.user.update({
+        where: { id: assinatura.usuarioId },
+        data: {
+          role: assinatura.plano,
+          planoExpiraEm: novaDataFim,
+        },
+      }),
+      prisma.auditoriaLog.create({
+        data: {
+          usuarioResponsavelId: admin.id,
+          usuarioAfetadoId: assinatura.usuarioId,
+          tipoAcao: "APROVACAO_ASSINATURA",
+          detalhes: `Assinatura ${assinatura.plano} de ${assinatura.usuario.name} aprovada até ${novaDataFim.toLocaleDateString("pt-BR")} (+${dias} dias).`,
+        },
+      }),
+    ]);
+
+    revalidatePath("/");
+    return {
+      success: true,
+      novaDataFim,
+      message: `Assinatura ${assinatura.plano} de ${assinatura.usuario.name} aprovada com sucesso!`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao aprovar assinatura." };
+  }
+}
+
+export async function recusarAssinaturaAction(input: {
+  assinaturaId: string;
+  adminId: string;
+  motivoRecusa: string;
+}) {
+  try {
+    const admin = await prisma.user.findUnique({ where: { id: input.adminId } });
+    if (!admin || admin.role !== "SUPER_ADMIN") {
+      return { success: false, error: "Apenas Super Admin pode recusar assinaturas." };
+    }
+
+    if (!input.motivoRecusa || !input.motivoRecusa.trim()) {
+      return { success: false, error: "Informe o motivo da recusa do comprovante." };
+    }
+
+    const assinatura = await prisma.assinaturaPlano.findUnique({
+      where: { id: input.assinaturaId },
+      include: { usuario: true },
+    });
+
+    if (!assinatura) return { success: false, error: "Solicitação não encontrada." };
+
+    await prisma.$transaction([
+      prisma.assinaturaPlano.update({
+        where: { id: assinatura.id },
+        data: {
+          status: "RECUSADO",
+          motivoRecusa: input.motivoRecusa,
+          aprovadoPorId: admin.id,
+        },
+      }),
+      prisma.auditoriaLog.create({
+        data: {
+          usuarioResponsavelId: admin.id,
+          usuarioAfetadoId: assinatura.usuarioId,
+          tipoAcao: "RECUSA_ASSINATURA",
+          detalhes: `Comprovante de assinatura recusado para ${assinatura.usuario.name}. Motivo: ${input.motivoRecusa}`,
+        },
+      }),
+    ]);
+
+    revalidatePath("/");
+    return { success: true, message: "Solicitação recusada com sucesso." };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao recusar solicitação." };
+  }
+}
+
+export async function renovarAssinaturaManualAction(input: {
+  usuarioId: string;
+  adminId: string;
+  plano?: "PRO" | "PRO_MASTER";
+  diasAdicionais?: number;
+  observacoes?: string;
+}) {
+  try {
+    const admin = await prisma.user.findUnique({ where: { id: input.adminId } });
+    if (!admin || admin.role !== "SUPER_ADMIN") {
+      return { success: false, error: "Apenas Super Admin pode renovar assinaturas manualmente." };
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id: input.usuarioId } });
+    if (!targetUser) return { success: false, error: "Usuário não encontrado." };
+
+    const targetPlano = input.plano || (targetUser.role === "PRO_MASTER" ? "PRO_MASTER" : "PRO");
+    const dias = input.diasAdicionais || 30;
+    const agora = new Date();
+    const novaDataFim = calcularNovaDataExpiracao(targetUser.planoExpiraEm, dias);
+    const valor = targetPlano === "PRO" ? 19.9 : 29.9;
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: targetUser.id },
+        data: {
+          role: targetPlano,
+          planoExpiraEm: novaDataFim,
+        },
+      }),
+      prisma.assinaturaPlano.create({
+        data: {
+          usuarioId: targetUser.id,
+          plano: targetPlano,
+          valor,
+          mesesVigencia: Math.round(dias / 30) || 1,
+          status: "APROVADO",
+          dataInicio: agora,
+          dataFim: novaDataFim,
+          aprovadoPorId: admin.id,
+          observacoes: input.observacoes || `Renovação manual concedida por Marcos Batista (+${dias} dias).`,
+        },
+      }),
+      prisma.auditoriaLog.create({
+        data: {
+          usuarioResponsavelId: admin.id,
+          usuarioAfetadoId: targetUser.id,
+          tipoAcao: "RENOVACAO_ASSINATURA_MANUAL",
+          detalhes: `Renovação de ${targetPlano} de ${targetUser.name} concedida até ${novaDataFim.toLocaleDateString("pt-BR")}.`,
+          justificativa: input.observacoes,
+        },
+      }),
+    ]);
+
+    revalidatePath("/");
+    return {
+      success: true,
+      novaDataFim,
+      message: `Assinatura de ${targetUser.name} renovada até ${novaDataFim.toLocaleDateString("pt-BR")}!`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao renovar assinatura." };
+  }
+}
+
+export async function cancelarAssinaturaAction(input: {
+  usuarioId: string;
+  adminId: string;
+  motivo?: string;
+}) {
+  try {
+    const admin = await prisma.user.findUnique({ where: { id: input.adminId } });
+    if (!admin || admin.role !== "SUPER_ADMIN") {
+      return { success: false, error: "Apenas Super Admin pode cancelar assinaturas." };
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id: input.usuarioId } });
+    if (!targetUser) return { success: false, error: "Usuário não encontrado." };
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: targetUser.id },
+        data: {
+          role: "COMUM",
+          planoExpiraEm: null,
+        },
+      }),
+      prisma.assinaturaPlano.updateMany({
+        where: { usuarioId: targetUser.id, status: "APROVADO" },
+        data: { status: "CANCELADO" },
+      }),
+      prisma.auditoriaLog.create({
+        data: {
+          usuarioResponsavelId: admin.id,
+          usuarioAfetadoId: targetUser.id,
+          tipoAcao: "CANCELAMENTO_ASSINATURA",
+          detalhes: `Assinatura de ${targetUser.name} cancelada pelo Super Admin. Retornado ao Plano Comum.`,
+          justificativa: input.motivo,
+        },
+      }),
+    ]);
+
+    revalidatePath("/");
+    return { success: true, message: `Assinatura de ${targetUser.name} cancelada com sucesso.` };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao cancelar assinatura." };
+  }
+}
+
+export async function getPainelAssinaturasAction(adminId: string) {
+  try {
+    const admin = await prisma.user.findUnique({ where: { id: adminId } });
+    if (!admin || admin.role !== "SUPER_ADMIN") {
+      return { success: false, error: "Acesso restrito ao Super Admin." };
+    }
+
+    const [pendentes, todosUsuarios, historico] = await Promise.all([
+      prisma.assinaturaPlano.findMany({
+        where: { status: "PENDENTE" },
+        include: {
+          usuario: {
+            select: { id: true, name: true, email: true, telefone: true, role: true, planoExpiraEm: true },
+          },
+        },
+        orderBy: { solicitadoEm: "desc" },
+      }),
+      prisma.user.findMany({
+        where: { role: { in: ["PRO", "PRO_MASTER"] } },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          telefone: true,
+          role: true,
+          planoExpiraEm: true,
+          createdAt: true,
+        },
+        orderBy: { name: "asc" },
+      }),
+      prisma.assinaturaPlano.findMany({
+        where: { status: { not: "PENDENTE" } },
+        include: {
+          usuario: { select: { id: true, name: true, email: true } },
+          aprovadoPor: { select: { id: true, name: true } },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 25,
+      }),
+    ]);
+
+    // Métricas SaaS
+    let mrrEstimado = 0;
+    let prestesAVencer = 0;
+    let totalAtivos = 0;
+
+    const assinantesFormatados = todosUsuarios.map((u) => {
+      const vigencia = getVigenciaPlano(u);
+      if (vigencia.isAtivo) {
+        totalAtivos++;
+        mrrEstimado += u.role === "PRO_MASTER" ? 29.9 : 19.9;
+        if (vigencia.status === "A_VENCER") prestesAVencer++;
+      }
+      return {
+        ...u,
+        vigencia,
+      };
+    });
+
+    return {
+      success: true,
+      data: {
+        solicitacoesPendentes: pendentes,
+        assinantes: assinantesFormatados,
+        historico,
+        metricas: {
+          totalAssinantesAtivos: totalAtivos,
+          totalPendentes: pendentes.length,
+          mrrEstimado,
+          prestesAVencer,
+        },
+      },
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao buscar dados de assinaturas." };
+  }
+}
+
+export async function getMinhaAssinaturaAction(usuarioId: string) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: usuarioId },
+      select: { id: true, name: true, email: true, role: true, planoExpiraEm: true },
+    });
+    if (!user) return { success: false, error: "Usuário não encontrado." };
+
+    const vigencia = getVigenciaPlano(user);
+    const pendente = await prisma.assinaturaPlano.findFirst({
+      where: { usuarioId, status: "PENDENTE" },
+      orderBy: { solicitadoEm: "desc" },
+    });
+
+    const ultimaAprovada = await prisma.assinaturaPlano.findFirst({
+      where: { usuarioId, status: "APROVADO" },
+      orderBy: { dataFim: "desc" },
+    });
+
+    return {
+      success: true,
+      data: {
+        vigencia,
+        pendente,
+        ultimaAprovada,
+      },
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao buscar assinatura." };
+  }
+}
+
 
 

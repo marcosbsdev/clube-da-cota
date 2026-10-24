@@ -4,9 +4,11 @@ import React, { useState, useEffect } from "react";
 import { useTheme, ThemeName } from "./ThemeProvider";
 import { updateUserThemeAction, updateUserRoleAction, updateUserPixSettingsAction } from "@/app/actions";
 import { TipoChavePix, TIPOS_CHAVE_PIX, getTipoChavePixLabel } from "@/lib/finance";
+import { getVigenciaPlano } from "@/lib/plans";
 import { ToastModal, ToastData } from "@/components/ToastModal";
 import { ModalUpgradePlanos } from "./ModalUpgradePlanos";
-import { Palette, Shield, User, Check, RefreshCw, LogOut, ShieldCheck, CheckCircle2, Zap, CreditCard, AlertCircle, PlusCircle, Crown } from "lucide-react";
+import { GestaoAssinaturasAdmin } from "./GestaoAssinaturasAdmin";
+import { Palette, Shield, User, Check, RefreshCw, LogOut, ShieldCheck, CheckCircle2, Zap, CreditCard, AlertCircle, PlusCircle, Crown, AlertTriangle } from "lucide-react";
 
 interface PerfilViewProps {
   currentUser: any;
@@ -176,6 +178,7 @@ export function PerfilView({
   };
 
   const roleInfo = getRoleDesc(currentUser.role);
+  const vigencia = getVigenciaPlano(currentUser);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -230,6 +233,55 @@ export function PerfilView({
             )}
           </div>
         </div>
+
+        {/* Banner de Vigência da Assinatura para Usuários PRO / PRO_MASTER */}
+        {vigencia.status === "EXPIRADO" && (
+          <div className="mt-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+              <span>{vigencia.label}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setModalUpgradeAberto(true)}
+              className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition cursor-pointer self-start sm:self-auto shadow-xs"
+            >
+              Renovar Assinatura
+            </button>
+          </div>
+        )}
+
+        {vigencia.status === "A_VENCER" && (
+          <div className="mt-4 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+              <span>{vigencia.label}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setModalUpgradeAberto(true)}
+              className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition cursor-pointer self-start sm:self-auto shadow-xs"
+            >
+              Renovar Agora
+            </button>
+          </div>
+        )}
+
+        {vigencia.status === "VIGENTE" && vigencia.dataExpiracaoFormatada && (
+          <div className="mt-4 p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span>{vigencia.label}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setModalUpgradeAberto(true)}
+              className="text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
+            >
+              Estender Vigência
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Configuração de Recebimento da Bolada (Pix Direto vs Centralizado) */}
@@ -399,6 +451,14 @@ export function PerfilView({
         </div>
       </div>
 
+      {/* Gestão de Assinaturas & Planos SaaS (Exclusivo Super Admin) */}
+      {currentUser.role === "SUPER_ADMIN" && (
+        <GestaoAssinaturasAdmin
+          currentUser={currentUser}
+          onAssinaturaAlterada={onRoleAtualizado}
+        />
+      )}
+
       {/* Gestão de Níveis de Acesso (Exclusivo Super Admin) */}
       {currentUser.role === "SUPER_ADMIN" && (
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-purple-200 shadow-sm space-y-4">
@@ -527,6 +587,10 @@ export function PerfilView({
         aberto={modalUpgradeAberto}
         onFechar={() => setModalUpgradeAberto(false)}
         planoRecomendado={currentUser.role === "COMUM" ? "PRO" : "PRO_MASTER"}
+        userId={currentUser.id}
+        onUpgradeSolicitado={() => {
+          if (onRoleAtualizado) onRoleAtualizado();
+        }}
       />
     </div>
   );

@@ -23,14 +23,17 @@ model User {
   inviteExpiresAt DateTime?
   resetToken      String?   @unique
   resetExpiresAt  DateTime?
+  planoExpiraEm   DateTime? // Data de expiração da assinatura SaaS (PRO / PRO_MASTER)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  consorciosCriados Consorcio[]        @relation("CriadorConsorcio")
-  participacoes     CotaParticipante[]
-  contribuicoes     Contribuicao[]     @relation("UsuarioContribuicao")
-  comprovantes      Comprovante[]      @relation("UsuarioComprovante")
-  auditoriasFeitas  AuditoriaLog[]     @relation("ResponsavelAuditoria")
+  consorciosCriados    Consorcio[]        @relation("CriadorConsorcio")
+  participacoes        CotaParticipante[]
+  contribuicoes        Contribuicao[]     @relation("UsuarioContribuicao")
+  comprovantes         Comprovante[]      @relation("UsuarioComprovante")
+  auditoriasFeitas     AuditoriaLog[]     @relation("ResponsavelAuditoria")
+  assinaturas          AssinaturaPlano[]  @relation("UsuarioAssinaturas")
+  assinaturasAprovadas AssinaturaPlano[]  @relation("AdminAprovadorAssinatura")
 }
 
 model Consorcio {
@@ -142,4 +145,25 @@ model AuditoriaLog {
   justificativa        String?
   ip                   String?
   createdAt            DateTime   @default(now())
+}
+
+model AssinaturaPlano {
+  id              String    @id @default(uuid())
+  usuarioId       String
+  usuario         User      @relation("UsuarioAssinaturas", fields: [usuarioId], references: [id], onDelete: Cascade)
+  plano           String    // "PRO", "PRO_MASTER"
+  valor           Float     // 19.90, 29.90
+  mesesVigencia   Int       @default(1)
+  status          String    @default("PENDENTE") // "PENDENTE", "APROVADO", "RECUSADO", "CANCELADO"
+  comprovanteUrl  String?
+  comprovanteNome String?
+  solicitadoEm    DateTime  @default(now())
+  dataInicio      DateTime?
+  dataFim         DateTime?
+  aprovadoPorId   String?
+  aprovadoPor     User?     @relation("AdminAprovadorAssinatura", fields: [aprovadoPorId], references: [id], onDelete: SetNull)
+  motivoRecusa    String?
+  observacoes     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
