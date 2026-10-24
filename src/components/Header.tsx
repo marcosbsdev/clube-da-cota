@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   Bell,
-  Users,
   Home,
   BarChart3,
   PlusCircle,
@@ -25,6 +24,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { TabType } from "./BottomNav";
+import { AppLogo } from "./AppLogo";
 import { marcarNotificacoesLidasAction, dispensarNotificacaoAction } from "@/app/actions";
 
 interface HeaderProps {
@@ -340,8 +340,8 @@ export function Header({
         {/* Marca / Identidade do Sistema */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center font-black text-white shadow-sm flex-shrink-0">
-              <Users className="w-5 h-5 text-white" />
+            <div className="rounded-xl shadow-sm flex-shrink-0">
+              <AppLogo size={40} />
             </div>
             <div>
               <span className="text-[10px] uppercase font-bold tracking-wider text-white/70 block leading-none">

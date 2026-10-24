@@ -9,6 +9,7 @@ import { CriadorView } from "@/components/CriadorView";
 import { CriarConsorcioWizard } from "@/components/CriarConsorcioWizard";
 import { PerfilView } from "@/components/PerfilView";
 import { AuthView } from "@/components/AuthView";
+import { AppLoadingScreen } from "@/components/AppLogo";
 import { useTheme, ThemeName } from "@/components/ThemeProvider";
 import { ConsorcioComboSelector } from "@/components/ConsorcioComboSelector";
 
@@ -59,14 +60,7 @@ export default function Home() {
   };
 
   if (loading) {
-    return (
-      <main className="min-h-screen w-full bg-slate-50 flex items-center justify-center p-6">
-        <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="text-sm font-semibold text-slate-600">Carregando Clube da Cota...</p>
-        </div>
-      </main>
-    );
+    return <AppLoadingScreen />;
   }
 
   // Se não houver sessão ativa, exibe o Módulo de Autenticação Real

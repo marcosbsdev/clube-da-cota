@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Users, Lock, Mail, User, Eye, EyeOff, ArrowRight, Check, AlertCircle, KeyRound, Sparkles } from "lucide-react";
+import { Lock, Mail, User, Eye, EyeOff, ArrowRight, Check, AlertCircle, KeyRound, Sparkles } from "lucide-react";
+import { AppLogo } from "./AppLogo";
 import { loginAction, registerAction, forgotPasswordAction, resetPasswordAction, quickLoginAction } from "@/app/actions";
 
 interface AuthViewProps {
@@ -120,8 +121,8 @@ export function AuthView({ onAuthSuccess, todosUsuarios }: AuthViewProps) {
       <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xl space-y-6">
         {/* Cabeçalho / Logo */}
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 bg-theme-main text-white rounded-2xl flex items-center justify-center mx-auto shadow-md">
-            <Users className="w-6 h-6" />
+          <div className="mx-auto w-20">
+            <AppLogo size={80} className="logo-breathe drop-shadow-md" />
           </div>
           <div>
             <span className="text-[10px] uppercase font-bold tracking-wider text-theme-text block">

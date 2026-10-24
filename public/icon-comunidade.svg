@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  
+  <defs>
+    <!-- Drop Shadow for Coin and Elements -->
+    <filter id="medallionShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#78350F" flood-opacity="0.35" />
+    </filter>
+    
+    <filter id="subtleGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <!-- Metallic Coin Gradients -->
+    <linearGradient id="goldOuterBevel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FEF08A" />
+      <stop offset="30%" stop-color="#F59E0B" />
+      <stop offset="70%" stop-color="#B45309" />
+      <stop offset="100%" stop-color="#78350F" />
+    </linearGradient>
+
+    <linearGradient id="goldRimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFBEB" />
+      <stop offset="40%" stop-color="#FBBF24" />
+      <stop offset="80%" stop-color="#D97706" />
+      <stop offset="100%" stop-color="#92400E" />
+    </linearGradient>
+
+    <radialGradient id="goldCoreDome" cx="38%" cy="32%" r="68%">
+      <stop offset="0%" stop-color="#FFFDF0" />
+      <stop offset="25%" stop-color="#FDE047" />
+      <stop offset="65%" stop-color="#F59E0B" />
+      <stop offset="90%" stop-color="#D97706" />
+      <stop offset="100%" stop-color="#92400E" />
+    </radialGradient>
+
+    <!-- Figure Gradients -->
+    <linearGradient id="grad-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#0284C7" />
+    </linearGradient>
+    <linearGradient id="grad-emerald" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34D399" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <linearGradient id="grad-yellow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE047" />
+      <stop offset="100%" stop-color="#D97706" />
+    </linearGradient>
+    <linearGradient id="grad-orange" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FB923C" />
+      <stop offset="100%" stop-color="#EA580C" />
+    </linearGradient>
+    <linearGradient id="grad-lime" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4ADE80" />
+      <stop offset="100%" stop-color="#16A34A" />
+    </linearGradient>
+  </defs>
+
+
+  <!-- Squircle Base with Soft Clean Shadow -->
+  <rect width="512" height="512" rx="115" fill="#FFFFFF" />
+  <rect width="510" height="510" x="1" y="1" rx="114" fill="none" stroke="#E2E8F0" stroke-width="2" />
+
+  <!-- Center the symbol in 512x512 -->
+  <g transform="translate(6, 66)">
+    
+    <!-- Figure: blue -->
+    <g id="figure-blue">
+      <!-- Body Swoosh with crisp white separation border -->
+      <path d="M 120.23 227.21 A 135 135 0 0 1 159.67 89.68 A 22.5 22.5 0 0 1 189.78 123.12 A 90 90 0 0 0 163.49 214.81 A 22.5 22.5 0 0 1 120.23 227.21 Z" fill="url(#grad-blue)" stroke="#FFFFFF" stroke-width="4.5" stroke-linejoin="round" />
+      <!-- Head Circle -->
+      <circle cx="98.12" cy="146.45" r="21" fill="url(#grad-blue)" stroke="#FFFFFF" stroke-width="4" />
+    </g>
+    <!-- Figure: emerald -->
+    <g id="figure-emerald">
+      <!-- Body Swoosh with crisp white separation border -->
+      <path d="M 174.51 78.08 A 135 135 0 0 1 317.50 73.09 A 22.5 22.5 0 0 1 295.00 112.06 A 90 90 0 0 0 199.67 115.39 A 22.5 22.5 0 0 1 174.51 78.08 Z" fill="url(#grad-emerald)" stroke="#FFFFFF" stroke-width="4.5" stroke-linejoin="round" />
+      <!-- Head Circle -->
+      <circle cx="244.49" cy="32.10" r="21" fill="url(#grad-emerald)" stroke="#FFFFFF" stroke-width="4" />
+    </g>
+    <!-- Figure: yellow -->
+    <g id="figure-yellow">
+      <!-- Body Swoosh with crisp white separation border -->
+      <path d="M 333.11 83.62 A 135 135 0 0 1 382.05 218.07 A 22.5 22.5 0 0 1 338.03 208.71 A 90 90 0 0 0 305.41 119.08 A 22.5 22.5 0 0 1 333.11 83.62 Z" fill="url(#grad-yellow)" stroke="#FFFFFF" stroke-width="4.5" stroke-linejoin="round" />
+      <!-- Head Circle -->
+      <circle cx="398.47" cy="135.96" r="21" fill="url(#grad-yellow)" stroke="#FFFFFF" stroke-width="4" />
+    </g>
+    <!-- Figure: orange -->
+    <g id="figure-orange">
+      <!-- Body Swoosh with crisp white separation border -->
+      <path d="M 376.86 236.17 A 135 135 0 0 1 264.11 324.26 A 22.5 22.5 0 0 1 259.41 279.51 A 90 90 0 0 0 334.57 220.78 A 22.5 22.5 0 0 1 376.86 236.17 Z" fill="url(#grad-orange)" stroke="#FFFFFF" stroke-width="4.5" stroke-linejoin="round" />
+      <!-- Head Circle -->
+      <circle cx="347.27" cy="314.51" r="21" fill="url(#grad-orange)" stroke="#FFFFFF" stroke-width="4" />
+    </g>
+    <!-- Figure: lime -->
+    <g id="figure-lime">
+      <!-- Body Swoosh with crisp white separation border -->
+      <path d="M 245.29 324.92 A 135 135 0 0 1 126.67 244.91 A 22.5 22.5 0 0 1 167.78 226.61 A 90 90 0 0 0 246.86 279.95 A 22.5 22.5 0 0 1 245.29 324.92 Z" fill="url(#grad-lime)" stroke="#FFFFFF" stroke-width="4.5" stroke-linejoin="round" />
+      <!-- Head Circle -->
+      <circle cx="161.65" cy="320.99" r="21" fill="url(#grad-lime)" stroke="#FFFFFF" stroke-width="4" />
+    </g>
+    
+    <!-- THE CENTRAL 3D GOLD MEDALLION (A Bolada) -->
+    <g id="central-gold-coin" filter="url(#medallionShadow)">
+      <!-- Outer Bevel Edge -->
+      <circle cx="250" cy="190" r="82" fill="url(#goldOuterBevel)" />
+      <circle cx="250" cy="190" r="82" stroke="#FFFFFF" stroke-width="3" fill="none" opacity="0.9" />
+
+      <!-- Concentric Bevel Grooves / Notches -->
+      <circle cx="250" cy="190" r="76" fill="url(#goldRimGrad)" />
+      <circle cx="250" cy="190" r="73" stroke="#78350F" stroke-width="1.5" stroke-dasharray="2 3" fill="none" opacity="0.6" />
+
+      <!-- Inner Polished Golden Dome -->
+      <circle cx="250" cy="190" r="68" fill="url(#goldCoreDome)" />
+
+      <!-- Realistic Curved Specular Highlight (Reflection of light) -->
+      <path d="M 208 160 C 230 138 270 138 292 160 C 270 150 230 150 208 160 Z" fill="#FFFFFF" opacity="0.65" />
+      
+      <!-- Subtle Bottom Golden Reflection -->
+      <ellipse cx="250" cy="232" rx="32" ry="10" fill="#FEF08A" opacity="0.4" />
+    </g>
+
+  </g>
+</svg>
