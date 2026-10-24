@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Lock, Mail, User, Eye, EyeOff, ArrowRight, Check, AlertCircle, KeyRound, Sparkles } from "lucide-react";
 import { AppLogo } from "./AppLogo";
 import { loginAction, registerAction, forgotPasswordAction, resetPasswordAction, quickLoginAction } from "@/app/actions";
+import { TipoChavePix, TIPOS_CHAVE_PIX } from "@/lib/finance";
 
 interface AuthViewProps {
   onAuthSuccess: (user: any) => void;
@@ -26,6 +27,9 @@ export function AuthView({ onAuthSuccess, todosUsuarios }: AuthViewProps) {
   const [emailCadastro, setEmailCadastro] = useState("");
   const [senhaCadastro, setSenhaCadastro] = useState("");
   const [confirmaSenha, setConfirmaSenha] = useState("");
+  const [receberPixDireto, setReceberPixDireto] = useState(false);
+  const [tipoChavePix, setTipoChavePix] = useState<TipoChavePix>("CELULAR");
+  const [chavePix, setChavePix] = useState("");
 
   // Campos Recuperação
   const [emailRecuperar, setEmailRecuperar] = useState("");
@@ -57,11 +61,19 @@ export function AuthView({ onAuthSuccess, todosUsuarios }: AuthViewProps) {
       return;
     }
 
+    if (receberPixDireto && !chavePix.trim()) {
+      setErroMsg("Por favor, preencha sua chave Pix para receber diretamente na sua conta.");
+      return;
+    }
+
     setLoading(true);
     const res = await registerAction({
       name: nomeCadastro,
       email: emailCadastro,
       password: senhaCadastro,
+      receberPixDireto,
+      tipoChavePix: receberPixDireto ? tipoChavePix : undefined,
+      chavePix: receberPixDireto ? chavePix.trim() : undefined,
     });
     setLoading(false);
 
@@ -303,6 +315,55 @@ export function AuthView({ onAuthSuccess, todosUsuarios }: AuthViewProps) {
                   className="w-full pl-10 pr-3.5 py-3 rounded-xl border border-slate-200 text-sm focus:border-theme-main focus:outline-none bg-slate-50/50"
                 />
               </div>
+            </div>
+
+            {/* Opção de Receber Pix Direto na Conta */}
+            <div className="pt-1">
+              <label className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer text-xs">
+                <input
+                  type="checkbox"
+                  checked={receberPixDireto}
+                  onChange={(e) => setReceberPixDireto(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-theme-main rounded border-slate-300 focus:ring-theme-main"
+                />
+                <div className="space-y-0.5">
+                  <span className="font-bold text-slate-800 block">Desejo receber Pix diretamente na minha conta bancária</span>
+                  <span className="text-[11px] text-slate-500 block leading-tight">Ao ser contemplado, você recebe as transferências diretamente na sua chave Pix.</span>
+                </div>
+              </label>
+
+              {receberPixDireto && (
+                <div className="mt-2.5 p-3 bg-emerald-50/60 rounded-xl border border-emerald-200 space-y-2.5 animate-in fade-in duration-150">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">Tipo da Chave</label>
+                      <select
+                        value={tipoChavePix}
+                        onChange={(e) => setTipoChavePix(e.target.value as TipoChavePix)}
+                        className="w-full p-2 rounded-lg border border-slate-200 text-xs font-bold bg-white focus:outline-none"
+                      >
+                        {TIPOS_CHAVE_PIX.map((t) => (
+                          <option key={t.value} value={t.value}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">Chave Pix *</label>
+                      <input
+                        type="text"
+                        required={receberPixDireto}
+                        value={chavePix}
+                        onChange={(e) => setChavePix(e.target.value)}
+                        placeholder={TIPOS_CHAVE_PIX.find((t) => t.value === tipoChavePix)?.placeholder}
+                        className="w-full p-2 rounded-lg border border-slate-200 text-xs font-mono font-bold bg-white focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <button

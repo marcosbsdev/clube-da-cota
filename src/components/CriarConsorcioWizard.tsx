@@ -12,6 +12,9 @@ import {
   calcularResumoFinanceiroConsorcio,
   formatarDataSegura,
   calcularDatasVencimento,
+  TipoChavePix,
+  TIPOS_CHAVE_PIX,
+  getTipoChavePixLabel,
 } from "@/lib/finance";
 
 interface CriarConsorcioWizardProps {
@@ -30,7 +33,8 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
   const [finalidade, setFinalidade] = useState("");
   const [dataInicio, setDataInicio] = useState(dataHojePadrao);
   const [regras, setRegras] = useState("");
-  const [dadosPagamento, setDadosPagamento] = useState("");
+  const [tipoChavePix, setTipoChavePix] = useState<TipoChavePix>("CELULAR");
+  const [chavePix, setChavePix] = useState("");
 
   // Etapa 2: Participantes e Cotas (inicia vazio; criador é opcional como participante)
   const [participantes, setParticipantes] = useState<any[]>([]);
@@ -175,8 +179,8 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
       nome,
       finalidade,
       regras,
-      chavePix: dadosPagamento,
-      dadosBancarios: dadosPagamento,
+      tipoChavePix,
+      chavePix: chavePix.trim(),
       dataInicio,
       dataPrimeiroVencimento,
       frequencia,
@@ -302,19 +306,54 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 space-y-1.5">
-            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
-              <span>💳</span> Dados para Receber os Pagamentos (Opcional)
-            </label>
-            <textarea
-              rows={3}
-              placeholder="Informe sua Chave Pix (Ex: CPF, celular, e-mail ou chave aleatória)"
-              value={dadosPagamento}
-              onChange={(e) => setDadosPagamento(e.target.value)}
-              className="w-full p-3 rounded-xl border border-slate-200 text-sm focus:border-theme-main focus:outline-none"
-            />
+          {/* Chave Pix do Consórcio (Obrigatória) */}
+          <div className="pt-3 border-t border-slate-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <span>⚡</span> Chave Pix do Consórcio <span className="text-rose-500 font-black">*</span>
+              </label>
+              <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md font-bold">
+                Obrigatório
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                  Tipo da Chave
+                </label>
+                <select
+                  value={tipoChavePix}
+                  onChange={(e) => setTipoChavePix(e.target.value as TipoChavePix)}
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold focus:border-theme-main focus:outline-none bg-white cursor-pointer"
+                >
+                  {TIPOS_CHAVE_PIX.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                  Chave Pix para Recebimento *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder={
+                    TIPOS_CHAVE_PIX.find((t) => t.value === tipoChavePix)?.placeholder ||
+                    "Informe a chave Pix"
+                  }
+                  value={chavePix}
+                  onChange={(e) => setChavePix(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono font-bold focus:border-theme-main focus:outline-none bg-white shadow-2xs"
+                />
+              </div>
+            </div>
             <p className="text-[11px] text-slate-400">
-              Informe a chave Pix para que os participantes possam copiar e realizar o pagamento das parcelas.
+              Esta chave Pix do consórcio é apresentada aos participantes para o pagamento das parcelas de cada ciclo.
             </p>
           </div>
 
@@ -324,10 +363,14 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
                 setErroMsg("O nome do consórcio é obrigatório.");
                 return;
               }
+              if (!chavePix.trim()) {
+                setErroMsg("A chave Pix do consórcio é obrigatória.");
+                return;
+              }
               setErroMsg("");
               setEtapa(2);
             }}
-            className="w-full mt-2 py-3.5 bg-theme-main hover:opacity-90 text-white font-bold rounded-2xl text-sm shadow-md flex items-center justify-center gap-2 transition touch-target"
+            className="w-full mt-2 py-3.5 bg-theme-main hover:opacity-90 text-white font-bold rounded-2xl text-sm shadow-md flex items-center justify-center gap-2 transition touch-target cursor-pointer"
           >
             <span>Continuar para Participantes</span>
             <ArrowRight className="w-4 h-4" />
@@ -1031,12 +1074,12 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
                 {textoFrequencia}
               </span>
             </div>
-            {dadosPagamento && (
-              <div className="flex justify-between">
-                <span className="text-slate-500">Dados de Pagamento:</span>
-                <span className="font-bold text-slate-900 text-right truncate max-w-[260px]">{dadosPagamento}</span>
-              </div>
-            )}
+            <div className="flex justify-between">
+              <span className="text-slate-500">Chave Pix do Consórcio:</span>
+              <span className="font-bold text-slate-900 text-right truncate max-w-[260px]">
+                {chavePix} ({getTipoChavePixLabel(tipoChavePix)})
+              </span>
+            </div>
           </div>
 
           {/* Acordeão do Cronograma Completo na Revisão Final */}

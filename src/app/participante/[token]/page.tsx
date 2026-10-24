@@ -25,7 +25,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
-import { formatarMoedaBRL, formatarDataSegura, calcularValorCiclo, formatarMesEAnoSeguro, formatarMesAnoCiclo } from "@/lib/finance";
+import { formatarMoedaBRL, formatarDataSegura, calcularValorCiclo, formatarMesEAnoSeguro, formatarMesAnoCiclo, calcularBoladaCiclo, getTipoChavePixLabel } from "@/lib/finance";
+import { ToastModal, ToastData } from "@/components/ToastModal";
 
 export default function ParticipanteTokenPage() {
   const params = useParams();
@@ -41,7 +42,7 @@ export default function ParticipanteTokenPage() {
   const [contribuicaoSelecionada, setContribuicaoSelecionada] = useState<any>(null);
   const [nomeArquivo, setNomeArquivo] = useState("");
   const [enviandoComprovante, setEnviandoComprovante] = useState(false);
-  const [msgSucesso, setMsgSucesso] = useState("");
+  const [toast, setToast] = useState<ToastData | null>(null);
 
   // Estado de ativação de senha
   const [mostrarCriarSenha, setMostrarCriarSenha] = useState(false);
@@ -94,11 +95,14 @@ export default function ParticipanteTokenPage() {
     setEnviandoComprovante(false);
 
     if (res.success) {
-      setMsgSucesso(res.message || "Comprovante enviado com sucesso!");
+      setToast({
+        titulo: "Comprovante Enviado!",
+        mensagem: res.message || "Comprovante enviado com sucesso!",
+        tipo: "success",
+      });
       setNomeArquivo("");
       setModalUploadAberto(false);
       carregarDados();
-      setTimeout(() => setMsgSucesso(""), 4000);
     } else {
       alert(res.error || "Erro ao enviar comprovante.");
     }
@@ -124,9 +128,12 @@ export default function ParticipanteTokenPage() {
 
     if (res.success) {
       setSenhaCriada(true);
-      setMsgSucesso(res.message || "Senha cadastrada com sucesso!");
+      setToast({
+        titulo: "Senha Cadastrada!",
+        mensagem: res.message || "Senha cadastrada com sucesso!",
+        tipo: "success",
+      });
       carregarDados();
-      setTimeout(() => setMsgSucesso(""), 4000);
     } else {
       setErroSenha(res.error || "Erro ao cadastrar senha.");
     }
@@ -208,8 +215,16 @@ export default function ParticipanteTokenPage() {
   const proximaParcela = contribuicoes.find(
     (c: any) => c.status === "PENDENTE" || c.status === "EM_ATRASO"
   );
+  const cicloAlvoPagamento = proximaParcela?.numeroCiclo || 1;
+  const cicloInfo = ciclosGrupo.find(
+    (cg: any) => cg.ordemSorteio === cicloAlvoPagamento || cg.numeroCota === cicloAlvoPagamento
+  );
+  const temPixDiretoContemplado = Boolean(cicloInfo?.temPixDireto && cicloInfo?.chavePix);
+  const isSouEuContemplado = cicloInfo?.usuarioId === participante.id;
 
-  const chavePixEfetiva = consorcio.chavePix || consorcio.dadosBancarios || "";
+  const chavePixEfetiva = temPixDiretoContemplado
+    ? cicloInfo.chavePix
+    : (consorcio.chavePix || consorcio.dadosBancarios || "");
 
   return (
     <main className="min-h-screen bg-slate-100/80 text-slate-900 pb-16">
@@ -241,13 +256,8 @@ export default function ParticipanteTokenPage() {
 
       {/* Container Central Mobile-First */}
       <div className="max-w-3xl mx-auto px-4 pt-5 space-y-4">
-        {/* Banner de Mensagem de Sucesso */}
-        {msgSucesso && (
-          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-semibold flex items-center gap-2 shadow-sm animate-in fade-in duration-200">
-            <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            <span>{msgSucesso}</span>
-          </div>
-        )}
+        {/* Toast Modal Flutuante com auto-dismiss */}
+        <ToastModal toast={toast} onClose={() => setToast(null)} />
 
         {/* 1. Header do Participante & Cota */}
         <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs space-y-3">
@@ -418,16 +428,48 @@ export default function ParticipanteTokenPage() {
               ) : null}
             </div>
 
-            {/* Chave PIX do Administrador */}
-            {chavePixEfetiva ? (
-              <div className="bg-blue-50/60 rounded-2xl p-4 border border-blue-100 space-y-2.5">
+            {/* Chave PIX: Condicionada (Contemplado com Pix Direto vs Organizador) */}
+            {isSouEuContemplado && temPixDiretoContemplado ? (
+              <div className="bg-emerald-50/70 rounded-2xl p-4 border border-emerald-200 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🎉</span>
+                  <div>
+                    <h5 className="text-xs font-bold text-emerald-950">
+                      Você é o Contemplado do Ciclo #{cicloAlvoPagamento}!
+                    </h5>
+                    <p className="text-[11px] text-emerald-700">Modalidade: Pix Direto na Conta</p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-700 leading-relaxed font-medium">
+                  Você não precisa realizar Pix neste ciclo. A sua cota fica com você no seu bolso, e os demais participantes transferirão os valores diretamente para a sua chave Pix ({chavePixEfetiva}).
+                </p>
+              </div>
+            ) : chavePixEfetiva ? (
+              <div className={`rounded-2xl p-4 border space-y-2.5 ${
+                temPixDiretoContemplado
+                  ? "bg-emerald-50/50 border-emerald-200"
+                  : "bg-blue-50/60 border-blue-100"
+              }`}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
-                    <span>⚡</span> Chave PIX do Organizador
+                  <span className={`text-xs font-bold flex items-center gap-1.5 ${
+                    temPixDiretoContemplado ? "text-emerald-950" : "text-blue-900"
+                  }`}>
+                    <span>⚡</span> {temPixDiretoContemplado ? "Chave PIX do Contemplado" : "Chave PIX do Organizador"}
                   </span>
-                  <span className="text-[11px] text-blue-700 font-medium">
-                    {consorcio.criadorNome}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[11px] font-bold ${
+                      temPixDiretoContemplado ? "text-emerald-800" : "text-blue-700"
+                    }`}>
+                      {temPixDiretoContemplado ? cicloInfo.usuarioNome : consorcio.criadorNome}
+                    </span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                      temPixDiretoContemplado
+                        ? "bg-emerald-200/80 text-emerald-900"
+                        : "bg-blue-100 text-blue-800"
+                    }`}>
+                      {getTipoChavePixLabel(temPixDiretoContemplado ? cicloInfo.tipoChavePix : consorcio.tipoChavePix)}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -435,15 +477,21 @@ export default function ParticipanteTokenPage() {
                     type="text"
                     readOnly
                     value={chavePixEfetiva}
-                    className="flex-1 bg-white border border-blue-200 text-slate-800 text-xs font-mono font-bold py-2.5 px-3 rounded-xl focus:outline-none"
+                    className={`flex-1 bg-white border text-slate-800 text-xs font-mono font-bold py-2.5 px-3 rounded-xl focus:outline-none ${
+                      temPixDiretoContemplado ? "border-emerald-200" : "border-blue-200"
+                    }`}
                   />
                   <button
                     onClick={() => handleCopiarPix(chavePixEfetiva)}
-                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer flex-shrink-0"
+                    className={`px-4 py-2.5 active:scale-95 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer flex-shrink-0 ${
+                      temPixDiretoContemplado
+                        ? "bg-emerald-600 hover:bg-emerald-700"
+                        : "bg-blue-600 hover:bg-blue-700"
+                    }`}
                   >
                     {pixCopiado ? (
                       <>
-                        <Check className="w-4 h-4 text-emerald-300" />
+                        <Check className="w-4 h-4 text-white" />
                         <span>Copiado!</span>
                       </>
                     ) : (
@@ -455,11 +503,15 @@ export default function ParticipanteTokenPage() {
                   </button>
                 </div>
 
-                {consorcio.regras && (
+                {temPixDiretoContemplado ? (
+                  <p className="text-[11px] text-emerald-700 italic mt-1 leading-relaxed">
+                    💡 O participante completou o cadastro e optou por receber o Pix diretamente em sua conta pessoal.
+                  </p>
+                ) : consorcio.regras ? (
                   <p className="text-[11px] text-slate-500 italic mt-1 leading-relaxed">
                     Instruções: {consorcio.regras}
                   </p>
-                )}
+                ) : null}
               </div>
             ) : null}
 
@@ -622,6 +674,14 @@ export default function ParticipanteTokenPage() {
                 const isMinhaCota = cg.numeroCota === cota.numero;
                 const isContemplada = cg.status === "CONTEMPLADA";
                 const mesAnoCg = formatarMesAnoCiclo(consorcio, cg.ordemSorteio);
+                const { boladaTotal, boladaLiquida } = calcularBoladaCiclo({
+                  numeroCiclo: cg.ordemSorteio,
+                  valorBase: consorcio.valorCota,
+                  modelo: consorcio.modeloContribuicao,
+                  acrescimo: consorcio.valorAcrescimo,
+                  totalCotas: consorcio.totalCotas,
+                  temPixDireto: Boolean(cg.temPixDireto),
+                });
 
                 return (
                   <div
@@ -639,10 +699,24 @@ export default function ParticipanteTokenPage() {
                       <span className="truncate">
                         {cg.participantes} {isMinhaCota && "(Você)"}
                       </span>
+                      {cg.temPixDireto && (
+                        <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1 py-0.2 rounded font-bold shrink-0">
+                          Pix Direto
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="text-[11px] text-slate-500 font-semibold hidden sm:inline">
+                      <span className="text-[11px] font-semibold text-slate-700 hidden sm:inline">
+                        {cg.temPixDireto ? (
+                          <span className="text-emerald-700 font-bold" title={`Bolada total: ${formatarMoedaBRL(boladaTotal)}`}>
+                            {formatarMoedaBRL(boladaLiquida)}
+                          </span>
+                        ) : (
+                          <span>{formatarMoedaBRL(boladaTotal)}</span>
+                        )}
+                      </span>
+                      <span className="text-[11px] text-slate-500 font-medium hidden md:inline">
                         {mesAnoCg}
                       </span>
                       <span

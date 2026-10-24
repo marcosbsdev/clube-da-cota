@@ -400,3 +400,79 @@ export function formatarMesAnoCiclo(
   return formatarMesEAnoSeguro(data);
 }
 
+export type TipoChavePix = "CELULAR" | "CPF_CNPJ" | "EMAIL" | "CHAVE_ALEATORIA";
+
+export const TIPOS_CHAVE_PIX: {
+  value: TipoChavePix;
+  label: string;
+  placeholder: string;
+  exemplo: string;
+}[] = [
+  {
+    value: "CELULAR",
+    label: "Celular",
+    placeholder: "(00) 00000-0000",
+    exemplo: "(11) 98765-4321",
+  },
+  {
+    value: "CPF_CNPJ",
+    label: "CPF/CNPJ",
+    placeholder: "000.000.000-00 ou 00.000.000/0000-00",
+    exemplo: "123.456.789-00",
+  },
+  {
+    value: "EMAIL",
+    label: "E-mail",
+    placeholder: "exemplo@dominio.com",
+    exemplo: "contato@email.com",
+  },
+  {
+    value: "CHAVE_ALEATORIA",
+    label: "Chave Aleatória",
+    placeholder: "Chave aleatória (UUID)",
+    exemplo: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  },
+];
+
+export function getTipoChavePixLabel(tipo?: string | null): string {
+  const achado = TIPOS_CHAVE_PIX.find((t) => t.value === tipo);
+  return achado?.label || "Chave Aleatória";
+}
+
+/**
+ * Calcula os valores de bolada bruta e líquida para um ciclo específico.
+ * Se o participante optou por Pix direto na conta (e possui cadastro ativo e chave informada),
+ * a bolada líquida é o valor arrecadado dos demais participantes (totalCotas - 1) * valorCota,
+ * e sua própria cota fica retida no bolso.
+ * Se o participante não optou por Pix direto ou não concluiu cadastro, a bolada é 100% bruta (valor cheio).
+ */
+export function calcularBoladaCiclo({
+  numeroCiclo,
+  valorBase,
+  modelo = "FIXO",
+  acrescimo = 0,
+  totalCotas,
+  temPixDireto,
+}: {
+  numeroCiclo: number;
+  valorBase: number;
+  modelo?: string | null;
+  acrescimo?: number;
+  totalCotas: number;
+  temPixDireto: boolean;
+}) {
+  const valorCotaNoCiclo = calcularValorCiclo(numeroCiclo, valorBase, modelo || "FIXO", acrescimo);
+  const cotas = Math.max(1, totalCotas);
+  const boladaTotal = valorCotaNoCiclo * cotas;
+  const boladaLiquida = temPixDireto ? valorCotaNoCiclo * Math.max(1, cotas - 1) : boladaTotal;
+  const cotaPropriaRetida = temPixDireto ? valorCotaNoCiclo : 0;
+
+  return {
+    valorCotaNoCiclo,
+    boladaTotal,
+    boladaLiquida,
+    cotaPropriaRetida,
+    temPixDireto,
+  };
+}
+

@@ -14,6 +14,9 @@ import {
   formatarMesEAnoSeguro,
   calcularDataCiclo,
   formatarMesAnoCiclo,
+  TIPOS_CHAVE_PIX,
+  getTipoChavePixLabel,
+  calcularBoladaCiclo,
 } from "../src/lib/finance.ts";
 
 console.log("🧪 Executando testes das regras financeiras do Clube da Cota...\n");
@@ -264,4 +267,62 @@ console.log("🧪 Executando testes das regras financeiras do Clube da Cota...\n
   console.log("✅ Teste 11: Cálculo de data e Mês/Ano para cada ciclo de contemplação aprovados.");
 }
 
-console.log("\n🎉 Todos os 11 testes de regras financeiras passaram com 100% de sucesso!");
+// Teste 12: Cálculo de Bolada Bruta vs Líquida (Pix Direto vs Centralizado) e Tipos de Chave Pix
+{
+  assert.strictEqual(TIPOS_CHAVE_PIX.length, 4, "Devem existir 4 tipos oficiais de chave Pix cadastrados");
+  assert.strictEqual(getTipoChavePixLabel("CELULAR"), "Celular");
+  assert.strictEqual(getTipoChavePixLabel("CPF_CNPJ"), "CPF/CNPJ");
+  assert.strictEqual(getTipoChavePixLabel("EMAIL"), "E-mail");
+  assert.strictEqual(getTipoChavePixLabel("CHAVE_ALEATORIA"), "Chave Aleatória");
+
+  // Cenário 1: 10 cotas, R$ 100/cota no Ciclo 1. Participante com Pix direto ativo.
+  // Bolada Total = 10 * 100 = 1000
+  // Bolada Líquida = (10 - 1) * 100 = 900
+  // Cota Retida no Bolso = 100
+  const comPixDireto = calcularBoladaCiclo({
+    numeroCiclo: 1,
+    valorBase: 100,
+    totalCotas: 10,
+    temPixDireto: true,
+  });
+
+  assert.strictEqual(comPixDireto.boladaTotal, 1000, "Bolada total deve ser 1000");
+  assert.strictEqual(comPixDireto.boladaLiquida, 900, "Bolada líquida deve ser 900 (sem a própria cota)");
+  assert.strictEqual(comPixDireto.cotaPropriaRetida, 100, "Cota própria retida deve ser 100");
+  assert.strictEqual(comPixDireto.temPixDireto, true);
+
+  // Cenário 2: 10 cotas, R$ 100/cota no Ciclo 1. Participante sem Pix direto (centralizado no consórcio).
+  // Bolada Total = 1000
+  // Bolada Líquida = 1000 (recebe valor cheio do organizador)
+  // Cota Retida no Bolso = 0
+  const semPixDireto = calcularBoladaCiclo({
+    numeroCiclo: 1,
+    valorBase: 100,
+    totalCotas: 10,
+    temPixDireto: false,
+  });
+
+  assert.strictEqual(semPixDireto.boladaTotal, 1000, "Bolada total deve ser 1000");
+  assert.strictEqual(semPixDireto.boladaLiquida, 1000, "Bolada líquida deve ser igual à total");
+  assert.strictEqual(semPixDireto.cotaPropriaRetida, 0, "Nenhuma cota retida no bolso");
+  assert.strictEqual(semPixDireto.temPixDireto, false);
+
+  // Cenário 3: Modelo com Acréscimo Mensal (Ciclo 5: 100 + 4 * 10 = 140 por cota, 10 cotas)
+  const cicloComAcrescimo = calcularBoladaCiclo({
+    numeroCiclo: 5,
+    valorBase: 100,
+    modelo: "ACRESCIMO_MENSAL",
+    acrescimo: 10,
+    totalCotas: 10,
+    temPixDireto: true,
+  });
+
+  assert.strictEqual(cicloComAcrescimo.valorCotaNoCiclo, 140, "Valor da cota no ciclo 5 deve ser 140");
+  assert.strictEqual(cicloComAcrescimo.boladaTotal, 1400, "Bolada total no ciclo 5 deve ser 1400");
+  assert.strictEqual(cicloComAcrescimo.boladaLiquida, 1260, "Bolada líquida no ciclo 5 deve ser 1260");
+  assert.strictEqual(cicloComAcrescimo.cotaPropriaRetida, 140, "Cota retida no ciclo 5 deve ser 140");
+
+  console.log("✅ Teste 12: Cálculo de Bolada Bruta vs Líquida e tipos de Chave Pix aprovados.");
+}
+
+console.log("\n🎉 Todos os 12 testes de regras financeiras passaram com 100% de sucesso!");

@@ -24,6 +24,8 @@ Bem-vindo à documentação oficial do **Clube da Cota**. Toda a base de conheci
 * **[ADR 001 - Redesign Espaçoso de Cards e Previsão Mensal por Ciclo](./decisoes/001-redesign-cards-e-ciclos.md):** Substituição do grid espremido de 2 colunas por cards em linha única, inclusão de Mês/Ano e harmonização total com as paletas dinâmicas.
 * **[ADR 002 - Sub-Abas na Gestão e Isolamento da Auditoria](./decisoes/002-sub-abas-gestao-e-auditoria-rbac.md):** Divisão da Gestão do Grupo em Painel Operacional em largura total e Trilha de Auditoria dedicada restrita a Pro Master e Super Admin.
 * **[ADR 003 - Sanitização de Dados Sensíveis no Cliente](./decisoes/003-sanitizacao-dados-sensiveis.md):** Eliminação de vazamento de `passwordHash` e `tokenAcesso` no retorno do servidor.
+* **[ADR 004 - Pix Direto vs. Centralizado, Bolada Líquida e Chave Pix Obrigatória](./decisoes/004-pix-direto-vs-centralizado-e-chave-pix-obrigatoria.md):** Arquitetura de transferência direta ao contemplado no mês com cota retida no bolso (bolada líquida) vs. arrecadação centralizada, além de chave Pix do consórcio obrigatória com os 4 tipos oficiais selecionáveis (`Celular`, `CPF/CNPJ`, `E-mail`, `Chave Aleatória`).
+* **[ADR 005 - Notificações Flutuantes (ToastModal) em Substituição a Banners Fixos](./decisoes/005-toast-modal-notificacoes-flutuantes.md):** Substituição de banners inline estáticos por notificações flutuantes no canto superior com auto-dismiss em 4s e fechamento manual, eliminando saltos indesejados de layout.
 
 ### 3. Backlog e Plano de Produção
 * **[Pendências & Segurança para Produção](./pendencias.md):** Plano detalhado para endurecimento de segurança (sessão assinada, proteção de recuperação de senha e flags de ambiente).

@@ -22,7 +22,17 @@ export async function getConsorcioData(usuarioId?: string, consorcioId?: string)
   const effectiveUserId = usuarioId || sessionCookie?.value;
 
   const todosUsuarios = await prisma.user.findMany({
-    select: { id: true, name: true, email: true, role: true, preferredTheme: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      preferredTheme: true,
+      isActivated: true,
+      receberPixDireto: true,
+      tipoChavePix: true,
+      chavePix: true,
+    },
   });
 
   const user = effectiveUserId
@@ -242,6 +252,7 @@ export interface CreateConsorcioInput {
   nome: string;
   finalidade?: string;
   regras?: string;
+  tipoChavePix?: string;
   chavePix?: string;
   dadosBancarios?: string;
   dataInicio: string;
@@ -293,6 +304,10 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
       return { success: false, error: validacaoParticipantes.mensagem || "Um consórcio deve ter obrigatoriamente no mínimo 2 participantes." };
     }
 
+    if (!input.chavePix || !input.chavePix.trim()) {
+      return { success: false, error: "A chave Pix do consórcio é obrigatória." };
+    }
+
     // Calcula quantidade total de cotas
     let totalCotas = 0;
     input.participantes.forEach((p) => {
@@ -309,13 +324,15 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
     });
 
     // Cria o consórcio
+    const chavePixLimpa = input.chavePix.trim();
     const novoConsorcio = await prisma.consorcio.create({
       data: {
         nome: input.nome,
         finalidade: input.finalidade || null,
         regras: input.regras || null,
-        chavePix: input.chavePix || null,
-        dadosBancarios: input.dadosBancarios || null,
+        tipoChavePix: input.tipoChavePix || "CHAVE_ALEATORIA",
+        chavePix: chavePixLimpa,
+        dadosBancarios: input.dadosBancarios || chavePixLimpa,
         dataInicio: new Date(input.dataInicio.includes("T") ? input.dataInicio : `${input.dataInicio}T12:00:00`),
         dataPrimeiroVencimento: new Date(input.dataPrimeiroVencimento.includes("T") ? input.dataPrimeiroVencimento : `${input.dataPrimeiroVencimento}T12:00:00`),
         frequencia: input.frequencia,
@@ -744,7 +761,14 @@ export async function loginAction(formData: { email: string; password: string })
   };
 }
 
-export async function registerAction(formData: { name: string; email: string; password: string }) {
+export async function registerAction(formData: {
+  name: string;
+  email: string;
+  password: string;
+  receberPixDireto?: boolean;
+  tipoChavePix?: string;
+  chavePix?: string;
+}) {
   const name = formData.name.trim();
   const email = formData.email.trim().toLowerCase();
   const password = formData.password;
@@ -780,6 +804,9 @@ export async function registerAction(formData: { name: string; email: string; pa
       role: "COMUM",
       preferredTheme: "blue",
       isActivated: true,
+      receberPixDireto: Boolean(formData.receberPixDireto),
+      tipoChavePix: formData.tipoChavePix || (formData.receberPixDireto ? "CELULAR" : null),
+      chavePix: formData.chavePix?.trim() || null,
     },
   });
 
@@ -971,6 +998,8 @@ export interface UpdateConsorcioInfoInput {
   nome: string;
   finalidade?: string;
   regras?: string;
+  tipoChavePix?: string;
+  chavePix?: string;
   dadosPagamento?: string;
 }
 
@@ -1000,10 +1029,18 @@ export async function updateConsorcioInfoAction(input: UpdateConsorcioInfoInput)
       return { success: false, error: "O nome do consórcio é obrigatório." };
     }
 
+    const chavePixValida = (input.chavePix || input.dadosPagamento)?.trim();
+    if (!chavePixValida) {
+      return { success: false, error: "A chave Pix do consórcio é obrigatória." };
+    }
+
+    const tipoChavePixEfetivo = input.tipoChavePix || consorcio.tipoChavePix || "CHAVE_ALEATORIA";
+
     const dadosAnteriores = {
       nome: consorcio.nome,
       finalidade: consorcio.finalidade,
       regras: consorcio.regras,
+      tipoChavePix: consorcio.tipoChavePix,
       chavePix: consorcio.chavePix,
       dadosBancarios: consorcio.dadosBancarios,
     };
@@ -1014,8 +1051,9 @@ export async function updateConsorcioInfoAction(input: UpdateConsorcioInfoInput)
         nome: input.nome.trim(),
         finalidade: input.finalidade?.trim() || null,
         regras: input.regras?.trim() || null,
-        chavePix: input.dadosPagamento?.trim() || null,
-        dadosBancarios: input.dadosPagamento?.trim() || null,
+        tipoChavePix: tipoChavePixEfetivo,
+        chavePix: chavePixValida,
+        dadosBancarios: input.dadosPagamento?.trim() || chavePixValida,
       },
     });
 
@@ -1031,6 +1069,8 @@ export async function updateConsorcioInfoAction(input: UpdateConsorcioInfoInput)
             nome: atualizado.nome,
             finalidade: atualizado.finalidade,
             regras: atualizado.regras,
+            tipoChavePix: atualizado.tipoChavePix,
+            chavePix: atualizado.chavePix,
             dadosPagamento: atualizado.chavePix,
           },
         }),
@@ -1047,6 +1087,62 @@ export async function updateConsorcioInfoAction(input: UpdateConsorcioInfoInput)
   } catch (error: any) {
     console.error("Erro ao atualizar dados do consórcio:", error);
     return { success: false, error: error.message || "Erro ao atualizar informações do consórcio." };
+  }
+}
+
+export interface UpdateUserPixSettingsInput {
+  usuarioId: string;
+  receberPixDireto: boolean;
+  tipoChavePix?: string;
+  chavePix?: string;
+}
+
+export async function updateUserPixSettingsAction(input: UpdateUserPixSettingsInput) {
+  try {
+    if (!input.usuarioId) {
+      return { success: false, error: "Usuário não autenticado." };
+    }
+
+    const usuario = await prisma.user.findUnique({ where: { id: input.usuarioId } });
+    if (!usuario) {
+      return { success: false, error: "Usuário não encontrado." };
+    }
+
+    if (input.receberPixDireto) {
+      if (!input.chavePix || !input.chavePix.trim()) {
+        return {
+          success: false,
+          error: "Para receber a bolada diretamente via Pix na sua conta, informe sua Chave Pix.",
+        };
+      }
+    }
+
+    const chavePixLimpa = input.chavePix?.trim() || null;
+    const tipoChavePixEfetivo = input.tipoChavePix || "CELULAR";
+
+    const atualizado = await prisma.user.update({
+      where: { id: input.usuarioId },
+      data: {
+        receberPixDireto: Boolean(input.receberPixDireto),
+        tipoChavePix: input.receberPixDireto ? tipoChavePixEfetivo : usuario.tipoChavePix,
+        chavePix: input.receberPixDireto ? chavePixLimpa : usuario.chavePix,
+      },
+    });
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message: "Preferências de recebimento Pix salvas com sucesso!",
+      user: {
+        id: atualizado.id,
+        receberPixDireto: atualizado.receberPixDireto,
+        tipoChavePix: atualizado.tipoChavePix,
+        chavePix: atualizado.chavePix,
+      },
+    };
+  } catch (error: any) {
+    console.error("Erro ao salvar preferências Pix do usuário:", error);
+    return { success: false, error: error.message || "Erro ao salvar preferências Pix." };
   }
 }
 
@@ -1339,7 +1435,16 @@ export async function getParticipanteByToken(token: string) {
       include: {
         participantes: {
           include: {
-            usuario: { select: { name: true } },
+            usuario: {
+              select: {
+                id: true,
+                name: true,
+                isActivated: true,
+                receberPixDireto: true,
+                tipoChavePix: true,
+                chavePix: true,
+              },
+            },
           },
         },
       },
@@ -1394,6 +1499,7 @@ export async function getParticipanteByToken(token: string) {
           valorAcrescimo: consorcio.valorAcrescimo,
           valorTotalBolada: consorcio.valorTotalBolada,
           totalCotas: consorcio.totalCotas,
+          tipoChavePix: consorcio.tipoChavePix,
           chavePix: consorcio.chavePix,
           dadosBancarios: consorcio.dadosBancarios,
           regras: consorcio.regras,
@@ -1416,12 +1522,25 @@ export async function getParticipanteByToken(token: string) {
               }
             : null,
         })),
-        ciclosGrupo: todasCotas.map((cot) => ({
-          numeroCota: cot.numero,
-          ordemSorteio: cot.ordemSorteio || cot.numero,
-          status: cot.status,
-          participantes: cot.participantes.map((p) => p.usuario.name).join(" & "),
-        })),
+        ciclosGrupo: todasCotas.map((cot) => {
+          const partPrincipal = cot.participantes[0]?.usuario;
+          return {
+            id: cot.id,
+            numeroCota: cot.numero,
+            ordemSorteio: cot.ordemSorteio || cot.numero,
+            status: cot.status,
+            participantes: cot.participantes.map((p) => p.usuario.name).join(" & "),
+            temPixDireto: Boolean(
+              partPrincipal?.isActivated &&
+              partPrincipal?.receberPixDireto &&
+              partPrincipal?.chavePix
+            ),
+            tipoChavePix: partPrincipal?.tipoChavePix || null,
+            chavePix: partPrincipal?.chavePix || null,
+            usuarioId: partPrincipal?.id || null,
+            usuarioNome: partPrincipal?.name || null,
+          };
+        }),
       },
     };
   } catch (error: any) {
@@ -1505,7 +1624,15 @@ export async function submitReceiptByTokenAction(
   }
 }
 
-export async function ativarContaComSenhaAction(token: string, novaSenha: string) {
+export async function ativarContaComSenhaAction(
+  token: string,
+  novaSenha: string,
+  pixSettings?: {
+    receberPixDireto?: boolean;
+    tipoChavePix?: string;
+    chavePix?: string;
+  }
+) {
   try {
     if (!token || !novaSenha || novaSenha.length < 6) {
       return { success: false, error: "A senha deve ter no mínimo 6 caracteres." };
@@ -1524,6 +1651,13 @@ export async function ativarContaComSenhaAction(token: string, novaSenha: string
       data: {
         passwordHash,
         isActivated: true,
+        ...(pixSettings
+          ? {
+              receberPixDireto: Boolean(pixSettings.receberPixDireto),
+              tipoChavePix: pixSettings.tipoChavePix || "CELULAR",
+              chavePix: pixSettings.chavePix?.trim() || null,
+            }
+          : {}),
       },
     });
 

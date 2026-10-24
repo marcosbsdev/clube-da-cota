@@ -2,13 +2,18 @@
 
 import React, { useState, useEffect } from "react";
 import {
+  TipoChavePix,
+  TIPOS_CHAVE_PIX,
+  getTipoChavePixLabel,
+  calcularBoladaCiclo,
   calcularIndicadoresConsorcio,
-  formatarDataSegura,
   calcularValorCiclo,
-  formatarMoedaBRL,
+  formatarDataSegura,
   formatarMesAnoCiclo,
+  formatarMoedaBRL,
   isModeloAcrescimo,
 } from "@/lib/finance";
+import { ToastModal, ToastData } from "@/components/ToastModal";
 import {
   confirmPaymentAction,
   revertPaymentAction,
@@ -427,14 +432,13 @@ export function CriadorView({
   const [modalRecusaAberto, setModalRecusaAberto] = useState(false);
   const [itemSelecionado, setItemSelecionado] = useState<any>(null);
   const [motivoTexto, setMotivoTexto] = useState("");
-  const [msgSucesso, setMsgSucesso] = useState("");
+  const [toast, setToast] = useState<ToastData | null>(null);
 
   // Estado da Confirmação de Recebimento de Mensalidade
   const [modalConfirmarPagamentoAberto, setModalConfirmarPagamentoAberto] = useState(false);
   const [contribuicaoParaConfirmar, setContribuicaoParaConfirmar] = useState<any>(null);
   const [justificativaConfirmacao, setJustificativaConfirmacao] = useState("Pagamento conferido e confirmado pelo criador.");
   const [isConfirmandoPagamento, setIsConfirmandoPagamento] = useState(false);
-  const [toastSucesso, setToastSucesso] = useState<{ titulo: string; mensagem: string } | null>(null);
 
   // Estado da Confirmação de Contemplação / Reversão
   const [modalContemplacaoAberto, setModalContemplacaoAberto] = useState(false);
@@ -443,22 +447,15 @@ export function CriadorView({
   const [justificativaContemplacao, setJustificativaContemplacao] = useState("");
   const [isSalvandoContemplacao, setIsSalvandoContemplacao] = useState(false);
 
-  // Auto-dismiss do Toast Flutuante de Sucesso após 4.5s
-  useEffect(() => {
-    if (toastSucesso) {
-      const timer = setTimeout(() => setToastSucesso(null), 4500);
-      return () => clearTimeout(timer);
-    }
-  }, [toastSucesso]);
-
   // Estado da Edição de Consórcio
   const [modalEditarAberto, setModalEditarAberto] = useState(false);
   const [editNome, setEditNome] = useState(consorcio?.nome || "");
   const [editFinalidade, setEditFinalidade] = useState(consorcio?.finalidade || "");
   const [editRegras, setEditRegras] = useState(consorcio?.regras || "");
-  const [editDadosPagamento, setEditDadosPagamento] = useState(
-    consorcio?.dadosBancarios || consorcio?.chavePix || ""
+  const [editTipoChavePix, setEditTipoChavePix] = useState<TipoChavePix>(
+    (consorcio?.tipoChavePix as TipoChavePix) || "CHAVE_ALEATORIA"
   );
+  const [editChavePix, setEditChavePix] = useState(consorcio?.chavePix || "");
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
   const [erroEdicao, setErroEdicao] = useState("");
 
@@ -735,13 +732,11 @@ export function CriadorView({
         const cotaNum = contribuicaoParaConfirmar.cota?.numero;
         const valorFormatado = formatarMoedaBRL(contribuicaoParaConfirmar.valorPrevisto);
 
-        const msg = `Recebimento de ${valorFormatado} da Cota #${cotaNum} (${nomeParticipante}) confirmado com sucesso!`;
-        setMsgSucesso(msg);
-        setToastSucesso({
-          titulo: "Recebimento Confirmado com Sucesso!",
-          mensagem: `A mensalidade de ${valorFormatado} da Cota #${cotaNum} (${nomeParticipante}) foi marcada como PAGA e registrada na auditoria.`,
+        setToast({
+          titulo: "Recebimento Confirmado!",
+          mensagem: `A mensalidade de ${valorFormatado} da Cota #${cotaNum} (${nomeParticipante}) foi marcada como PAGA.`,
+          tipo: "success",
         });
-        setTimeout(() => setMsgSucesso(""), 4500);
 
         if (onAtualizarConsorcio) {
           await onAtualizarConsorcio();
@@ -763,8 +758,11 @@ export function CriadorView({
     await revertPaymentAction(itemSelecionado.id, currentUser.id, motivoTexto);
     setModalEstornoAberto(false);
     setMotivoTexto("");
-    setMsgSucesso("Pagamento revertido e registrado na auditoria.");
-    setTimeout(() => setMsgSucesso(""), 3000);
+    setToast({
+      titulo: "Pagamento Revertido",
+      mensagem: "A mensalidade retornou para pendente e foi registrada na auditoria.",
+      tipo: "info",
+    });
   };
 
   const handleSalvarRecusaComprovante = async (e: React.FormEvent) => {
@@ -774,8 +772,11 @@ export function CriadorView({
     await rejectReceiptAction(itemSelecionado.comprovante.id, currentUser.id, motivoTexto);
     setModalRecusaAberto(false);
     setMotivoTexto("");
-    setMsgSucesso("Comprovante recusado com justificativa enviada ao participante.");
-    setTimeout(() => setMsgSucesso(""), 3000);
+    setToast({
+      titulo: "Comprovante Recusado",
+      mensagem: "O comprovante foi recusado e o participante poderá reenviar.",
+      tipo: "warning",
+    });
   };
 
   // Exportação simples para CSV (Requisito da página 82 do PDF)
@@ -807,6 +808,11 @@ export function CriadorView({
       return;
     }
 
+    if (!editChavePix.trim()) {
+      setErroEdicao("A chave Pix do consórcio é obrigatória.");
+      return;
+    }
+
     setSalvandoEdicao(true);
     setErroEdicao("");
 
@@ -816,15 +822,20 @@ export function CriadorView({
       nome: editNome,
       finalidade: editFinalidade,
       regras: editRegras,
-      dadosPagamento: editDadosPagamento,
+      tipoChavePix: editTipoChavePix,
+      chavePix: editChavePix.trim(),
+      dadosPagamento: editChavePix.trim(),
     });
 
     setSalvandoEdicao(false);
 
     if (res.success) {
-      setMsgSucesso("Informações do consórcio atualizadas com sucesso!");
+      setToast({
+        titulo: "Consórcio Atualizado!",
+        mensagem: "Informações do consórcio atualizadas com sucesso.",
+        tipo: "success",
+      });
       setModalEditarAberto(false);
-      setTimeout(() => setMsgSucesso(""), 3500);
       if (onAtualizarConsorcio) {
         onAtualizarConsorcio();
       }
@@ -854,12 +865,15 @@ export function CriadorView({
     setSalvandoTroca(false);
 
     if (res.success) {
-      setMsgSucesso(res.message || "Troca de posição efetivada com sucesso!");
+      setToast({
+        titulo: "Posições Trocadas!",
+        mensagem: res.message || "A nova ordem das cotas foi definida com sucesso.",
+        tipo: "success",
+      });
       setModalTrocaAberto(false);
       setTrocaCotaId1("");
       setTrocaCotaId2("");
       setTrocaJustificativa("");
-      setTimeout(() => setMsgSucesso(""), 3500);
       if (onAtualizarConsorcio) {
         onAtualizarConsorcio();
       }
@@ -905,30 +919,35 @@ export function CriadorView({
         const nomes =
           cotaAlvoContemplacao.participantes?.map((p: any) => p.usuario.name).join(" & ") ||
           `Cota #${cotaAlvoContemplacao.numero}`;
-        const boladaDesteCiclo =
-          calcularValorCiclo(
-            pos,
-            consorcio.valorCota,
-            consorcio.modeloContribuicao,
-            consorcio.valorAcrescimo
-          ) * consorcio.totalCotas;
+        const partPrinc = cotaAlvoContemplacao.participantes?.[0]?.usuario;
+        const temPixDireto = Boolean(
+          partPrinc?.isActivated &&
+          partPrinc?.receberPixDireto &&
+          partPrinc?.chavePix
+        );
+        const { boladaTotal, boladaLiquida } = calcularBoladaCiclo({
+          numeroCiclo: pos,
+          valorBase: consorcio.valorCota,
+          modelo: consorcio.modeloContribuicao,
+          acrescimo: consorcio.valorAcrescimo,
+          totalCotas: consorcio.totalCotas,
+          temPixDireto,
+        });
+        const valorApresentado = temPixDireto ? boladaLiquida : boladaTotal;
 
         if (acaoContemplacao === "CONTEMPLADA") {
-          const msg = `🎉 Cota #${cotaAlvoContemplacao.numero} (${nomes}) contemplada com sucesso!`;
-          setMsgSucesso(msg);
-          setToastSucesso({
-            titulo: "🎉 Cota Contemplada com Sucesso!",
-            mensagem: `A Cota #${cotaAlvoContemplacao.numero} (${nomes}) foi contemplada no Ciclo #${pos} com a bolada de ${formatarMoedaBRL(boladaDesteCiclo)}.`,
+          setToast({
+            titulo: "Cota Contemplada!",
+            mensagem: `A Cota #${cotaAlvoContemplacao.numero} (${nomes}) foi contemplada no Ciclo #${pos} com a bolada ${temPixDireto ? "líquida (Pix direto) de " : "de "}${formatarMoedaBRL(valorApresentado)}.`,
+            tipo: "success",
           });
         } else {
-          const msg = `↩️ Contemplação da Cota #${cotaAlvoContemplacao.numero} (${nomes}) revertida para Aguardando.`;
-          setMsgSucesso(msg);
-          setToastSucesso({
-            titulo: "↩️ Contemplação Revertida",
+          setToast({
+            titulo: "Contemplação Revertida",
             mensagem: `A Cota #${cotaAlvoContemplacao.numero} (${nomes}) retornou ao status 'Aguardando Sorteio'.`,
+            tipo: "info",
           });
         }
-        setTimeout(() => setMsgSucesso(""), 4500);
 
         if (onAtualizarConsorcio) {
           await onAtualizarConsorcio();
@@ -999,36 +1018,8 @@ export function CriadorView({
 
   return (
     <div className="space-y-6">
-      {/* Toast Flutuante de Sucesso (Fixo no topo da tela com alta visibilidade) */}
-      {toastSucesso && (
-        <div className="fixed top-20 right-4 sm:right-8 z-[100] max-w-md bg-white border border-emerald-300 rounded-3xl shadow-2xl p-4 sm:p-5 flex items-start gap-3.5 animate-in slide-in-from-top-4 duration-300 border-l-8 border-l-emerald-500">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0 shadow-xs">
-            <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-black text-slate-900 leading-tight">
-              {toastSucesso.titulo}
-            </h4>
-            <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-              {toastSucesso.mensagem}
-            </p>
-          </div>
-          <button
-            onClick={() => setToastSucesso(null)}
-            className="text-slate-400 hover:text-slate-700 p-1 rounded-xl transition cursor-pointer text-xs font-bold"
-            title="Fechar"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
-      {msgSucesso && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-semibold flex items-center gap-2 shadow-sm">
-          <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-          <span>{msgSucesso}</span>
-        </div>
-      )}
+      {/* Toast Modal Flutuante com auto-dismiss */}
+      <ToastModal toast={toast} onClose={() => setToast(null)} />
 
       {/* Barra de Ações Rápidas do Gestor */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/80 backdrop-blur-xs p-4 rounded-3xl border border-slate-200/80 shadow-2xs">
@@ -1047,7 +1038,8 @@ export function CriadorView({
               setEditNome(consorcio?.nome || "");
               setEditFinalidade(consorcio?.finalidade || "");
               setEditRegras(consorcio?.regras || "");
-              setEditDadosPagamento(consorcio?.dadosBancarios || consorcio?.chavePix || "");
+              setEditTipoChavePix((consorcio?.tipoChavePix as TipoChavePix) || "CHAVE_ALEATORIA");
+              setEditChavePix(consorcio?.chavePix || "");
               setErroEdicao("");
               setModalEditarAberto(true);
             }}
@@ -1318,13 +1310,25 @@ export function CriadorView({
                 const pos = cota.ordemSorteio || cota.numero;
                 const isContemplada = cota.status === "CONTEMPLADA";
                 const nomes = cota.participantes.map((p: any) => p.usuario.name).join(" & ");
-                const boladaDesteCiclo =
-                  calcularValorCiclo(
-                    pos,
-                    consorcio.valorCota,
-                    consorcio.modeloContribuicao,
-                    consorcio.valorAcrescimo
-                  ) * consorcio.totalCotas;
+                const participantePrincipal = cota.participantes?.[0]?.usuario;
+                const temPixDireto = Boolean(
+                  participantePrincipal?.isActivated &&
+                  participantePrincipal?.receberPixDireto &&
+                  participantePrincipal?.chavePix
+                );
+                const {
+                  valorCotaNoCiclo,
+                  boladaTotal,
+                  boladaLiquida,
+                  cotaPropriaRetida,
+                } = calcularBoladaCiclo({
+                  numeroCiclo: pos,
+                  valorBase: consorcio.valorCota,
+                  modelo: consorcio.modeloContribuicao,
+                  acrescimo: consorcio.valorAcrescimo,
+                  totalCotas: consorcio.totalCotas,
+                  temPixDireto,
+                });
                 const mesAnoCiclo = formatarMesAnoCiclo(consorcio, pos);
 
                 return (
@@ -1368,9 +1372,31 @@ export function CriadorView({
                             </span>
                           )}
                           <span className="text-slate-300 hidden sm:inline">•</span>
-                          <span className="text-slate-500">
-                            Bolada: <strong className={isContemplada ? "text-theme-text font-black" : "text-slate-900 font-bold"}>{formatarMoedaBRL(boladaDesteCiclo)}</strong>
-                          </span>
+                          {temPixDireto ? (
+                            <span className="inline-flex items-center gap-1.5 flex-wrap">
+                              <span className="text-slate-500">
+                                Bolada Líquida:{" "}
+                                <strong className={isContemplada ? "text-theme-text font-black" : "text-emerald-700 font-bold"}>
+                                  {formatarMoedaBRL(boladaLiquida)}
+                                </strong>
+                              </span>
+                              <span className="text-[10px] text-slate-400 hidden lg:inline">
+                                (Total: {formatarMoedaBRL(boladaTotal)}, retém {formatarMoedaBRL(cotaPropriaRetida)})
+                              </span>
+                              <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.2 rounded-md font-bold flex items-center gap-0.5">
+                                <span>⚡</span> Pix Direto
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 flex-wrap">
+                              <span className="text-slate-500">
+                                Bolada: <strong className={isContemplada ? "text-theme-text font-black" : "text-slate-900 font-bold"}>{formatarMoedaBRL(boladaTotal)}</strong>
+                              </span>
+                              <span className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.2 rounded-md font-medium">
+                                Centralizado
+                              </span>
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1927,13 +1953,25 @@ export function CriadorView({
         const nomes =
           cotaAlvoContemplacao.participantes?.map((p: any) => p.usuario.name).join(" & ") ||
           `Cota #${cotaAlvoContemplacao.numero}`;
-        const boladaDesteCiclo =
-          calcularValorCiclo(
-            pos,
-            consorcio.valorCota,
-            consorcio.modeloContribuicao,
-            consorcio.valorAcrescimo
-          ) * consorcio.totalCotas;
+        const partPrinc = cotaAlvoContemplacao.participantes?.[0]?.usuario;
+        const temPixDireto = Boolean(
+          partPrinc?.isActivated &&
+          partPrinc?.receberPixDireto &&
+          partPrinc?.chavePix
+        );
+        const {
+          valorCotaNoCiclo,
+          boladaTotal,
+          boladaLiquida,
+          cotaPropriaRetida,
+        } = calcularBoladaCiclo({
+          numeroCiclo: pos,
+          valorBase: consorcio.valorCota,
+          modelo: consorcio.modeloContribuicao,
+          acrescimo: consorcio.valorAcrescimo,
+          totalCotas: consorcio.totalCotas,
+          temPixDireto,
+        });
         const isConfirmar = acaoContemplacao === "CONTEMPLADA";
 
         return (
@@ -2005,7 +2043,7 @@ export function CriadorView({
                 >
                   <div>
                     <span className="text-xs font-bold text-slate-700 block">
-                      {isConfirmar ? "Bolada a Entregar:" : "Valor da Bolada Deste Ciclo:"}
+                      {isConfirmar ? (temPixDireto ? "Bolada Líquida a Transferir:" : "Bolada a Entregar:") : "Valor da Bolada Deste Ciclo:"}
                     </span>
                     <span className="text-[11px] text-slate-500">
                       Ciclo #{pos} de {consorcio.totalCotas} • Previsão: <strong className="text-slate-800">{formatarMesAnoCiclo(consorcio, pos)}</strong>
@@ -2016,9 +2054,32 @@ export function CriadorView({
                       isConfirmar ? "text-theme-text" : "text-amber-800"
                     }`}
                   >
-                    {formatarMoedaBRL(boladaDesteCiclo)}
+                    {formatarMoedaBRL(temPixDireto ? boladaLiquida : boladaTotal)}
                   </span>
                 </div>
+
+                {temPixDireto ? (
+                  <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between font-bold text-emerald-900">
+                      <span className="flex items-center gap-1">
+                        <span>⚡</span> Modalidade: Pix Direto na Conta
+                      </span>
+                      <span className="text-[10px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-md">
+                        {getTipoChavePixLabel(partPrinc.tipoChavePix)}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-emerald-800">
+                      Chave Pix: <strong className="font-mono">{partPrinc.chavePix}</strong>
+                    </div>
+                    <p className="text-[10px] text-emerald-700">
+                      O participante não faz Pix neste ciclo (sua cota de {formatarMoedaBRL(cotaPropriaRetida)} fica retida no bolso) e recebe {formatarMoedaBRL(boladaLiquida)} diretamente dos demais participantes.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200 text-[11px] text-slate-600">
+                    <span>🏦 <strong>Arrecadação Centralizada:</strong> Os participantes realizam transferências para o Pix oficial do consórcio ({formatarMoedaBRL(boladaTotal)} bruto).</span>
+                  </div>
+                )}
 
                 {isConfirmar ? (
                   <p className="text-[11px] text-theme-text bg-theme-light/80 p-2.5 rounded-xl border border-theme-main/20 leading-relaxed">
@@ -2246,26 +2307,52 @@ export function CriadorView({
                 />
               </div>
 
-              {/* Dados para Pagamento (Chave Pix / Conta Bancária) */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Dados para Receber Pagamentos (PIX / Conta)
+              {/* Chave Pix do Consórcio (Obrigatória) */}
+              <div className="space-y-3 pt-1">
+                <div className="flex justify-between items-center">
+                  <label className="block text-xs font-bold text-slate-800 flex items-center gap-1">
+                    <span>⚡</span> Chave Pix do Consórcio <span className="text-rose-500 font-black">*</span>
                   </label>
                   <span className="text-[10px] text-theme-text font-bold bg-theme-light px-2 py-0.2 rounded-md">
                     Visível aos participantes
                   </span>
                 </div>
-                <textarea
-                  rows={3}
-                  value={editDadosPagamento}
-                  onChange={(e) => setEditDadosPagamento(e.target.value)}
-                  placeholder="Ex: Chave Pix (CPF, celular, e-mail ou chave aleatória)"
-                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-medium focus:border-theme-main focus:outline-none bg-slate-50/50"
-                />
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  Esta instrução é exibida diretamente na tela dos participantes para eles realizarem o pagamento.
-                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                      Tipo da Chave
+                    </label>
+                    <select
+                      value={editTipoChavePix}
+                      onChange={(e) => setEditTipoChavePix(e.target.value as TipoChavePix)}
+                      className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold focus:border-theme-main focus:outline-none bg-white cursor-pointer"
+                    >
+                      {TIPOS_CHAVE_PIX.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                      Chave Pix para Pagamento *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder={
+                        TIPOS_CHAVE_PIX.find((t) => t.value === editTipoChavePix)?.placeholder ||
+                        "Informe a chave Pix"
+                      }
+                      value={editChavePix}
+                      onChange={(e) => setEditChavePix(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono font-bold focus:border-theme-main focus:outline-none bg-white shadow-2xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Regras Gerais */}

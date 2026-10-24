@@ -33,6 +33,15 @@ Código-fonte principal: [`src/lib/finance.ts`](file:///C:/Users/tctat/.gemini/a
 ### Formatação Monetária
 * Todos os valores monetários seguem rigorosamente o padrão brasileiro BRL (`R$ 1.500,00`).
 
+### Modalidade de Recebimento Pix: Direto vs. Centralizado
+1. **Pix do Consórcio (Obrigatório):** Todo consórcio criado ou editado possui obrigatoriamente uma chave Pix e a classificação do tipo de chave (`CELULAR`, `CPF_CNPJ`, `EMAIL`, `CHAVE_ALEATORIA`).
+2. **Pix Direto ao Contemplado:** Se o participante contemplado do ciclo completou cadastro na plataforma (`isActivated = true`), optou por receber o Pix diretamente na sua conta (`receberPixDireto = true`) e informou sua chave Pix:
+   * **Bolada Líquida:** O contemplado não realiza Pix no mês do seu recebimento. Sua própria cota fica no bolso e ele recebe a soma líquida das transferências dos demais participantes `(totalCotas - 1) * valorCotaNoCiclo`.
+   * **Apresentação de Chave:** Os demais participantes visualizam a chave Pix pessoal do contemplado na tela de pagamento para transferência direta. O contemplado visualiza um aviso parabenizando-o e informando que sua cota foi retida.
+3. **Arrecadação Centralizada:** Se o participante optou por não receber direto ou ainda não completou seu cadastro:
+   * A bolada é integralmente bruta (`totalCotas * valorCotaNoCiclo`).
+   * A chave Pix apresentada para pagamento é a do organizador do consórcio.
+
 ---
 
 ## 2. Indicadores Principais do Criador (Dashboard KPIs)
@@ -45,7 +54,7 @@ O painel do gestor calcula e exibe em tempo real 4 métricas essenciais:
 ---
 
 ## 3. Suíte de Testes Automatizados
-O arquivo `tests/finance.test.mjs` valida 11 regras financeiras matemáticas:
+O arquivo `tests/finance.test.mjs` valida 12 regras financeiras matemáticas:
 1. Geração de datas de vencimento mensais.
 2. Validação de cotas compartilhadas (frações de 50%).
 3. Transição de status financeiro (`PENDENTE` -> `PAGO` / `EM_ATRASO`).
@@ -57,3 +66,4 @@ O arquivo `tests/finance.test.mjs` valida 11 regras financeiras matemáticas:
 9. Formatação de data à prova de bugs de fuso horário.
 10. Formatação de Mês/Ano e cálculo de lucro sobre a bolada.
 11. Cálculo de data e Mês/Ano para cada ciclo de contemplação.
+12. Cálculo de Bolada Bruta vs Líquida (Pix Direto vs Centralizado) e 4 tipos de Chave Pix.
