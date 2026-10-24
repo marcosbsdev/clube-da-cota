@@ -31,6 +31,10 @@ Bem-vindo à documentação oficial do **Clube da Cota**. Toda a base de conheci
 * **[ADR 008 - Módulo de Gerenciamento de Assinaturas e Planos SaaS](./decisoes/008-modulo-gestao-assinaturas-saas.md):** Controle de validade e vigência de 30 dias (`planoExpiraEm`), painel administrativo exclusivo do Super Admin com métricas financeiras (MRR, assinantes ativos, pendências), visualizador de comprovantes Pix, aprovação/recusa com 1 clique e envio de comprovante direto pelo app.
 * **[ADR 009 - Modelo A de Monetização (1 Consórcio Ativo Simultâneo), Encerramento e Exclusão Segura](./decisoes/009-modelo-a-um-ativo-simultaneo-e-ciclo-vida-consorcio.md):** 1 consórcio ativo simultâneo para o Plano Comum (múltiplos grupos paralelos exigem upgrade para Pro), consórcio encerrado congelado em modo somente leitura (bloqueio de repasse e pagamentos), bloqueio de exclusão física se houver pagamentos confirmados e exclusão permitida de rascunhos sem pagamentos com liberação imediata da vaga.
 * **[ADR 010 - Alerta de Ciclo Concluído, Encerramento Proativo e Radar CRM de Upgrade para o Administrador](./decisoes/010-aviso-ciclo-concluido-e-crm-upgrade-admin.md):** Identificação automática de consórcios com último vencimento no passado, banner interativo para o criador decidir entre manter ativo ou encerrar (liberando vaga), e aba de oportunidades no painel Super Admin com botão de WhatsApp contextualizado para CS/Upgrade e encerramento administrativo.
+* **[ADR 011 - Arquitetura Docker Multi-Stage, Multiplataforma e Suporte Nativo a PostgreSQL](./decisoes/011-arquitetura-docker-multiplataforma-e-postgresql.md):** Dockerfile multi-stage com build standalone Next.js (~150MB), orquestração via Docker Compose com PostgreSQL 16 Alpine, volumes persistentes e sincronização automática via entrypoint.
 
-### 3. Backlog e Plano de Produção
+### 3. Guias de Operação e Infraestrutura (`docs/guias/`)
+* **[Execução Local com Docker e Deploy em Servidor Dedicado](./guias/docker-deploy.md):** Manual completo de comandos `docker compose up`, variáveis de ambiente e deploy em VPS com reverse proxy SSL (Caddy/Nginx).
+
+### 4. Backlog e Plano de Produção
 * **[Pendências & Segurança para Produção](./pendencias.md):** Plano detalhado para endurecimento de segurança (sessão assinada, proteção de recuperação de senha e flags de ambiente).

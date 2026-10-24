@@ -2872,7 +2872,7 @@ export function CriadorView({
                 />
               </div>
 
-              /* Caixa Informativa de Proteção Financeira (Imutabilidade após início) */}
+              {/* Caixa Informativa de Proteção Financeira (Imutabilidade após início) */}
               <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-2">
                 <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
                   <Lock className="w-4 h-4 text-amber-700 flex-shrink-0" />

@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(uuid())
+  name            String
+  email           String    @unique
+  telefone        String?   // WhatsApp / Celular (ex: "(11) 98765-4321")
+  passwordHash    String?
+  role            String    @default("COMUM") // "COMUM", "PRO", "PRO_MASTER", "SUPER_ADMIN"
+  preferredTheme  String    @default("blue")  // "blue", "dark", "purple", "ocean", "coral"
+  isActivated     Boolean   @default(false)
+  receberPixDireto Boolean  @default(false)
+  tipoChavePix     String?  // "CPF_CNPJ", "CELULAR", "EMAIL", "CHAVE_ALEATORIA"
+  chavePix         String?
+  inviteToken     String?   @unique
+  inviteExpiresAt DateTime?
+  resetToken      String?   @unique
+  resetExpiresAt  DateTime?
+  planoExpiraEm   DateTime? // Data de expiração da assinatura SaaS (PRO / PRO_MASTER)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  consorciosCriados    Consorcio[]        @relation("CriadorConsorcio")
+  participacoes        CotaParticipante[]
+  contribuicoes        Contribuicao[]     @relation("UsuarioContribuicao")
+  comprovantes         Comprovante[]      @relation("UsuarioComprovante")
+  auditoriasFeitas     AuditoriaLog[]     @relation("ResponsavelAuditoria")
+  assinaturas          AssinaturaPlano[]  @relation("UsuarioAssinaturas")
+  assinaturasAprovadas AssinaturaPlano[]  @relation("AdminAprovadorAssinatura")
+}
+
+model Consorcio {
+  id                     String    @id @default(uuid())
+  nome                   String
+  finalidade             String?
+  regras                 String?
+  dataInicio             DateTime
+  status                 String    @default("ATIVO") // "RASCUNHO", "ATIVO", "ENCERRADO"
+  frequencia             String    @default("MENSAL") // "SEMANAL", "QUINZENAL", "MENSAL", "OUTRA"
+  modeloContribuicao     String    @default("FIXO") // "FIXO", "ACRESCIMO_MENSAL"
+  valorCota              Float
+  valorAcrescimo         Float     @default(0)
+  valorTotalBolada       Float
+  totalCotas             Int
+  tipoChavePix           String?   @default("CHAVE_ALEATORIA")
+  chavePix               String?
+  dadosBancarios         String?
+  dataPrimeiroVencimento DateTime
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  criadorId String
+  criador   User   @relation("CriadorConsorcio", fields: [criadorId], references: [id], onDelete: Cascade)
+
+  cotas         Cota[]
+  contribuicoes Contribuicao[]
+  auditorias    AuditoriaLog[]
+}
+
+model Cota {
+  id              String   @id @default(uuid())
+  consorcioId     String
+  consorcio       Consorcio @relation(fields: [consorcioId], references: [id], onDelete: Cascade)
+  numero          Int
+  ordemSorteio    Int?
+  isCompartilhada Boolean  @default(false)
+  status          String   @default("ATIVA") // "ATIVA", "CONTEMPLADA"
+  tokenAcesso     String?  @unique
+  createdAt       DateTime @default(now())
+
+  participantes CotaParticipante[]
+  contribuicoes Contribuicao[]
+}
+
+model CotaParticipante {
+  id           String  @id @default(uuid())
+  cotaId       String
+  cota         Cota    @relation(fields: [cotaId], references: [id], onDelete: Cascade)
+  usuarioId    String
+  usuario      User    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  percentual   Float   @default(100.0) // 100% ou fração (ex: 50.0)
+  valorParcela Float
+  tokenAcesso  String? @unique
+
+  createdAt DateTime @default(now())
+
+  @@unique([cotaId, usuarioId])
+}
+
+model Contribuicao {
+  id                     String    @id @default(uuid())
+  consorcioId            String
+  consorcio              Consorcio @relation(fields: [consorcioId], references: [id], onDelete: Cascade)
+  cotaId                 String
+  cota                   Cota      @relation(fields: [cotaId], references: [id], onDelete: Cascade)
+  usuarioId              String
+  usuario                User      @relation("UsuarioContribuicao", fields: [usuarioId], references: [id], onDelete: Cascade)
+  numeroCiclo            Int
+  valorPrevisto          Float
+  dataVencimento         DateTime
+  status                 String    @default("PENDENTE") // "PENDENTE", "PAGO", "EM_ATRASO", "CANCELADO"
+  dataPagamento          DateTime?
+  motivoAlteracao        String?
+  responsavelAlteracaoId String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  comprovante Comprovante?
+}
+
+model Comprovante {
+  id             String    @id @default(uuid())
+  contribuicaoId String    @unique
+  contribuicao   Contribuicao @relation(fields: [contribuicaoId], references: [id], onDelete: Cascade)
+  usuarioId      String
+  usuario        User      @relation("UsuarioComprovante", fields: [usuarioId], references: [id], onDelete: Cascade)
+  arquivoUrl     String
+  arquivoNome    String
+  tamanhoBytes   Int
+  mimeType       String
+  status         String    @default("PENDENTE") // "PENDENTE", "CONFIRMADO", "RECUSADO"
+  motivoRecusa   String?
+  analisadoPorId String?
+  analisadoEm    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model AuditoriaLog {
+  id                   String     @id @default(uuid())
+  consorcioId          String?
+  consorcio            Consorcio? @relation(fields: [consorcioId], references: [id], onDelete: SetNull)
+  usuarioResponsavelId String
+  usuarioResponsavel   User       @relation("ResponsavelAuditoria", fields: [usuarioResponsavelId], references: [id], onDelete: Cascade)
+  usuarioAfetadoId     String?
+  tipoAcao             String
+  detalhes             String
+  justificativa        String?
+  ip                   String?
+  createdAt            DateTime   @default(now())
+}
+
+model AssinaturaPlano {
+  id              String    @id @default(uuid())
+  usuarioId       String
+  usuario         User      @relation("UsuarioAssinaturas", fields: [usuarioId], references: [id], onDelete: Cascade)
+  plano           String    // "PRO", "PRO_MASTER"
+  valor           Float     // 19.90, 29.90
+  mesesVigencia   Int       @default(1)
+  status          String    @default("PENDENTE") // "PENDENTE", "APROVADO", "RECUSADO", "CANCELADO"
+  comprovanteUrl  String?
+  comprovanteNome String?
+  solicitadoEm    DateTime  @default(now())
+  dataInicio      DateTime?
+  dataFim         DateTime?
+  aprovadoPorId   String?
+  aprovadoPor     User?     @relation("AdminAprovadorAssinatura", fields: [aprovadoPorId], references: [id], onDelete: SetNull)
+  motivoRecusa    String?
+  observacoes     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}

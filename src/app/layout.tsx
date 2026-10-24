@@ -1,9 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Clube da Cota - Consórcio entre Amigos",
@@ -39,7 +36,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className={`${inter.className} theme-blue bg-slate-100 min-h-screen text-slate-800 antialiased`}>
+      <body className="font-sans theme-blue bg-slate-100 min-h-screen text-slate-800 antialiased">
         <ThemeProvider initialTheme="blue">
           {children}
         </ThemeProvider>
