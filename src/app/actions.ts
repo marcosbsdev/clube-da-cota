@@ -9,6 +9,8 @@ import {
   calcularTotalArrecadacaoConsorcio,
   ModeloContribuicao,
   validarMinimoParticipantes,
+  formatarTelefone,
+  TipoChavePix,
 } from "@/lib/finance";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
@@ -26,6 +28,7 @@ export async function getConsorcioData(usuarioId?: string, consorcioId?: string)
       id: true,
       name: true,
       email: true,
+      telefone: true,
       role: true,
       preferredTheme: true,
       isActivated: true,
@@ -264,10 +267,12 @@ export interface CreateConsorcioInput {
   participantes: {
     nome: string;
     email?: string;
+    telefone?: string;
     cotasCount: number;
     isCompartilhada?: boolean;
     fraçãoNome?: string;
     fraçãoEmail?: string;
+    fraçãoTelefone?: string;
     valorFração1?: number;
     valorFração2?: number;
   }[];
@@ -370,6 +375,7 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
           data: {
             name: part.nome,
             email: emailFinal,
+            telefone: part.telefone ? formatarTelefone(part.telefone) : null,
             role: "COMUM",
             isActivated: false,
             inviteToken: hasRealEmail
@@ -379,6 +385,11 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
               ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 dias conforme PDF
               : null,
           },
+        });
+      } else if (part.telefone && !usuario.telefone) {
+        await prisma.user.update({
+          where: { id: usuario.id },
+          data: { telefone: formatarTelefone(part.telefone) },
         });
       }
 
@@ -398,6 +409,7 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
             data: {
               name: part.fraçãoNome,
               email: emailFinal2,
+              telefone: part.fraçãoTelefone ? formatarTelefone(part.fraçãoTelefone) : null,
               role: "COMUM",
               isActivated: false,
               inviteToken: hasRealEmail2
@@ -407,6 +419,11 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
                 ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
                 : null,
             },
+          });
+        } else if (part.fraçãoTelefone && !usuario2.telefone) {
+          await prisma.user.update({
+            where: { id: usuario2.id },
+            data: { telefone: formatarTelefone(part.fraçãoTelefone) },
           });
         }
 
@@ -1143,6 +1160,310 @@ export async function updateUserPixSettingsAction(input: UpdateUserPixSettingsIn
   } catch (error: any) {
     console.error("Erro ao salvar preferências Pix do usuário:", error);
     return { success: false, error: error.message || "Erro ao salvar preferências Pix." };
+  }
+}
+
+export interface UpdateParticipantInfoInput {
+  consorcioId: string;
+  gestorUserId: string;
+  targetUserId: string;
+  nome: string;
+  email?: string;
+  telefone?: string;
+  tipoChavePix?: TipoChavePix;
+  chavePix?: string;
+  receberPixDireto?: boolean;
+}
+
+export async function updateParticipantInfoAction(input: UpdateParticipantInfoInput) {
+  try {
+    const gestor = await prisma.user.findUnique({ where: { id: input.gestorUserId } });
+    if (!gestor) return { success: false, error: "Gestor não encontrado." };
+
+    const consorcio = await prisma.consorcio.findUnique({ where: { id: input.consorcioId } });
+    if (!consorcio) return { success: false, error: "Consórcio não encontrado." };
+
+    const isAutorizado =
+      gestor.role === "SUPER_ADMIN" ||
+      gestor.role === "PRO_MASTER" ||
+      consorcio.criadorId === gestor.id;
+
+    if (!isAutorizado) {
+      return { success: false, error: "Você não tem permissão para editar participantes deste consórcio." };
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id: input.targetUserId } });
+    if (!targetUser) return { success: false, error: "Participante não encontrado." };
+
+    const nomeLimpo = input.nome.trim();
+    if (!nomeLimpo) return { success: false, error: "O nome do participante é obrigatório." };
+
+    let emailFinal = targetUser.email;
+    const novoEmail = input.email?.trim().toLowerCase();
+
+    if (novoEmail && novoEmail !== targetUser.email) {
+      const existente = await prisma.user.findUnique({ where: { email: novoEmail } });
+      if (existente && existente.id !== targetUser.id) {
+        return {
+          success: false,
+          error: `O e-mail "${novoEmail}" já está em uso por outro usuário cadastrado no sistema.`,
+        };
+      }
+      emailFinal = novoEmail;
+    }
+
+    const telefoneFormatado = input.telefone ? formatarTelefone(input.telefone) : null;
+    const chavePixLimpa = input.chavePix?.trim() || null;
+    const tipoPixFinal = chavePixLimpa ? (input.tipoChavePix || "CHAVE_ALEATORIA") : null;
+    const receberPixDiretoFinal = Boolean(input.receberPixDireto && chavePixLimpa);
+
+    const dadosAnteriores = {
+      name: targetUser.name,
+      email: targetUser.email,
+      telefone: targetUser.telefone,
+      tipoChavePix: targetUser.tipoChavePix,
+      chavePix: targetUser.chavePix,
+      receberPixDireto: targetUser.receberPixDireto,
+    };
+
+    const usuarioAtualizado = await prisma.user.update({
+      where: { id: targetUser.id },
+      data: {
+        name: nomeLimpo,
+        email: emailFinal,
+        telefone: telefoneFormatado,
+        tipoChavePix: tipoPixFinal,
+        chavePix: chavePixLimpa,
+        receberPixDireto: receberPixDiretoFinal,
+      },
+    });
+
+    const dadosNovos = {
+      name: usuarioAtualizado.name,
+      email: usuarioAtualizado.email,
+      telefone: usuarioAtualizado.telefone,
+      tipoChavePix: usuarioAtualizado.tipoChavePix,
+      chavePix: usuarioAtualizado.chavePix,
+      receberPixDireto: usuarioAtualizado.receberPixDireto,
+    };
+
+    await prisma.auditoriaLog.create({
+      data: {
+        consorcioId: consorcio.id,
+        usuarioResponsavelId: gestor.id,
+        usuarioAfetadoId: targetUser.id,
+        tipoAcao: "EDICAO_DADOS_PARTICIPANTE",
+        detalhes: JSON.stringify({
+          participanteId: targetUser.id,
+          nomeAnterior: targetUser.name,
+          novoNome: nomeLimpo,
+          antes: dadosAnteriores,
+          depois: dadosNovos,
+        }),
+        justificativa: "Atualização de dados cadastrais do participante pelo gestor.",
+      },
+    });
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message: `Dados cadastrais de ${nomeLimpo} atualizados com sucesso!`,
+      usuario: {
+        id: usuarioAtualizado.id,
+        name: usuarioAtualizado.name,
+        email: usuarioAtualizado.email,
+        telefone: usuarioAtualizado.telefone,
+        tipoChavePix: usuarioAtualizado.tipoChavePix,
+        chavePix: usuarioAtualizado.chavePix,
+        receberPixDireto: usuarioAtualizado.receberPixDireto,
+      },
+    };
+  } catch (error: any) {
+    console.error("Erro ao atualizar participante:", error);
+    return { success: false, error: error.message || "Erro ao atualizar participante." };
+  }
+}
+
+export interface SubstituteParticipantInput {
+  consorcioId: string;
+  cotaId: string;
+  participanteAntigoId: string;
+  gestorUserId: string;
+  modoNovoParticipante: "EXISTENTE" | "NOVO";
+  novoUsuarioId?: string;
+  nome?: string;
+  email?: string;
+  telefone?: string;
+  tipoChavePix?: TipoChavePix;
+  chavePix?: string;
+  receberPixDireto?: boolean;
+  aPartirDoCiclo: number;
+  justificativa: string;
+  acertoFinanceiroInfo?: string;
+}
+
+export async function substituteParticipantAction(input: SubstituteParticipantInput) {
+  try {
+    const gestor = await prisma.user.findUnique({ where: { id: input.gestorUserId } });
+    if (!gestor) return { success: false, error: "Gestor não encontrado." };
+
+    const consorcio = await prisma.consorcio.findUnique({
+      where: { id: input.consorcioId },
+      include: {
+        cotas: {
+          include: {
+            participantes: { include: { usuario: true } },
+          },
+        },
+      },
+    });
+    if (!consorcio) return { success: false, error: "Consórcio não encontrado." };
+
+    const isAutorizado =
+      gestor.role === "SUPER_ADMIN" ||
+      gestor.role === "PRO_MASTER" ||
+      consorcio.criadorId === gestor.id;
+
+    if (!isAutorizado) {
+      return { success: false, error: "Você não tem permissão para substituir participantes deste consórcio." };
+    }
+
+    if (!input.justificativa || input.justificativa.trim().length < 5) {
+      return { success: false, error: "A justificativa da substituição é obrigatória (mínimo de 5 caracteres)." };
+    }
+
+    const cota = consorcio.cotas.find((c) => c.id === input.cotaId);
+    if (!cota) return { success: false, error: "Cota não encontrada neste consórcio." };
+
+    const vinculoAntigo = cota.participantes.find((p) => p.usuarioId === input.participanteAntigoId);
+    if (!vinculoAntigo) {
+      return { success: false, error: "O participante informado não pertence a esta cota." };
+    }
+
+    const participanteAntigo = vinculoAntigo.usuario;
+    let novoUsuario: any = null;
+
+    if (input.modoNovoParticipante === "EXISTENTE") {
+      if (!input.novoUsuarioId) {
+        return { success: false, error: "Selecione o participante existente que assumirá a cota." };
+      }
+      novoUsuario = await prisma.user.findUnique({ where: { id: input.novoUsuarioId } });
+      if (!novoUsuario) return { success: false, error: "Participante selecionado não foi encontrado." };
+    } else {
+      const nomeNovo = input.nome?.trim();
+      if (!nomeNovo) {
+        return { success: false, error: "O nome do novo participante é obrigatório." };
+      }
+
+      const hasRealEmail = Boolean(input.email && input.email.trim().length > 0);
+      const emailFinal = hasRealEmail
+        ? input.email!.trim().toLowerCase()
+        : `participante_${Date.now()}_${Math.random().toString(36).substring(2, 8)}@clubedacota.local`;
+
+      novoUsuario = hasRealEmail
+        ? await prisma.user.findUnique({ where: { email: emailFinal } })
+        : null;
+
+      if (!novoUsuario) {
+        const telefoneFormatado = input.telefone ? formatarTelefone(input.telefone) : null;
+        const chavePixLimpa = input.chavePix?.trim() || null;
+        const tipoPixFinal = chavePixLimpa ? (input.tipoChavePix || "CHAVE_ALEATORIA") : null;
+
+        novoUsuario = await prisma.user.create({
+          data: {
+            name: nomeNovo,
+            email: emailFinal,
+            telefone: telefoneFormatado,
+            tipoChavePix: tipoPixFinal,
+            chavePix: chavePixLimpa,
+            receberPixDireto: Boolean(input.receberPixDireto && chavePixLimpa),
+            role: "COMUM",
+            isActivated: false,
+            inviteToken: hasRealEmail
+              ? `convite-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
+              : null,
+            inviteExpiresAt: hasRealEmail
+              ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+              : null,
+          },
+        });
+      }
+    }
+
+    if (novoUsuario.id === participanteAntigo.id) {
+      return { success: false, error: "O novo titular deve ser uma pessoa diferente do titular atual da cota." };
+    }
+
+    // 1. Gera novo Token de Acesso exclusivo para o novo titular (invalidando o link anterior)
+    const novoTokenAcesso = "cp_" + crypto.randomBytes(6).toString("hex");
+
+    // 2. Atualiza CotaParticipante com o novo usuario e novo token
+    await prisma.cotaParticipante.update({
+      where: { id: vinculoAntigo.id },
+      data: {
+        usuarioId: novoUsuario.id,
+        tokenAcesso: novoTokenAcesso,
+      },
+    });
+
+    // 3. Reatribui as contribuições futuras (numeroCiclo >= aPartirDoCiclo)
+    const cicloCorte = Math.max(1, Number(input.aPartirDoCiclo) || 1);
+    const atualizacaoContribuicoes = await prisma.contribuicao.updateMany({
+      where: {
+        cotaId: cota.id,
+        usuarioId: participanteAntigo.id,
+        numeroCiclo: { gte: cicloCorte },
+      },
+      data: {
+        usuarioId: novoUsuario.id,
+      },
+    });
+
+    // 4. Registra na trilha de auditoria
+    await prisma.auditoriaLog.create({
+      data: {
+        consorcioId: consorcio.id,
+        usuarioResponsavelId: gestor.id,
+        usuarioAfetadoId: novoUsuario.id,
+        tipoAcao: "SUBSTITUICAO_PARTICIPANTE_COTA",
+        detalhes: JSON.stringify({
+          cotaNumero: cota.numero,
+          cotaId: cota.id,
+          aPartirDoCiclo: cicloCorte,
+          parcelasReatribuidas: atualizacaoContribuicoes.count,
+          participanteAntigo: {
+            id: participanteAntigo.id,
+            name: participanteAntigo.name,
+            email: participanteAntigo.email,
+          },
+          novoParticipante: {
+            id: novoUsuario.id,
+            name: novoUsuario.name,
+            email: novoUsuario.email,
+            telefone: novoUsuario.telefone,
+          },
+          acertoFinanceiroInfo: input.acertoFinanceiroInfo?.trim() || null,
+          cotaJaContemplada: cota.status === "CONTEMPLADA",
+        }),
+        justificativa: input.justificativa.trim(),
+      },
+    });
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message: `Cota #${cota.numero} repassada com sucesso para ${novoUsuario.name}!`,
+      novoToken: novoTokenAcesso,
+      cotaNumero: cota.numero,
+      novoUsuario: {
+        id: novoUsuario.id,
+        name: novoUsuario.name,
+        telefone: novoUsuario.telefone,
+      },
+    };
+  } catch (error: any) {
+    console.error("Erro ao substituir participante:", error);
+    return { success: false, error: error.message || "Erro ao substituir participante da cota." };
   }
 }
 

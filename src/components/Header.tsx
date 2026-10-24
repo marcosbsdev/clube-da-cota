@@ -22,6 +22,7 @@ import {
   X,
   ExternalLink,
   ShieldCheck,
+  UserCheck,
 } from "lucide-react";
 import { TabType } from "./BottomNav";
 import { AppLogo } from "./AppLogo";
@@ -34,6 +35,8 @@ interface HeaderProps {
   activeTab?: TabType;
   onChangeTab?: (tab: TabType) => void;
   canCreateOrManage?: boolean;
+  canManage?: boolean;
+  canCreate?: boolean;
   currentUserId?: string;
   todosUsuarios?: any[];
   onTrocarUsuario?: (id: string) => void;
@@ -109,6 +112,18 @@ function getNotificacaoMeta(tipoAcao: string) {
         bg: "bg-blue-100 text-blue-800 border-blue-200",
         icon: Edit3,
       };
+    case "EDICAO_DADOS_PARTICIPANTE":
+      return {
+        label: "Participante Editado",
+        bg: "bg-sky-100 text-sky-800 border-sky-200",
+        icon: Edit3,
+      };
+    case "SUBSTITUICAO_PARTICIPANTE_COTA":
+      return {
+        label: "Repasse de Cota",
+        bg: "bg-purple-100 text-purple-800 border-purple-200",
+        icon: UserCheck,
+      };
     case "CRIACAO_CONSORCIO":
       return {
         label: "Consórcio Criado",
@@ -169,6 +184,16 @@ function formatarTextoNotificacao(tipoAcao: string, detalhes: string): string {
         return `Dados do consórcio atualizados (Nome: "${parsed.depois.nome}").`;
       }
       return "Dados cadastrais ou regras de pagamento atualizados.";
+    case "EDICAO_DADOS_PARTICIPANTE":
+      if (parsed?.novoNome) {
+        return `Dados cadastrais de ${parsed.novoNome} foram atualizados.`;
+      }
+      return detalhes || "Dados cadastrais de participante atualizados.";
+    case "SUBSTITUICAO_PARTICIPANTE_COTA":
+      if (parsed?.cotaNumero && parsed?.novoParticipante?.name) {
+        return `Cota #${parsed.cotaNumero} repassada para ${parsed.novoParticipante.name} a partir do ciclo ${parsed.aPartirDoCiclo || 1}.`;
+      }
+      return detalhes || "Cota repassada para novo titular com justificativa.";
     case "CRIACAO_CONSORCIO":
       return detalhes || "Grupo de consórcio criado com sucesso.";
     default:
@@ -183,6 +208,8 @@ export function Header({
   activeTab = "participante",
   onChangeTab,
   canCreateOrManage = true,
+  canManage,
+  canCreate,
   currentUserId,
   todosUsuarios = [],
   onTrocarUsuario,
@@ -191,6 +218,9 @@ export function Header({
   todosConsorcios = [],
   onSelecionarConsorcio,
 }: HeaderProps) {
+  const canManageResolved = canManage !== undefined ? canManage : canCreateOrManage;
+  const canCreateResolved = canCreate !== undefined ? canCreate : canCreateOrManage;
+
   const [dropdownAberto, setDropdownAberto] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -368,7 +398,7 @@ export function Header({
                 <span>Meu Consórcio</span>
               </button>
 
-              {canCreateOrManage && (
+              {canManageResolved && (
                 <button
                   onClick={() => onChangeTab("criador")}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
@@ -382,7 +412,7 @@ export function Header({
                 </button>
               )}
 
-              {canCreateOrManage && (
+              {canCreateResolved && (
                 <button
                   onClick={() => onChangeTab("assistente")}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
@@ -624,7 +654,7 @@ export function Header({
                 </div>
 
                 {/* Rodapé: Link para Gestão / Auditoria */}
-                {onChangeTab && canCreateOrManage && (
+                {onChangeTab && canManageResolved && (
                   <div className="pt-2 mt-2 border-t border-slate-100">
                     {(userRole === "PRO_MASTER" || userRole === "SUPER_ADMIN") ? (
                       <button

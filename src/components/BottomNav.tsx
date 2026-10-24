@@ -9,9 +9,20 @@ interface BottomNavProps {
   activeTab: TabType;
   onChangeTab: (tab: TabType) => void;
   canCreateOrManage?: boolean;
+  canManage?: boolean;
+  canCreate?: boolean;
 }
 
-export function BottomNav({ activeTab, onChangeTab, canCreateOrManage = true }: BottomNavProps) {
+export function BottomNav({
+  activeTab,
+  onChangeTab,
+  canCreateOrManage = true,
+  canManage,
+  canCreate,
+}: BottomNavProps) {
+  const canManageResolved = canManage !== undefined ? canManage : canCreateOrManage;
+  const canCreateResolved = canCreate !== undefined ? canCreate : canCreateOrManage;
+
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-200 px-6 py-2 flex justify-between items-center z-40 shadow-lg">
       <button
@@ -24,7 +35,7 @@ export function BottomNav({ activeTab, onChangeTab, canCreateOrManage = true }: 
         <span className="text-[11px]">Início</span>
       </button>
 
-      {canCreateOrManage && (
+      {canManageResolved && (
         <button
           onClick={() => onChangeTab("criador")}
           className={`flex flex-col items-center gap-1 transition touch-target ${
@@ -36,7 +47,7 @@ export function BottomNav({ activeTab, onChangeTab, canCreateOrManage = true }: 
         </button>
       )}
 
-      {canCreateOrManage && (
+      {canCreateResolved && (
         <button
           onClick={() => onChangeTab("assistente")}
           className="flex flex-col items-center gap-1 text-slate-500 hover:text-slate-700 focus:outline-none"

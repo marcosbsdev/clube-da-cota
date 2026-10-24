@@ -77,12 +77,14 @@ export default function Home() {
   }
 
   const { currentUser, todosUsuarios, consorcio, todosConsorcios = [] } = data;
-  const isCriadorOuAdmin =
+  const canManage =
     currentUser.role === "SUPER_ADMIN" ||
     currentUser.role === "PRO_MASTER" ||
-    currentUser.role === "PRO" ||
     todosConsorcios.some((c: any) => c.criadorId === currentUser.id) ||
     (consorcio && consorcio.criadorId === currentUser.id);
+
+  // Todo usuário autenticado tem direito de criar consórcio (COMUM até 1 ativo, PRO até 3, PRO_MASTER e SUPER_ADMIN ilimitados)
+  const canCreate = Boolean(currentUser);
 
   return (
     <main className="min-h-screen bg-slate-100/70 flex flex-col relative pb-20 md:pb-10">
@@ -92,7 +94,8 @@ export default function Home() {
         userRole={currentUser.role}
         activeTab={activeTab}
         onChangeTab={setActiveTab}
-        canCreateOrManage={isCriadorOuAdmin}
+        canManage={canManage}
+        canCreate={canCreate}
         currentUserId={currentUser.id}
         todosUsuarios={todosUsuarios}
         onTrocarUsuario={(novoId) => {
@@ -113,7 +116,7 @@ export default function Home() {
             consorcioAtual={consorcio}
             todosConsorcios={todosConsorcios}
             onSelecionarConsorcio={handleSelecionarConsorcio}
-            onCriarNovoConsorcio={isCriadorOuAdmin ? () => setActiveTab("assistente") : undefined}
+            onCriarNovoConsorcio={canCreate ? () => setActiveTab("assistente") : undefined}
           />
         )}
 
@@ -121,18 +124,19 @@ export default function Home() {
           <ParticipanteView consorcio={consorcio} currentUser={currentUser} />
         )}
 
-        {activeTab === "criador" && isCriadorOuAdmin && (
+        {activeTab === "criador" && canManage && (
           <CriadorView
             consorcio={consorcio}
             currentUser={currentUser}
             todosConsorcios={todosConsorcios}
+            todosUsuarios={todosUsuarios}
             onSelecionarConsorcio={handleSelecionarConsorcio}
             onCriarNovoConsorcio={() => setActiveTab("assistente")}
             onAtualizarConsorcio={() => carregarDados(currentUser.id, consorcio.id, true)}
           />
         )}
 
-        {activeTab === "assistente" && isCriadorOuAdmin && (
+        {activeTab === "assistente" && canCreate && (
           <CriarConsorcioWizard
             currentUser={currentUser}
             onConcluido={() => {
@@ -152,6 +156,7 @@ export default function Home() {
             }}
             onLogout={handleLogout}
             onRoleAtualizado={() => carregarDados(selectedUserId, selectedConsorcioId)}
+            onCriarNovoConsorcio={canCreate ? () => setActiveTab("assistente") : undefined}
           />
         )}
       </div>
@@ -160,7 +165,8 @@ export default function Home() {
       <BottomNav
         activeTab={activeTab}
         onChangeTab={setActiveTab}
-        canCreateOrManage={isCriadorOuAdmin}
+        canManage={canManage}
+        canCreate={canCreate}
       />
     </main>
   );

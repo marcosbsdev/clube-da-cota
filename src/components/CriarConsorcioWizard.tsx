@@ -15,6 +15,7 @@ import {
   TipoChavePix,
   TIPOS_CHAVE_PIX,
   getTipoChavePixLabel,
+  formatarTelefone,
 } from "@/lib/finance";
 
 interface CriarConsorcioWizardProps {
@@ -42,10 +43,12 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
   // Form temporário de novo participante
   const [novoNome, setNovoNome] = useState("");
   const [novoEmail, setNovoEmail] = useState("");
+  const [novoTelefone, setNovoTelefone] = useState("");
   const [novasCotas, setNovasCotas] = useState(1);
   const [isCompartilhada, setIsCompartilhada] = useState(false);
   const [parceiroNome, setParceiroNome] = useState("");
   const [parceiroEmail, setParceiroEmail] = useState("");
+  const [parceiroTelefone, setParceiroTelefone] = useState("");
 
   // Etapa 3: Valores e Vencimento
   const [valorCota, setValorCota] = useState<number>(500);
@@ -147,10 +150,12 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
       {
         nome: novoNome.trim(),
         email: novoEmail.trim() || undefined,
+        telefone: novoTelefone.trim() || undefined,
         cotasCount: novasCotas,
         isCompartilhada,
         fraçãoNome: isCompartilhada ? parceiroNome.trim() : undefined,
         fraçãoEmail: isCompartilhada ? (parceiroEmail.trim() || undefined) : undefined,
+        fraçãoTelefone: isCompartilhada ? (parceiroTelefone.trim() || undefined) : undefined,
         valorFração1: isCompartilhada ? valorCota / 2 : undefined,
         valorFração2: isCompartilhada ? valorCota / 2 : undefined,
       },
@@ -159,10 +164,12 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
     // Limpa campos
     setNovoNome("");
     setNovoEmail("");
+    setNovoTelefone("");
     setNovasCotas(1);
     setIsCompartilhada(false);
     setParceiroNome("");
     setParceiroEmail("");
+    setParceiroTelefone("");
     setErroMsg("");
   };
 
@@ -508,7 +515,7 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
           <form onSubmit={handleAdicionarParticipante} className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-3xl space-y-3.5">
             <h4 className="text-xs sm:text-sm font-bold text-slate-800">Adicionar Novo Participante</h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <input
                   type="text"
@@ -527,10 +534,19 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
                   className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white"
                 />
               </div>
+              <div>
+                <input
+                  type="tel"
+                  placeholder="WhatsApp / Celular (opcional)"
+                  value={novoTelefone}
+                  onChange={(e) => setNovoTelefone(formatarTelefone(e.target.value))}
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white"
+                />
+              </div>
             </div>
 
             <p className="text-[11px] text-slate-500 italic mt-0.5">
-              💡 O e-mail é opcional (necessário apenas se o participante for acessar o sistema para acompanhar suas parcelas).
+              💡 O e-mail e o WhatsApp são opcionais para envio de lembretes e link de acesso à cota.
             </p>
 
             <div className="flex items-center gap-2">
@@ -561,7 +577,7 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
 
               {isCompartilhada && (
                 <div className="space-y-2 mt-3 pt-3 border-t border-slate-200">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <input
                       type="text"
                       placeholder="Nome do parceiro(a) *"
@@ -571,9 +587,16 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
                     />
                     <input
                       type="email"
-                      placeholder="E-mail do parceiro (opcional)"
+                      placeholder="E-mail (opcional)"
                       value={parceiroEmail}
                       onChange={(e) => setParceiroEmail(e.target.value)}
+                      className="p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white"
+                    />
+                    <input
+                      type="tel"
+                      placeholder="WhatsApp (opcional)"
+                      value={parceiroTelefone}
+                      onChange={(e) => setParceiroTelefone(formatarTelefone(e.target.value))}
                       className="p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white"
                     />
                   </div>

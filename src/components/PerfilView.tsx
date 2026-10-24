@@ -5,7 +5,7 @@ import { useTheme, ThemeName } from "./ThemeProvider";
 import { updateUserThemeAction, updateUserRoleAction, updateUserPixSettingsAction } from "@/app/actions";
 import { TipoChavePix, TIPOS_CHAVE_PIX, getTipoChavePixLabel } from "@/lib/finance";
 import { ToastModal, ToastData } from "@/components/ToastModal";
-import { Palette, Shield, User, Check, RefreshCw, LogOut, ShieldCheck, CheckCircle2, Zap, CreditCard, AlertCircle } from "lucide-react";
+import { Palette, Shield, User, Check, RefreshCw, LogOut, ShieldCheck, CheckCircle2, Zap, CreditCard, AlertCircle, PlusCircle } from "lucide-react";
 
 interface PerfilViewProps {
   currentUser: any;
@@ -13,6 +13,7 @@ interface PerfilViewProps {
   onTrocarUsuario: (id: string) => void;
   onLogout?: () => void;
   onRoleAtualizado?: () => void;
+  onCriarNovoConsorcio?: () => void;
 }
 
 export function PerfilView({
@@ -21,6 +22,7 @@ export function PerfilView({
   onTrocarUsuario,
   onLogout,
   onRoleAtualizado,
+  onCriarNovoConsorcio,
 }: PerfilViewProps) {
   const { theme, setTheme } = useTheme();
   const [salvando, setSalvando] = useState(false);
@@ -195,12 +197,24 @@ export function PerfilView({
           </div>
         </div>
 
-        <div className="mt-5 pt-4 border-t border-slate-100 text-xs sm:text-sm text-slate-600">
-          <p className="flex items-center gap-2 font-bold text-slate-800">
-            <Shield className="w-4 h-4 text-theme-text flex-shrink-0" />
-            <span>Permissões e Capacidades da Conta:</span>
-          </p>
-          <p className="text-slate-500 mt-1 text-xs sm:text-sm leading-relaxed">{roleInfo.desc}</p>
+        <div className="mt-5 pt-4 border-t border-slate-100 text-xs sm:text-sm text-slate-600 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="flex items-center gap-2 font-bold text-slate-800">
+              <Shield className="w-4 h-4 text-theme-text flex-shrink-0" />
+              <span>Permissões e Capacidades da Conta:</span>
+            </p>
+            <p className="text-slate-500 mt-1 text-xs sm:text-sm leading-relaxed">{roleInfo.desc}</p>
+          </div>
+          {onCriarNovoConsorcio && (
+            <button
+              type="button"
+              onClick={onCriarNovoConsorcio}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-theme-main hover:bg-theme-main/90 active:scale-95 text-white font-bold text-xs shadow-xs transition self-start sm:self-auto cursor-pointer flex-shrink-0"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Criar Consórcio</span>
+            </button>
+          )}
         </div>
       </div>
 

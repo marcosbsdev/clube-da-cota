@@ -54,7 +54,7 @@ O painel do gestor calcula e exibe em tempo real 4 métricas essenciais:
 ---
 
 ## 3. Suíte de Testes Automatizados
-O arquivo `tests/finance.test.mjs` valida 12 regras financeiras matemáticas:
+O arquivo `tests/finance.test.mjs` valida 13 regras financeiras matemáticas:
 1. Geração de datas de vencimento mensais.
 2. Validação de cotas compartilhadas (frações de 50%).
 3. Transição de status financeiro (`PENDENTE` -> `PAGO` / `EM_ATRASO`).
@@ -67,3 +67,18 @@ O arquivo `tests/finance.test.mjs` valida 12 regras financeiras matemáticas:
 10. Formatação de Mês/Ano e cálculo de lucro sobre a bolada.
 11. Cálculo de data e Mês/Ano para cada ciclo de contemplação.
 12. Cálculo de Bolada Bruta vs Líquida (Pix Direto vs Centralizado) e 4 tipos de Chave Pix.
+13. Formatação e sanitização de WhatsApp/Telefone e links `wa.me`.
+
+---
+
+## 4. Gestão de Participantes e Repasse de Cotas
+
+### Edição de Dados Cadastrais
+* O criador do consórcio (ou administrador Pro Master / Super Admin) pode atualizar os dados de contato de qualquer membro (Nome, E-mail, WhatsApp, Tipo de Chave Pix, Chave Pix e preferência de Pix Direto).
+* Os dados são validados (e-mail sem conflito com outros usuários) e o telefone é formatado no padrão brasileiro `(99) 99999-9999`.
+
+### Substituição de Participante (Repasse de Cota)
+* Caso um membro desista ou repasse sua cota para terceiros, o gestor pode transferir a titularidade para um **Novo Participante** ou **Participante Existente**.
+* **Segurança de Acesso:** O token passwordless anterior é imediatamente revogado e um novo token (`cp_...`) é emitido exclusivamente para o novo titular.
+* **Corte Contábil de Parcelas:** As contribuições históricas (`numeroCiclo < corte`) continuam registradas sob o participante original. Apenas as parcelas a partir do ciclo de corte (`numeroCiclo >= corte`) são atribuídas ao novo titular.
+* **Justificativa Obrigatória & Auditoria:** Exige justificativa com no mínimo 5 caracteres, registrando o evento na auditoria (`SUBSTITUICAO_PARTICIPANTE_COTA`). Se a cota já houver sido contemplada anteriormente, um alerta em destaque avisa o gestor.

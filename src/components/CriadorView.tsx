@@ -12,6 +12,8 @@ import {
   formatarMesAnoCiclo,
   formatarMoedaBRL,
   isModeloAcrescimo,
+  formatarTelefone,
+  gerarLinkWhatsApp,
 } from "@/lib/finance";
 import { ToastModal, ToastData } from "@/components/ToastModal";
 import {
@@ -21,6 +23,8 @@ import {
   updateConsorcioInfoAction,
   swapCotaPositionsAction,
   toggleCotaContempladaAction,
+  updateParticipantInfoAction,
+  substituteParticipantAction,
 } from "@/app/actions";
 import {
   CheckCircle2,
@@ -50,6 +54,9 @@ import {
   Sparkles,
   Calendar,
   Search,
+  UserCheck,
+  Phone,
+  RefreshCw,
 } from "lucide-react";
 
 function formatarDataHoraAuditoria(d: string | Date) {
@@ -108,6 +115,18 @@ function getAcaoAuditoriaMeta(tipoAcao: string) {
         label: "Comprovante Recusado",
         bg: "bg-rose-100 text-rose-900 border-rose-200/80",
         icon: X,
+      };
+    case "EDICAO_DADOS_PARTICIPANTE":
+      return {
+        label: "Participante Editado",
+        bg: "bg-sky-100 text-sky-900 border-sky-200/80",
+        icon: Edit3,
+      };
+    case "SUBSTITUICAO_PARTICIPANTE_COTA":
+      return {
+        label: "Repasse de Cota",
+        bg: "bg-purple-100 text-purple-900 border-purple-200/80",
+        icon: UserCheck,
       };
     case "CRIACAO_CONSORCIO":
       return {
@@ -227,6 +246,58 @@ function renderAuditoriaDetalhes(a: any, consorcio: any) {
         </div>
       );
     }
+  }
+
+  // Caso SUBSTITUICAO_PARTICIPANTE_COTA
+  if (a.tipoAcao === "SUBSTITUICAO_PARTICIPANTE_COTA" && parsedJson) {
+    const antigo = parsedJson.participanteAntigo?.name || "Titular anterior";
+    const novo = parsedJson.novoParticipante?.name || "Novo titular";
+    const cotaNum = parsedJson.cotaNumero || "?";
+    const cicloInicio = parsedJson.aPartirDoCiclo || 1;
+    return (
+      <div className="bg-white p-3 rounded-2xl border border-slate-200/80 space-y-2 shadow-2xs">
+        <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+          <span>Repasse da Cota #{cotaNum}</span>
+          <span className="text-[10px] bg-amber-100 text-amber-900 font-extrabold px-2 py-0.5 rounded-md">
+            A partir do Ciclo #{cicloInicio}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] text-slate-400 font-bold block uppercase">Titular Anterior</span>
+            <span className="font-bold text-slate-700 truncate block">{antigo}</span>
+          </div>
+          <span className="text-slate-400 font-bold">→</span>
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] text-emerald-600 font-bold block uppercase">Novo Titular</span>
+            <span className="font-black text-slate-900 truncate block">{novo}</span>
+          </div>
+        </div>
+        {parsedJson.acertoFinanceiroInfo && (
+          <p className="text-[11px] text-slate-500 italic bg-amber-50/60 p-2 rounded-lg border border-amber-100">
+            💬 Acerto: {parsedJson.acertoFinanceiroInfo}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // Caso EDICAO_DADOS_PARTICIPANTE
+  if (a.tipoAcao === "EDICAO_DADOS_PARTICIPANTE" && parsedJson) {
+    const nome = parsedJson.novoNome || parsedJson.nomeAnterior || "Participante";
+    return (
+      <div className="bg-white p-3 rounded-2xl border border-slate-200/80 space-y-1.5 shadow-2xs text-xs">
+        <div className="flex items-center justify-between font-bold text-slate-800">
+          <span>{nome}</span>
+          <span className="text-[10px] bg-sky-100 text-sky-800 font-bold px-2 py-0.5 rounded-md">
+            Dados Atualizados
+          </span>
+        </div>
+        <p className="text-[11px] text-slate-500">
+          Informações cadastrais e de recebimento Pix ajustadas pelo administrador.
+        </p>
+      </div>
+    );
   }
 
   // 2. Caso CONFIRMACAO_PAGAMENTO
@@ -383,6 +454,7 @@ interface CriadorViewProps {
   consorcio: any;
   currentUser: any;
   todosConsorcios?: any[];
+  todosUsuarios?: any[];
   onSelecionarConsorcio?: (id: string) => void;
   onCriarNovoConsorcio?: () => void;
   onAtualizarConsorcio?: () => void;
@@ -392,6 +464,7 @@ export function CriadorView({
   consorcio,
   currentUser,
   todosConsorcios = [],
+  todosUsuarios = [],
   onSelecionarConsorcio,
   onCriarNovoConsorcio,
   onAtualizarConsorcio,
@@ -474,6 +547,36 @@ export function CriadorView({
 
   // Filtro de visualização do sorteio/contemplação no painel
   const [filtroSorteioCriador, setFiltroSorteioCriador] = useState<"TODAS" | "AGUARDANDO" | "CONTEMPLADAS">("TODAS");
+
+  // Estado de Edição de Dados Cadastrais do Participante
+  const [modalEditarParticipanteAberto, setModalEditarParticipanteAberto] = useState(false);
+  const [participanteEditando, setParticipanteEditando] = useState<any>(null);
+  const [editPartNome, setEditPartNome] = useState("");
+  const [editPartEmail, setEditPartEmail] = useState("");
+  const [editPartTelefone, setEditPartTelefone] = useState("");
+  const [editPartTipoPix, setEditPartTipoPix] = useState<TipoChavePix>("CELULAR");
+  const [editPartChavePix, setEditPartChavePix] = useState("");
+  const [editPartReceberPixDireto, setEditPartReceberPixDireto] = useState(false);
+  const [salvandoPart, setSalvandoPart] = useState(false);
+  const [erroEditPart, setErroEditPart] = useState("");
+
+  // Estado de Substituição / Repasse de Cota
+  const [modalRepassarAberto, setModalRepassarAberto] = useState(false);
+  const [cotaRepassar, setCotaRepassar] = useState<any>(null);
+  const [participanteAntigoRepasse, setParticipanteAntigoRepasse] = useState<any>(null);
+  const [modoNovoParticipante, setModoNovoParticipante] = useState<"EXISTENTE" | "NOVO">("NOVO");
+  const [novoUsuarioIdRepasse, setNovoUsuarioIdRepasse] = useState("");
+  const [repassarNome, setRepassarNome] = useState("");
+  const [repassarEmail, setRepassarEmail] = useState("");
+  const [repassarTelefone, setRepassarTelefone] = useState("");
+  const [repassarTipoPix, setRepassarTipoPix] = useState<TipoChavePix>("CELULAR");
+  const [repassarChavePix, setRepassarChavePix] = useState("");
+  const [repassarReceberPixDireto, setRepassarReceberPixDireto] = useState(false);
+  const [repassarAPartirDoCiclo, setRepassarAPartirDoCiclo] = useState<number>(1);
+  const [repassarJustificativa, setRepassarJustificativa] = useState("");
+  const [repassarAcertoInfo, setRepassarAcertoInfo] = useState("");
+  const [salvandoRepasse, setSalvandoRepasse] = useState(false);
+  const [erroRepasse, setErroRepasse] = useState("");
 
   const handleCopiarLinkParticipante = (token: string, idx: number) => {
     if (!token) return;
@@ -965,6 +1068,150 @@ export function CriadorView({
     }
   };
 
+  // Handlers para Edição Cadastral do Participante
+  const handleAbrirEditarParticipante = (usuario: any) => {
+    setParticipanteEditando(usuario);
+    setEditPartNome(usuario.name || "");
+    const isProvisorio = usuario.email?.includes("@clubedacota.local");
+    setEditPartEmail(isProvisorio ? "" : (usuario.email || ""));
+    setEditPartTelefone(usuario.telefone ? formatarTelefone(usuario.telefone) : "");
+    setEditPartTipoPix((usuario.tipoChavePix as TipoChavePix) || "CELULAR");
+    setEditPartChavePix(usuario.chavePix || "");
+    setEditPartReceberPixDireto(Boolean(usuario.receberPixDireto));
+    setErroEditPart("");
+    setModalEditarParticipanteAberto(true);
+  };
+
+  const handleSalvarEditarParticipante = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!participanteEditando) return;
+    if (!editPartNome.trim()) {
+      setErroEditPart("O nome do participante é obrigatório.");
+      return;
+    }
+
+    setSalvandoPart(true);
+    setErroEditPart("");
+
+    const res = await updateParticipantInfoAction({
+      consorcioId: consorcio.id,
+      gestorUserId: currentUser.id,
+      targetUserId: participanteEditando.id,
+      nome: editPartNome.trim(),
+      email: editPartEmail.trim() || undefined,
+      telefone: editPartTelefone.trim() || undefined,
+      tipoChavePix: editPartTipoPix,
+      chavePix: editPartChavePix.trim() || undefined,
+      receberPixDireto: editPartReceberPixDireto,
+    });
+
+    setSalvandoPart(false);
+
+    if (res.success) {
+      setToast({
+        titulo: "Participante Atualizado!",
+        mensagem: res.message || "Dados cadastrais atualizados com sucesso.",
+        tipo: "success",
+      });
+      setModalEditarParticipanteAberto(false);
+      setParticipanteEditando(null);
+      if (onAtualizarConsorcio) {
+        onAtualizarConsorcio();
+      }
+    } else {
+      setErroEditPart(res.error || "Erro ao atualizar participante.");
+    }
+  };
+
+  // Handlers para Repasse / Substituição de Cota
+  const handleAbrirRepassarCota = (cota: any, participante: any) => {
+    setCotaRepassar(cota);
+    setParticipanteAntigoRepasse(participante);
+    setModoNovoParticipante("NOVO");
+    setNovoUsuarioIdRepasse("");
+    setRepassarNome("");
+    setRepassarEmail("");
+    setRepassarTelefone("");
+    setRepassarTipoPix("CELULAR");
+    setRepassarChavePix("");
+    setRepassarReceberPixDireto(false);
+    setRepassarJustificativa("");
+    setRepassarAcertoInfo("");
+    setErroRepasse("");
+
+    // Descobre o primeiro ciclo pendente para esta cota como sugestão
+    const contribsDestaCota = (consorcio.contribuicoes || []).filter(
+      (cb: any) => cb.cotaId === cota.id && cb.usuarioId === participante.id
+    );
+    const primeiraPendente = contribsDestaCota.find(
+      (cb: any) => cb.status === "PENDENTE" || cb.status === "EM_ATRASO"
+    );
+    const cicloSugerido = primeiraPendente ? primeiraPendente.numeroCiclo : 1;
+    setRepassarAPartirDoCiclo(cicloSugerido);
+
+    setModalRepassarAberto(true);
+  };
+
+  const handleSalvarRepasse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cotaRepassar || !participanteAntigoRepasse) return;
+
+    if (!repassarJustificativa.trim() || repassarJustificativa.trim().length < 5) {
+      setErroRepasse("Informe a justificativa da substituição (mínimo de 5 caracteres).");
+      return;
+    }
+
+    if (modoNovoParticipante === "EXISTENTE" && !novoUsuarioIdRepasse) {
+      setErroRepasse("Selecione o participante existente que assumirá a cota.");
+      return;
+    }
+
+    if (modoNovoParticipante === "NOVO" && !repassarNome.trim()) {
+      setErroRepasse("Informe o nome do novo participante.");
+      return;
+    }
+
+    setSalvandoRepasse(true);
+    setErroRepasse("");
+
+    const res = await substituteParticipantAction({
+      consorcioId: consorcio.id,
+      cotaId: cotaRepassar.id,
+      participanteAntigoId: participanteAntigoRepasse.id,
+      gestorUserId: currentUser.id,
+      modoNovoParticipante,
+      novoUsuarioId: modoNovoParticipante === "EXISTENTE" ? novoUsuarioIdRepasse : undefined,
+      nome: modoNovoParticipante === "NOVO" ? repassarNome.trim() : undefined,
+      email: modoNovoParticipante === "NOVO" ? (repassarEmail.trim() || undefined) : undefined,
+      telefone: modoNovoParticipante === "NOVO" ? (repassarTelefone.trim() || undefined) : undefined,
+      tipoChavePix: repassarTipoPix,
+      chavePix: repassarChavePix.trim() || undefined,
+      receberPixDireto: repassarReceberPixDireto,
+      aPartirDoCiclo: repassarAPartirDoCiclo,
+      justificativa: repassarJustificativa.trim(),
+      acertoFinanceiroInfo: repassarAcertoInfo.trim() || undefined,
+    });
+
+    setSalvandoRepasse(false);
+
+    if (res.success) {
+      setToast({
+        titulo: "Cota Repassada com Sucesso!",
+        mensagem: res.message || "A titularidade da cota foi transferida e o novo link exclusivo foi gerado.",
+        tipo: "success",
+      });
+      setModalRepassarAberto(false);
+      setCotaRepassar(null);
+      setParticipanteAntigoRepasse(null);
+
+      if (onAtualizarConsorcio) {
+        await onAtualizarConsorcio();
+      }
+    } else {
+      setErroRepasse(res.error || "Erro ao repassar cota.");
+    }
+  };
+
   const cotasOrdenadas = [...(consorcio?.cotas || [])].sort((a: any, b: any) => {
     const posA = a.ordemSorteio || a.numero;
     const posB = b.ordemSorteio || b.numero;
@@ -1359,6 +1606,12 @@ export function CriadorView({
                           <span className="text-[10px] sm:text-[11px] text-slate-600 font-semibold bg-white border border-slate-200 px-2 py-0.5 rounded-md shrink-0">
                             Cota #{cota.numero} • Ciclo #{pos}
                           </span>
+                          {participantePrincipal?.telefone && (
+                            <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0 font-medium" title="WhatsApp do participante">
+                              <Phone className="w-2.5 h-2.5 text-emerald-600" />
+                              <span>{participantePrincipal.telefone}</span>
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] sm:text-xs text-slate-600 font-medium mt-1 flex items-center gap-2 flex-wrap">
                           {isContemplada ? (
@@ -1402,7 +1655,27 @@ export function CriadorView({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 self-end sm:self-center flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => handleAbrirEditarParticipante(participantePrincipal)}
+                        className="text-xs font-bold px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                        title="Editar nome, e-mail, WhatsApp e chave Pix do participante"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-slate-500" />
+                        <span className="hidden md:inline">Editar</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleAbrirRepassarCota(cota, participantePrincipal)}
+                        className="text-xs font-bold px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl border border-slate-200 bg-white hover:bg-amber-50 hover:border-amber-200 text-slate-700 hover:text-amber-800 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                        title="Substituir participante / repassar cota em caso de desistência"
+                      >
+                        <UserCheck className="w-3.5 h-3.5 text-amber-600" />
+                        <span className="hidden md:inline">Repassar</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => {
@@ -2602,7 +2875,10 @@ export function CriadorView({
                 const cicloPos = cotaCompartilhar.ordemSorteio || cotaCompartilhar.numero;
                 const mesAnoPrevisao = formatarMesAnoCiclo(consorcio, cicloPos);
                 const mensagemWhatsapp = `Olá ${p.usuario.name}!\n\nAcompanhe sua cota #${cotaCompartilhar.numero} no consórcio *${consorcio.nome}* pelo seu link exclusivo:\n\n${linkUrl}\n\nLá você pode ver as parcelas, copiar o PIX e acompanhar o recebimento da sua bolada previsto para *${mesAnoPrevisao}*!`;
-                const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(mensagemWhatsapp)}`;
+                const whatsappUrl = gerarLinkWhatsApp({
+                  telefone: p.usuario.telefone,
+                  mensagem: mensagemWhatsapp,
+                });
                 const isCopiado = linkCopiadoIdx === idx;
 
                 return (
@@ -2615,6 +2891,14 @@ export function CriadorView({
                         <h4 className="text-sm font-black text-slate-900 truncate">
                           {p.usuario.name}
                         </h4>
+                        {p.usuario.telefone ? (
+                          <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5 font-medium">
+                            <Phone className="w-3 h-3 text-emerald-600" />
+                            <span>{p.usuario.telefone}</span>
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-slate-400 italic mt-0.5">Sem WhatsApp cadastrado</p>
+                        )}
                       </div>
                       <span className="text-[11px] font-bold bg-white px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700">
                         {p.percentual}% da cota
@@ -2684,6 +2968,398 @@ export function CriadorView({
                 Fechar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edição de Dados Cadastrais do Participante */}
+      {modalEditarParticipanteAberto && participanteEditando && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100] animate-in fade-in duration-150">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center text-xl flex-shrink-0">
+                  ✏️
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base sm:text-lg">
+                    Editar Dados do Participante
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Ajuste as informações cadastrais e de recebimento Pix
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalEditarParticipanteAberto(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {erroEditPart && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                <span>{erroEditPart}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSalvarEditarParticipante} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Nome Completo *
+                </label>
+                <input
+                  type="text"
+                  value={editPartNome}
+                  onChange={(e) => setEditPartNome(e.target.value)}
+                  required
+                  placeholder="Nome do participante"
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold focus:border-theme-main focus:outline-none bg-slate-50/50"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    E-mail
+                  </label>
+                  <input
+                    type="email"
+                    value={editPartEmail}
+                    onChange={(e) => setEditPartEmail(e.target.value)}
+                    placeholder="email@exemplo.com"
+                    className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-medium focus:border-theme-main focus:outline-none bg-slate-50/50"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                    Opcional para acompanhamento
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    WhatsApp / Celular
+                  </label>
+                  <input
+                    type="tel"
+                    value={editPartTelefone}
+                    onChange={(e) => setEditPartTelefone(formatarTelefone(e.target.value))}
+                    placeholder="(00) 00000-0000"
+                    className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-medium focus:border-theme-main focus:outline-none bg-slate-50/50"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                    Para envio de link direto
+                  </span>
+                </div>
+              </div>
+
+              {/* Seção Pix Pessoal */}
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    Dados de Recebimento Pix do Participante
+                  </span>
+                  <span className="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-md">
+                    Opcional
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                      Tipo de Chave
+                    </label>
+                    <select
+                      value={editPartTipoPix}
+                      onChange={(e) => setEditPartTipoPix(e.target.value as TipoChavePix)}
+                      className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-semibold focus:border-theme-main focus:outline-none bg-white"
+                    >
+                      {TIPOS_CHAVE_PIX.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                      Chave Pix
+                    </label>
+                    <input
+                      type="text"
+                      value={editPartChavePix}
+                      onChange={(e) => setEditPartChavePix(e.target.value)}
+                      placeholder={TIPOS_CHAVE_PIX.find((t) => t.value === editPartTipoPix)?.placeholder}
+                      className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-mono focus:border-theme-main focus:outline-none bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Opção Pix Direto na Conta */}
+                <label className="flex items-start gap-2.5 pt-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editPartReceberPixDireto}
+                    onChange={(e) => setEditPartReceberPixDireto(e.target.checked)}
+                    className="mt-0.5 rounded text-theme-main focus:ring-0 w-4 h-4 cursor-pointer"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-800 block">
+                      Receber Pix diretamente na conta quando for contemplado
+                    </span>
+                    <span className="text-[11px] text-slate-500 block leading-tight mt-0.5">
+                      Na contemplação, os membros transferem para esta chave e a cota do mês fica retida no bolso (bolada líquida).
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-500 leading-relaxed">
+                ℹ️ Esta alteração será registrada na <strong>trilha de auditoria</strong> com data, hora e responsável.
+              </div>
+
+              <div className="flex gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setModalEditarParticipanteAberto(false)}
+                  disabled={salvandoPart}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={salvandoPart || !editPartNome.trim()}
+                  className="flex-1 py-3 bg-theme-main hover:opacity-90 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{salvandoPart ? "Salvando..." : "Salvar Alterações"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Repasse / Substituição de Cota */}
+      {modalRepassarAberto && cotaRepassar && participanteAntigoRepasse && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100] animate-in fade-in duration-150">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl flex-shrink-0">
+                  🔄
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base sm:text-lg">
+                    Repasse / Substituição de Cota
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Cota #{cotaRepassar.numero} • Titular Atual: <strong>{participanteAntigoRepasse.name}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalRepassarAberto(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Alerta de Cota Contemplada se aplicável */}
+            {cotaRepassar.status === "CONTEMPLADA" && (
+              <div className="p-3.5 bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl text-xs space-y-1">
+                <div className="flex items-center gap-1.5 font-black text-amber-800">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Atenção: Cota Já Contemplada!</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-amber-900/90">
+                  Esta cota já foi contemplada no Ciclo #{cotaRepassar.ordemSorteio || cotaRepassar.numero}. O novo participante assumirá a titularidade da cota já recebida e será responsável pelas parcelas restantes até o término do grupo.
+                </p>
+              </div>
+            )}
+
+            {erroRepasse && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                <span>{erroRepasse}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSalvarRepasse} className="space-y-4">
+              {/* Seleção do Tipo de Novo Titular */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-2">
+                  Quem assumirá esta cota?
+                </label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl">
+                  <button
+                    type="button"
+                    onClick={() => setModoNovoParticipante("NOVO")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      modoNovoParticipante === "NOVO"
+                        ? "bg-white text-slate-900 shadow-2xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <span>Novo Membro</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModoNovoParticipante("EXISTENTE")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      modoNovoParticipante === "EXISTENTE"
+                        ? "bg-white text-slate-900 shadow-2xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <span>Membro Já Existente</span>
+                  </button>
+                </div>
+              </div>
+
+              {modoNovoParticipante === "EXISTENTE" ? (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Selecione o Participante Existente *
+                  </label>
+                  <select
+                    value={novoUsuarioIdRepasse}
+                    onChange={(e) => setNovoUsuarioIdRepasse(e.target.value)}
+                    required
+                    className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold focus:border-theme-main focus:outline-none bg-slate-50/50"
+                  >
+                    <option value="">Selecione quem vai assumir...</option>
+                    {todosUsuarios
+                      .filter((u: any) => u.id !== participanteAntigoRepasse.id)
+                      .map((u: any) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} {u.telefone ? `(${u.telefone})` : ""}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
+                  <span className="text-xs font-bold text-slate-800 block">
+                    Dados do Novo Participante
+                  </span>
+                  <div>
+                    <input
+                      type="text"
+                      value={repassarNome}
+                      onChange={(e) => setRepassarNome(e.target.value)}
+                      required={modoNovoParticipante === "NOVO"}
+                      placeholder="Nome completo do novo titular *"
+                      className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold focus:border-theme-main focus:outline-none bg-white"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input
+                      type="email"
+                      value={repassarEmail}
+                      onChange={(e) => setRepassarEmail(e.target.value)}
+                      placeholder="E-mail (opcional)"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:border-theme-main focus:outline-none bg-white"
+                    />
+                    <input
+                      type="tel"
+                      value={repassarTelefone}
+                      onChange={(e) => setRepassarTelefone(formatarTelefone(e.target.value))}
+                      placeholder="WhatsApp (opcional)"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:border-theme-main focus:outline-none bg-white"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Ciclo de Início da Nova Titularidade */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  A partir de qual Ciclo o novo titular assume as parcelas? *
+                </label>
+                <select
+                  value={repassarAPartirDoCiclo}
+                  onChange={(e) => setRepassarAPartirDoCiclo(Number(e.target.value))}
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold focus:border-theme-main focus:outline-none bg-slate-50/50"
+                >
+                  {Array.from({ length: consorcio.totalCotas }, (_, i) => i + 1).map((numCiclo) => {
+                    const contribCiclo = (consorcio.contribuicoes || []).find(
+                      (cb: any) => cb.cotaId === cotaRepassar.id && cb.numeroCiclo === numCiclo
+                    );
+                    const statusStr = contribCiclo?.status === "PAGO" ? "Já pago pelo titular anterior" : "Pendente";
+                    return (
+                      <option key={numCiclo} value={numCiclo}>
+                        Ciclo #{numCiclo} ({formatarMesAnoCiclo(consorcio, numCiclo)}) — {statusStr}
+                      </option>
+                    );
+                  })}
+                </select>
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  As parcelas pagas anteriores permanecem vinculadas ao titular histórico.
+                </span>
+              </div>
+
+              {/* Acerto Financeiro / Observação */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Acerto Financeiro Prévio (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={repassarAcertoInfo}
+                  onChange={(e) => setRepassarAcertoInfo(e.target.value)}
+                  placeholder="Ex: Novo membro pagou as parcelas anteriores diretamente ao antigo titular"
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-medium focus:border-theme-main focus:outline-none bg-slate-50/50"
+                />
+              </div>
+
+              {/* Justificativa Obrigatória */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Motivo / Justificativa da Substituição *
+                </label>
+                <textarea
+                  value={repassarJustificativa}
+                  onChange={(e) => setRepassarJustificativa(e.target.value)}
+                  required
+                  rows={2}
+                  placeholder="Ex: Desistência voluntária do titular por motivos pessoais; repasse acordado entre as partes."
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-medium focus:border-theme-main focus:outline-none bg-slate-50/50"
+                />
+              </div>
+
+              {/* Aviso de Segurança de Link */}
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl text-[11px] text-blue-900 leading-relaxed">
+                🔒 <strong>Segurança do Link:</strong> O link de acesso sem senha do participante anterior será <strong>invalidado imediatamente</strong>. Um novo link exclusivo será gerado para que você possa compartilhar com o novo titular.
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="flex gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setModalRepassarAberto(false)}
+                  disabled={salvandoRepasse}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={salvandoRepasse || !repassarJustificativa.trim()}
+                  className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <UserCheck className="w-4 h-4" />
+                  <span>{salvandoRepasse ? "Efetivando Repasse..." : "Confirmar Repasse"}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

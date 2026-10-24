@@ -22,6 +22,8 @@ Toda ação relevante gera uma entrada na tabela `AuditoriaLog`:
 * `CONTEMPLACAO_MARCADA` / `DESMARCADA`: Mudança de status da cota contemplada.
 * `TROCA_POSICOES`: Permutação de ordem de contemplação entre dois participantes (com motivo obrigatório).
 * `EDICAO_CONSORCIO`: Alterações cadastrais nas regras ou dados do grupo.
+* `EDICAO_DADOS_PARTICIPANTE`: Atualização de dados cadastrais (Nome, WhatsApp, Pix) de um cotista com snapshot antes/depois.
+* `SUBSTITUICAO_PARTICIPANTE_COTA`: Repasse de titularidade de cota com novo token de acesso, reatribuição de parcelas a partir do ciclo informado e justificativa obrigatória.
 
 ---
 

@@ -476,3 +476,49 @@ export function calcularBoladaCiclo({
   };
 }
 
+/**
+ * Remove caracteres não numéricos de um telefone
+ */
+export function sanitizarTelefone(valor?: string | null): string {
+  if (!valor) return "";
+  return valor.replace(/\D/g, "");
+}
+
+/**
+ * Aplica máscara brasileira padrão a um número de telefone/celular:
+ * Ex: (11) 98765-4321 ou (11) 8765-4321
+ */
+export function formatarTelefone(valor?: string | null): string {
+  const digits = sanitizarTelefone(valor);
+  if (!digits) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+}
+
+/**
+ * Gera URL oficial de envio direto via WhatsApp Web / App.
+ * Se houver telefone informado, adiciona o DDI Brasil (55) caso necessário.
+ */
+export function gerarLinkWhatsApp({
+  telefone,
+  mensagem,
+}: {
+  telefone?: string | null;
+  mensagem: string;
+}): string {
+  const digits = sanitizarTelefone(telefone);
+  const textoCodificado = encodeURIComponent(mensagem);
+
+  if (digits.length >= 10) {
+    const ddi = digits.startsWith("55") ? digits : `55${digits}`;
+    return `https://wa.me/${ddi}?text=${textoCodificado}`;
+  }
+
+  return `https://wa.me/?text=${textoCodificado}`;
+}
+
+

@@ -17,6 +17,9 @@ import {
   TIPOS_CHAVE_PIX,
   getTipoChavePixLabel,
   calcularBoladaCiclo,
+  formatarTelefone,
+  sanitizarTelefone,
+  gerarLinkWhatsApp,
 } from "../src/lib/finance.ts";
 
 console.log("🧪 Executando testes das regras financeiras do Clube da Cota...\n");
@@ -325,4 +328,23 @@ console.log("🧪 Executando testes das regras financeiras do Clube da Cota...\n
   console.log("✅ Teste 12: Cálculo de Bolada Bruta vs Líquida e tipos de Chave Pix aprovados.");
 }
 
-console.log("\n🎉 Todos os 12 testes de regras financeiras passaram com 100% de sucesso!");
+// Teste 13: Formatação de Telefone/WhatsApp e geração de link wa.me
+{
+  assert.strictEqual(sanitizarTelefone("(11) 98765-4321"), "11987654321");
+  assert.strictEqual(sanitizarTelefone("+55 11 98765-4321"), "5511987654321");
+
+  assert.strictEqual(formatarTelefone("11987654321"), "(11) 98765-4321");
+  assert.strictEqual(formatarTelefone("1133334444"), "(11) 3333-4444");
+  assert.strictEqual(formatarTelefone(""), "");
+
+  const link = gerarLinkWhatsApp({
+    telefone: "(11) 98765-4321",
+    mensagem: "Olá, segue o seu link de acesso!",
+  });
+  assert.ok(link.startsWith("https://wa.me/5511987654321?text="));
+  assert.ok(link.includes("Ol%C3%A1%2C%20segue%20o%20seu%20link%20de%20acesso!"));
+
+  console.log("✅ Teste 13: Formatação e sanitização de Telefone/WhatsApp e link direto aprovados.");
+}
+
+console.log("\n🎉 Todos os 13 testes de regras financeiras passaram com 100% de sucesso!");

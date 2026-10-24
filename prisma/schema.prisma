@@ -11,6 +11,7 @@ model User {
   id              String    @id @default(uuid())
   name            String
   email           String    @unique
+  telefone        String?   // WhatsApp / Celular (ex: "(11) 98765-4321")
   passwordHash    String?
   role            String    @default("COMUM") // "COMUM", "PRO", "PRO_MASTER", "SUPER_ADMIN"
   preferredTheme  String    @default("blue")  // "blue", "dark", "purple", "ocean", "coral"
