@@ -147,6 +147,28 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
       {/* Toast Modal Flutuante com auto-dismiss */}
       <ToastModal toast={toast} onClose={() => setToast(null)} />
 
+      {/* Banner de Consórcio Encerrado para o Participante */}
+      {consorcio?.status === "ENCERRADO" && (
+        <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 border border-slate-800 shadow-md flex items-center gap-3.5 animate-in fade-in">
+          <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center flex-shrink-0 text-xl font-bold">
+            🔒
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="font-bold text-xs sm:text-sm text-white">
+                Consórcio Encerrado (Modo Consulta)
+              </h4>
+              <span className="text-[10px] font-bold bg-amber-400 text-slate-950 px-2 py-0.2 rounded-full uppercase">
+                Arquivado
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+              Este consórcio foi finalizado pelo organizador. Todo o histórico de cotas, contemplações e pagamentos permanece disponível para sua consulta.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Grid Responsivo: Esquerda (Meu Status & Pagamentos) e Direita (Parcelas & Acompanhamento) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Coluna Esquerda: Visão Geral, Próximo Vencimento & Chave Pix */}
@@ -236,16 +258,22 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                 </div>
               </div>
 
-              <button
-                onClick={() => {
-                  setContribuicaoSelecionada(proximaContribuicao);
-                  setModalUploadAberto(true);
-                }}
-                className="w-full mt-4 py-3.5 px-4 bg-theme-main hover:opacity-95 active:scale-[0.99] text-white font-bold rounded-2xl text-sm shadow-md flex items-center justify-center gap-2 transition touch-target cursor-pointer"
-              >
-                <Upload className="w-5 h-5" />
-                <span>Enviar Comprovante PIX</span>
-              </button>
+              {consorcio?.status !== "ENCERRADO" ? (
+                <button
+                  onClick={() => {
+                    setContribuicaoSelecionada(proximaContribuicao);
+                    setModalUploadAberto(true);
+                  }}
+                  className="w-full mt-4 py-3.5 px-4 bg-theme-main hover:opacity-95 active:scale-[0.99] text-white font-bold rounded-2xl text-sm shadow-md flex items-center justify-center gap-2 transition touch-target cursor-pointer"
+                >
+                  <Upload className="w-5 h-5" />
+                  <span>Enviar Comprovante PIX</span>
+                </button>
+              ) : (
+                <div className="mt-4 p-3 rounded-2xl bg-slate-200/80 text-slate-700 text-xs text-center font-bold">
+                  Consórcio encerrado (novos pagamentos bloqueados)
+                </div>
+              )}
             </div>
           )}
 

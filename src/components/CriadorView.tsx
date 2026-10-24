@@ -13,6 +13,7 @@ import {
   formatarMoedaBRL,
   isModeloAcrescimo,
   formatarTelefone,
+  analisarCicloConsorcio,
   gerarLinkWhatsApp,
 } from "@/lib/finance";
 import { ToastModal, ToastData } from "@/components/ToastModal";
@@ -25,6 +26,9 @@ import {
   toggleCotaContempladaAction,
   updateParticipantInfoAction,
   substituteParticipantAction,
+  encerrarConsorcioAction,
+  reativarConsorcioAction,
+  excluirConsorcioAction,
 } from "@/app/actions";
 import {
   CheckCircle2,
@@ -56,6 +60,10 @@ import {
   Search,
   UserCheck,
   Phone,
+  Archive,
+  PlayCircle,
+  Trash2,
+  AlertOctagon,
   RefreshCw,
 } from "lucide-react";
 
@@ -531,6 +539,124 @@ export function CriadorView({
   const [editChavePix, setEditChavePix] = useState(consorcio?.chavePix || "");
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
   const [erroEdicao, setErroEdicao] = useState("");
+
+  // Estados de Encerramento e Exclusão do Consórcio (Ciclo de Vida)
+  const [modalEncerrarAberto, setModalEncerrarAberto] = useState(false);
+  const [motivoEncerramento, setMotivoEncerramento] = useState("");
+  const [processandoEncerramento, setProcessandoEncerramento] = useState(false);
+
+  const [modalExcluirAberto, setModalExcluirAberto] = useState(false);
+  const [confirmacaoNomeExcluir, setConfirmacaoNomeExcluir] = useState("");
+  const [processandoExclusao, setProcessandoExclusao] = useState(false);
+
+  const isEncerrado = consorcio?.status === "ENCERRADO";
+  const statusCiclo = analisarCicloConsorcio(consorcio || {});
+  const [avisoCicloOcultado, setAvisoCicloOcultado] = useState(false);
+  const exibirAvisoCicloConcluido =
+    !isEncerrado && statusCiclo.isCicloConcluido && !avisoCicloOcultado;
+
+  const totalPagosConsorcio = (consorcio?.contribuicoes || []).filter(
+    (c: any) => c.status === "PAGO"
+  ).length;
+
+  const handleEncerrarConsorcio = async () => {
+    try {
+      setProcessandoEncerramento(true);
+      const res = await encerrarConsorcioAction({
+        consorcioId: consorcio.id,
+        usuarioId: currentUser.id,
+        motivo: motivoEncerramento.trim() || undefined,
+      });
+      if (res.success) {
+        setToast({
+          titulo: "Consórcio Encerrado",
+          mensagem: res.message || "O consórcio foi finalizado com sucesso.",
+          tipo: "success",
+        });
+        setModalEncerrarAberto(false);
+        setModalEditarAberto(false);
+        if (onAtualizarConsorcio) onAtualizarConsorcio();
+      } else {
+        setToast({
+          titulo: "Erro ao Encerrar",
+          mensagem: res.error || "Não foi possível encerrar o consórcio.",
+          tipo: "error",
+        });
+      }
+    } catch (e: any) {
+      setToast({
+        titulo: "Erro de Conexão",
+        mensagem: e.message || "Falha ao encerrar consórcio.",
+        tipo: "error",
+      });
+    } finally {
+      setProcessandoEncerramento(false);
+    }
+  };
+
+  const handleReativarConsorcio = async () => {
+    try {
+      const res = await reativarConsorcioAction({
+        consorcioId: consorcio.id,
+        usuarioId: currentUser.id,
+      });
+      if (res.success) {
+        setToast({
+          titulo: "Consórcio Reativado!",
+          mensagem: res.message || "O consórcio está ativo novamente.",
+          tipo: "success",
+        });
+        if (onAtualizarConsorcio) onAtualizarConsorcio();
+      } else {
+        setToast({
+          titulo: "Não foi possível reativar",
+          mensagem: res.error || "Erro ao reativar consórcio.",
+          tipo: "error",
+        });
+      }
+    } catch (e: any) {
+      setToast({
+        titulo: "Erro de Conexão",
+        mensagem: e.message || "Falha ao reativar consórcio.",
+        tipo: "error",
+      });
+    }
+  };
+
+  const handleExcluirConsorcio = async () => {
+    try {
+      setProcessandoExclusao(true);
+      const res = await excluirConsorcioAction({
+        consorcioId: consorcio.id,
+        usuarioId: currentUser.id,
+        confirmacaoNome: confirmacaoNomeExcluir,
+      });
+      if (res.success) {
+        setToast({
+          titulo: "Consórcio Excluído",
+          mensagem: res.message || "O consórcio foi excluído definitivamente.",
+          tipo: "success",
+        });
+        setModalExcluirAberto(false);
+        setModalEditarAberto(false);
+        if (onAtualizarConsorcio) onAtualizarConsorcio();
+      } else {
+        setToast({
+          titulo: "Erro ao Excluir",
+          mensagem: res.error || "Não foi possível excluir o consórcio.",
+          tipo: "error",
+        });
+      }
+    } catch (e: any) {
+      setToast({
+        titulo: "Erro de Conexão",
+        mensagem: e.message || "Falha ao excluir consórcio.",
+        tipo: "error",
+      });
+    } finally {
+      setProcessandoExclusao(false);
+    }
+  };
 
   // Estado da Troca de Posição de Cotas
   const [modalTrocaAberto, setModalTrocaAberto] = useState(false);
@@ -1272,9 +1398,20 @@ export function CriadorView({
       {/* Barra de Ações Rápidas do Gestor */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/80 backdrop-blur-xs p-4 rounded-3xl border border-slate-200/80 shadow-2xs">
         <div>
-          <h2 className="text-base font-black text-slate-900">
-            Painel de Gestão & Indicadores
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-black text-slate-900">
+              Painel de Gestão & Indicadores
+            </h2>
+            {isEncerrado ? (
+              <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-800 border border-slate-300">
+                Encerrado
+              </span>
+            ) : (
+              <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                Ativo
+              </span>
+            )}
+          </div>
           <p className="text-xs text-slate-500">
             Controle financeiro, arrecadação e conferência de comprovantes
           </p>
@@ -1318,6 +1455,98 @@ export function CriadorView({
           )}
         </div>
       </div>
+
+      {/* Banner de Consórcio Encerrado (Somente Leitura) */}
+      {isEncerrado && (
+        <div className="bg-slate-900 text-white rounded-3xl p-5 sm:p-6 border border-slate-800 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-xl flex-shrink-0">
+              <Lock className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-black text-sm sm:text-base text-white">
+                  Consórcio Encerrado (Modo Somente Leitura)
+                </h3>
+                <span className="text-[10px] font-bold bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full uppercase">
+                  Arquivado
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-1 max-w-xl leading-relaxed">
+                Todas as cotas, comprovantes e histórico financeiro estão preservados para consulta permanente dos cotistas. Novas alterações e pagamentos estão bloqueados.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleReativarConsorcio}
+            className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs transition cursor-pointer flex items-center gap-2 flex-shrink-0 shadow-xs"
+          >
+            <PlayCircle className="w-4 h-4" />
+            <span>Reativar Consórcio</span>
+          </button>
+        </div>
+      )}
+
+      {/* Alerta de Ciclo Programado Finalizado (Gerenciamento de Encerramento e Liberação de Vaga) */}
+      {exibirAvisoCicloConcluido && (
+        <div className="bg-gradient-to-r from-amber-950 via-slate-900 to-slate-900 text-white rounded-3xl p-5 sm:p-6 border border-amber-500/40 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in fade-in">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center justify-center text-xl flex-shrink-0 shadow-inner">
+              <Sparkles className="w-6 h-6 text-amber-400" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-black text-sm sm:text-base text-white">
+                  {statusCiclo.is100PorcentoQuitado
+                    ? "🎉 Ciclo Concluído & 100% Quitado!"
+                    : "⚠️ Ciclo Programado Vencido"}
+                </h3>
+                <span className="text-[10px] font-black bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  {statusCiclo.diasDecorridos === 0
+                    ? "Venceu Hoje"
+                    : `Venceu há ${statusCiclo.diasDecorridos} dia${statusCiclo.diasDecorridos > 1 ? "s" : ""}`}
+                </span>
+                <span className="text-[10px] font-bold bg-white/10 text-amber-200 px-2.5 py-0.5 rounded-full border border-white/10">
+                  Último vencimento: {statusCiclo.dataUltimoVencimentoFormatada}
+                </span>
+              </div>
+              <p className="text-xs text-amber-100/90 mt-1.5 max-w-2xl leading-relaxed">
+                {statusCiclo.is100PorcentoQuitado ? (
+                  <>
+                    Todos os pagamentos programados foram confirmados! Se todas as boladas foram entregues, você já pode <strong className="text-white font-bold">encerrar este consórcio</strong> para arquivar o histórico e <strong className="text-amber-300 font-bold">liberar sua vaga de consórcio ativo</strong> para abrir novos grupos no seu plano.
+                  </>
+                ) : (
+                  <>
+                    A data do último vencimento programado já passou, mas ainda constam <strong className="text-amber-300 font-bold">{statusCiclo.totalPendentes} parcela(s) pendente(s)</strong>. Você pode <strong className="text-white font-bold">manter ativo</strong> para receber os valores em atraso ou <strong className="text-white font-bold">encerrar</strong> se a prestação de contas com o grupo já estiver concluída.
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setModalEncerrarAberto(true)}
+              className="flex-1 md:flex-initial px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+            >
+              <Archive className="w-4 h-4" />
+              <span>Encerrar e Liberar Vaga</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAvisoCicloOcultado(true)}
+              className="flex-1 md:flex-initial px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 border border-white/20"
+            >
+              <Clock className="w-3.5 h-3.5 text-amber-300" />
+              <span>Manter Ativo por enquanto</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Sub-Abas de Gestão: Operacional vs Trilha de Auditoria (Exclusivo Pro Master e Super Admin) */}
       {isPrivilegiadoAuditoria && (
@@ -2643,7 +2872,7 @@ export function CriadorView({
                 />
               </div>
 
-              {/* Caixa Informativa de Proteção Financeira (Imutabilidade após início) */}
+              /* Caixa Informativa de Proteção Financeira (Imutabilidade após início) */}
               <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-2">
                 <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
                   <Lock className="w-4 h-4 text-amber-700 flex-shrink-0" />
@@ -2652,6 +2881,69 @@ export function CriadorView({
                 <p className="text-[11px] text-amber-800 leading-relaxed">
                   Para garantir a segurança dos participantes e a validade das parcelas geradas, o <strong>valor da cota (R$ {consorcio.valorCota.toFixed(2)})</strong>, a <strong>quantidade de cotas ({consorcio.totalCotas})</strong> e a <strong>frequência ({consorcio.frequencia?.toLowerCase()})</strong> não podem ser alterados após o início do consórcio.
                 </p>
+              </div>
+
+              {/* Ciclo de Vida do Consórcio: Encerramento ou Exclusão */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900">
+                      Ciclo de Vida do Consórcio
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Encerre este grupo após a conclusão dos sorteios ou exclua rascunhos de teste.
+                    </p>
+                  </div>
+                  <span
+                    className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                      isEncerrado
+                        ? "bg-slate-200 text-slate-800"
+                        : "bg-emerald-100 text-emerald-800"
+                    }`}
+                  >
+                    {isEncerrado ? "Encerrado" : "Ativo"}
+                  </span>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                  {!isEncerrado ? (
+                    <button
+                      type="button"
+                      onClick={() => setModalEncerrarAberto(true)}
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold transition cursor-pointer"
+                    >
+                      <Archive className="w-3.5 h-3.5" />
+                      <span>Encerrar Consórcio (Arquivar)</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleReativarConsorcio}
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-bold transition cursor-pointer"
+                    >
+                      <PlayCircle className="w-3.5 h-3.5" />
+                      <span>Reativar Consórcio</span>
+                    </button>
+                  )}
+
+                  {totalPagosConsorcio === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConfirmacaoNomeExcluir("");
+                        setModalExcluirAberto(true);
+                      }}
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Excluir Consórcio de Teste</span>
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-slate-400 italic">
+                      Possui pagamentos confirmados (não pode ser excluído)
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Botões de Ação */}
@@ -3360,6 +3652,119 @@ export function CriadorView({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Encerramento de Consórcio */}
+      {modalEncerrarAberto && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[110] animate-in fade-in">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-slate-200 shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center gap-2.5 text-amber-800">
+              <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center">
+                <Archive className="w-5 h-5 text-amber-700" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Encerrar Consórcio?</h3>
+                <p className="text-xs text-slate-500">{consorcio.nome}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Ao encerrar, este consórcio passará para o modo <strong>Somente Leitura</strong>. Os participantes ainda poderão consultar todo o histórico financeiro, comprovantes e cotas, mas novas movimentações e pagamentos serão bloqueados.
+            </p>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                Motivo do Encerramento (opcional):
+              </label>
+              <input
+                type="text"
+                value={motivoEncerramento}
+                onChange={(e) => setMotivoEncerramento(e.target.value)}
+                placeholder="Ex: Todas as cotas contempladas e quitadas / Grupo finalizado"
+                className="w-full p-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setModalEncerrarAberto(false)}
+                disabled={processandoEncerramento}
+                className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 cursor-pointer"
+              >
+                Voltar
+              </button>
+              <button
+                type="button"
+                onClick={handleEncerrarConsorcio}
+                disabled={processandoEncerramento}
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition cursor-pointer shadow-xs"
+              >
+                {processandoEncerramento ? "Encerrando..." : "Confirmar Encerramento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Exclusão de Consórcio de Teste */}
+      {modalExcluirAberto && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[110] animate-in fade-in">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-rose-200 shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center gap-2.5 text-rose-700">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Excluir Consórcio de Teste?</h3>
+                <p className="text-xs text-rose-600 font-bold">Ação Permanente e Irreversível</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Como este grupo <strong>não possui nenhum pagamento confirmado</strong>, ele pode ser excluído com segurança. Todas as cotas e participantes vazios serão apagados.
+            </p>
+
+            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-800">
+              💡 <strong>Plano Comum:</strong> Ao excluir este consórcio de teste, a sua vaga de 1 consórcio ativo será liberada imediatamente para criar um novo grupo!
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                Digite exatamente <strong>{consorcio.nome}</strong> para confirmar:
+              </label>
+              <input
+                type="text"
+                value={confirmacaoNomeExcluir}
+                onChange={(e) => setConfirmacaoNomeExcluir(e.target.value)}
+                placeholder={consorcio.nome}
+                className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:border-rose-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setModalExcluirAberto(false)}
+                disabled={processandoExclusao}
+                className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleExcluirConsorcio}
+                disabled={
+                  processandoExclusao ||
+                  confirmacaoNomeExcluir.trim().toLowerCase() !== consorcio.nome.trim().toLowerCase()
+                }
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+              >
+                {processandoExclusao ? "Excluindo..." : "Confirmar Exclusão"}
+              </button>
+            </div>
           </div>
         </div>
       )}

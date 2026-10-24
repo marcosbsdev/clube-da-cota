@@ -34,7 +34,7 @@ export const PLANOS_INFO: Record<"COMUM" | "PRO" | "PRO_MASTER", PlanoDetalhes> 
     temAuditoria: false,
     beneficios: [
       "Participa de consórcios como membro",
-      "Pode criar até 1 consórcio ativo",
+      "Pode criar até 1 consórcio ativo simultâneo",
       "Até 10 participantes no grupo",
       "Acesso por Magic Link passwordless",
     ],
@@ -108,7 +108,7 @@ export function getVigenciaPlano(user: {
       alertaRenovacao: false,
       badgeTexto: "Gratuito",
       badgeClasse: "bg-slate-100 text-slate-700 border-slate-200",
-      label: "Plano Gratuito (1 consórcio ativo)",
+      label: "Plano Gratuito (1 consórcio ativo simultâneo)",
     };
   }
 

@@ -521,4 +521,118 @@ export function gerarLinkWhatsApp({
   return `https://wa.me/?text=${textoCodificado}`;
 }
 
+/**
+ * Estrutura com os indicadores de ciclo e encerramento de um consórcio
+ */
+export interface StatusCicloConsorcio {
+  isCicloConcluido: boolean;
+  dataUltimoVencimento: Date | null;
+  dataUltimoVencimentoFormatada: string;
+  diasDecorridos: number;
+  totalContribuicoes: number;
+  totalPagas: number;
+  totalPendentes: number;
+  is100PorcentoQuitado: boolean;
+  porcentagemQuitado: number;
+}
+
+/**
+ * Analisa se um consórcio atingiu o fim do seu cronograma de vencimentos
+ * e calcula o status de quitação das mensalidades.
+ */
+export function analisarCicloConsorcio(consorcio: {
+  status?: string | null;
+  totalCotas?: number | null;
+  dataPrimeiroVencimento?: string | Date | null;
+  dataInicio?: string | Date | null;
+  frequencia?: string | null;
+  contribuicoes?: Array<{
+    numeroCiclo: number;
+    dataVencimento: string | Date;
+    status: string;
+    valorPrevisto?: number;
+  }>;
+}): StatusCicloConsorcio {
+  const contribuicoes = consorcio.contribuicoes || [];
+  let dataUltimoVencimento: Date | null = null;
+
+  if (contribuicoes.length > 0) {
+    const timestamps = contribuicoes.map((c) => new Date(c.dataVencimento).getTime());
+    dataUltimoVencimento = new Date(Math.max(...timestamps));
+  } else if (consorcio.totalCotas && consorcio.totalCotas > 0) {
+    dataUltimoVencimento = calcularDataCiclo(consorcio, consorcio.totalCotas);
+  }
+
+  const hoje = new Date();
+  let diasDecorridos = 0;
+  let isCicloConcluido = false;
+
+  if (dataUltimoVencimento && !isNaN(dataUltimoVencimento.getTime())) {
+    const diffMs = hoje.getTime() - dataUltimoVencimento.getTime();
+    diasDecorridos = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+    isCicloConcluido = diffMs > 0;
+  }
+
+  const totalContribuicoes = contribuicoes.length;
+  const totalPagas = contribuicoes.filter((c) => c.status === "PAGO").length;
+  const totalPendentes = contribuicoes.filter((c) => c.status !== "PAGO").length;
+  const is100PorcentoQuitado = totalContribuicoes > 0 && totalPendentes === 0;
+  const porcentagemQuitado =
+    totalContribuicoes > 0 ? Math.round((totalPagas / totalContribuicoes) * 100) : 0;
+
+  return {
+    isCicloConcluido,
+    dataUltimoVencimento,
+    dataUltimoVencimentoFormatada: formatarDataSegura(dataUltimoVencimento),
+    diasDecorridos,
+    totalContribuicoes,
+    totalPagas,
+    totalPendentes,
+    is100PorcentoQuitado,
+    porcentagemQuitado,
+  };
+}
+
+/**
+ * Gera mensagem contextualizada de follow-up e customer success para o WhatsApp do organizador.
+ */
+export function gerarMensagemFollowupConsorcio(input: {
+  nomeCriador: string;
+  nomeConsorcio: string;
+  isQuitado: boolean;
+  totalPendentes: number;
+  planoCriador: "COMUM" | "PRO" | "PRO_MASTER";
+}): string {
+  const primeiroNome = input.nomeCriador ? input.nomeCriador.trim().split(" ")[0] : "Organizador";
+
+  if (input.isQuitado) {
+    if (input.planoCriador === "COMUM") {
+      return `Olá, ${primeiroNome}! Tudo bem? Aqui é o Marcos Batista do Clube da Cota! 🎉
+
+Passando para parabenizar pela conclusão do seu consórcio "${input.nomeConsorcio}". Todos os pagamentos foram 100% quitados com sucesso!
+
+Para você continuar aproveitando o Clube da Cota:
+1️⃣ Caso queira abrir um novo consórcio gratuitamente, basta encerrar este grupo no seu painel para liberar sua vaga no Plano Comum.
+2️⃣ Se preferir gerenciar múltiplos consórcios simultaneamente com seus amigos ou família, você pode fazer o upgrade para o Plano Pro (até 3 consórcios) ou Pro Master (ilimitados).
+
+Precisando de qualquer suporte, estou à disposição!`;
+    }
+
+    return `Olá, ${primeiroNome}! Tudo bem? Aqui é o Marcos Batista do Clube da Cota! 🎉
+
+Parabéns pela conclusão do consórcio "${input.nomeConsorcio}"! Todas as cotas foram integralmente quitadas.
+
+Você já pode encerrar este grupo no seu painel para arquivar o histórico com segurança e liberar limite na sua assinatura ${input.planoCriador === "PRO_MASTER" ? "Pro Master" : "Pro"} para criar novos consórcios.
+
+Conte comigo se precisar de qualquer apoio!`;
+  }
+
+  return `Olá, ${primeiroNome}! Tudo bem? Aqui é o Marcos Batista do Clube da Cota.
+
+Notei que o prazo programado do consórcio "${input.nomeConsorcio}" já terminou e ainda constam ${input.totalPendentes} parcela(s) pendente(s).
+
+Gostaria de saber se precisa de algum suporte com a plataforma ou na conferência dos pagamentos para ajudar na finalização do seu grupo. Quando concluir tudo, você poderá encerrá-lo no painel para arquivar e liberar vaga para novos consórcios!`;
+}
+
+
 

@@ -11,6 +11,9 @@ import {
   validarMinimoParticipantes,
   formatarTelefone,
   TipoChavePix,
+  analisarCicloConsorcio,
+  gerarMensagemFollowupConsorcio,
+  gerarLinkWhatsApp,
 } from "@/lib/finance";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
@@ -298,7 +301,7 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
       };
     }
 
-    // Validação de limites por nível de acesso (Páginas 2, 8 e 83 do PDF)
+    // Validação de limites por nível de acesso (Modelo A: Comum possui até 1 consórcio ativo simultâneo)
     const consorciosAtivos = await prisma.consorcio.count({
       where: { criadorId: criador.id, status: "ATIVO" },
     });
@@ -307,7 +310,7 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
       return {
         success: false,
         error:
-          "Você atingiu o limite de 1 consórcio ativo do Plano Comum. Para gerenciar novos grupos, realize a migração de plano via Pix para Marcos Batista (markos.system@gmail.com): Plano Pro (R$ 19,90/mês para até 3 consórcios) ou Pro Master (R$ 29,90/mês para consórcios ilimitados).",
+          "Você atingiu o limite de 1 consórcio ativo do Plano Comum. Para gerenciar novos grupos simultaneamente, realize a migração de plano via Pix para Marcos Batista (markos.system@gmail.com): Plano Pro (R$ 19,90/mês para até 3 consórcios) ou Pro Master (R$ 29,90/mês para consórcios ilimitados).",
       };
     }
     if (criador.role === "PRO" && consorciosAtivos >= 3) {
@@ -596,6 +599,10 @@ export async function confirmPaymentAction(
   });
 
   if (!contribuicao) return { success: false, error: "Contribuição não encontrada." };
+
+  if (contribuicao.consorcio.status === "ENCERRADO") {
+    return { success: false, error: "Este consórcio está encerrado (somente leitura) e não permite novas confirmações de pagamento." };
+  }
 
   await prisma.contribuicao.update({
     where: { id: contribuicaoId },
@@ -1083,6 +1090,13 @@ export async function updateConsorcioInfoAction(input: UpdateConsorcioInfoInput)
       };
     }
 
+    if (consorcio.status === "ENCERRADO") {
+      return {
+        success: false,
+        error: "Este consórcio está encerrado (somente leitura) e não permite alterações cadastrais.",
+      };
+    }
+
     if (!input.nome || !input.nome.trim()) {
       return { success: false, error: "O nome do consórcio é obrigatório." };
     }
@@ -1233,6 +1247,13 @@ export async function updateParticipantInfoAction(input: UpdateParticipantInfoIn
       return { success: false, error: "Você não tem permissão para editar participantes deste consórcio." };
     }
 
+    if (consorcio.status === "ENCERRADO") {
+      return {
+        success: false,
+        error: "Este consórcio está encerrado (somente leitura) e não permite alteração de dados de participantes.",
+      };
+    }
+
     const targetUser = await prisma.user.findUnique({ where: { id: input.targetUserId } });
     if (!targetUser) return { success: false, error: "Participante não encontrado." };
 
@@ -1367,6 +1388,13 @@ export async function substituteParticipantAction(input: SubstituteParticipantIn
 
     if (!isAutorizado) {
       return { success: false, error: "Você não tem permissão para substituir participantes deste consórcio." };
+    }
+
+    if (consorcio.status === "ENCERRADO") {
+      return {
+        success: false,
+        error: "Este consórcio está encerrado (somente leitura) e não permite substituição de participantes.",
+      };
     }
 
     if (!input.justificativa || input.justificativa.trim().length < 5) {
@@ -1547,6 +1575,13 @@ export async function swapCotaPositionsAction(input: SwapCotaPositionsInput) {
       return {
         success: false,
         error: "Somente o criador do consórcio ou administradores estão autorizados a efetivar a troca de posições no sistema.",
+      };
+    }
+
+    if (consorcio.status === "ENCERRADO") {
+      return {
+        success: false,
+        error: "Este consórcio está encerrado (somente leitura) e não permite troca de posições de cotas.",
       };
     }
 
@@ -2337,7 +2372,7 @@ export async function getPainelAssinaturasAction(adminId: string) {
       return { success: false, error: "Acesso restrito ao Super Admin." };
     }
 
-    const [pendentes, todosUsuarios, historico] = await Promise.all([
+    const [pendentes, todosUsuarios, historico, consorciosAtivos] = await Promise.all([
       prisma.assinaturaPlano.findMany({
         where: { status: "PENDENTE" },
         include: {
@@ -2369,6 +2404,26 @@ export async function getPainelAssinaturasAction(adminId: string) {
         orderBy: { updatedAt: "desc" },
         take: 25,
       }),
+      prisma.consorcio.findMany({
+        where: { status: "ATIVO" },
+        include: {
+          criador: {
+            select: { id: true, name: true, email: true, telefone: true, role: true, planoExpiraEm: true },
+          },
+          cotas: { select: { id: true, numero: true } },
+          contribuicoes: {
+            select: {
+              id: true,
+              numeroCiclo: true,
+              dataVencimento: true,
+              status: true,
+              valorPrevisto: true,
+            },
+            orderBy: { dataVencimento: "asc" },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      }),
     ]);
 
     // Métricas SaaS
@@ -2389,22 +2444,95 @@ export async function getPainelAssinaturasAction(adminId: string) {
       };
     });
 
+    // Mapeia consórcios com ciclo programado concluído (oportunidades de CS e Upgrade)
+    const consorciosConcluidos = (consorciosAtivos || [])
+      .map((c) => {
+        const statusCiclo = analisarCicloConsorcio(c);
+        if (!statusCiclo.isCicloConcluido) return null;
+
+        const valorTotalPrevisto = (c.contribuicoes || []).reduce(
+          (acc, cb) => acc + (cb.valorPrevisto || 0),
+          0
+        );
+        const valorTotalArrecadado = (c.contribuicoes || [])
+          .filter((cb) => cb.status === "PAGO")
+          .reduce((acc, cb) => acc + (cb.valorPrevisto || 0), 0);
+
+        const mensagemWhatsapp = gerarMensagemFollowupConsorcio({
+          nomeCriador: c.criador?.name || "Organizador",
+          nomeConsorcio: c.nome,
+          isQuitado: statusCiclo.is100PorcentoQuitado,
+          totalPendentes: statusCiclo.totalPendentes,
+          planoCriador: (c.criador?.role as any) || "COMUM",
+        });
+
+        const linkWhatsapp = gerarLinkWhatsApp({
+          telefone: c.criador?.telefone,
+          mensagem: mensagemWhatsapp,
+        });
+
+        return {
+          id: c.id,
+          nome: c.nome,
+          status: c.status,
+          frequencia: c.frequencia,
+          totalCotas: c.totalCotas,
+          criador: c.criador,
+          statusCiclo,
+          valorTotalPrevisto,
+          valorTotalArrecadado,
+          mensagemWhatsapp,
+          linkWhatsapp,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
     return {
       success: true,
       data: {
         solicitacoesPendentes: pendentes,
         assinantes: assinantesFormatados,
         historico,
+        consorciosConcluidos,
         metricas: {
           totalAssinantesAtivos: totalAtivos,
           totalPendentes: pendentes.length,
           mrrEstimado,
           prestesAVencer,
+          totalCiclosConcluidos: consorciosConcluidos.length,
+          totalCiclosQuitados: consorciosConcluidos.filter((c) => c.statusCiclo.is100PorcentoQuitado).length,
+          totalCiclosComPendencias: consorciosConcluidos.filter((c) => !c.statusCiclo.is100PorcentoQuitado).length,
         },
       },
     };
   } catch (err: any) {
     return { success: false, error: err.message || "Erro ao buscar dados de assinaturas." };
+  }
+}
+
+export async function getConsorciosCicloConcluidoAction(adminId: string) {
+  try {
+    const admin = await prisma.user.findUnique({ where: { id: adminId } });
+    if (!admin || admin.role !== "SUPER_ADMIN") {
+      return { success: false, error: "Acesso restrito ao Super Admin." };
+    }
+
+    const painelRes = await getPainelAssinaturasAction(adminId);
+    if (!painelRes.success || !painelRes.data) {
+      return { success: false, error: painelRes.error || "Falha ao consultar consórcios." };
+    }
+
+    return {
+      success: true,
+      data: painelRes.data.consorciosConcluidos,
+      metricas: {
+        totalCiclosConcluidos: painelRes.data.metricas.totalCiclosConcluidos,
+        totalCiclosQuitados: painelRes.data.metricas.totalCiclosQuitados,
+        totalCiclosComPendencias: painelRes.data.metricas.totalCiclosComPendencias,
+      },
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao listar consórcios concluídos." };
   }
 }
 
@@ -2439,6 +2567,219 @@ export async function getMinhaAssinaturaAction(usuarioId: string) {
     return { success: false, error: err.message || "Erro ao buscar assinatura." };
   }
 }
+
+// ==========================================
+// CICLO DE VIDA DO CONSÓRCIO: ENCERRAMENTO, REATIVAÇÃO E EXCLUSÃO
+// ==========================================
+
+export async function encerrarConsorcioAction(input: {
+  consorcioId: string;
+  usuarioId: string;
+  motivo?: string;
+}) {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: input.usuarioId } });
+    if (!user) return { success: false, error: "Usuário não encontrado." };
+
+    const consorcio = await prisma.consorcio.findUnique({ where: { id: input.consorcioId } });
+    if (!consorcio) return { success: false, error: "Consórcio não encontrado." };
+
+    const isAutorizado =
+      user.role === "SUPER_ADMIN" ||
+      user.role === "PRO_MASTER" ||
+      consorcio.criadorId === user.id;
+
+    if (!isAutorizado) {
+      return { success: false, error: "Você não tem permissão para encerrar este consórcio." };
+    }
+
+    if (consorcio.status === "ENCERRADO") {
+      return { success: false, error: "Este consórcio já está encerrado." };
+    }
+
+    await prisma.$transaction([
+      prisma.consorcio.update({
+        where: { id: consorcio.id },
+        data: { status: "ENCERRADO" },
+      }),
+      prisma.auditoriaLog.create({
+        data: {
+          consorcioId: consorcio.id,
+          usuarioResponsavelId: user.id,
+          tipoAcao: "ENCERRAMENTO_CONSORCIO",
+          detalhes: `Consórcio "${consorcio.nome}" foi encerrado por ${user.name}. Status alterado para Somente Leitura.`,
+          justificativa: input.motivo || "Encerramento do consórcio pelo organizador.",
+        },
+      }),
+    ]);
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message: `O consórcio "${consorcio.nome}" foi encerrado com sucesso. Todo o histórico foi preservado como somente leitura.`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao encerrar consórcio." };
+  }
+}
+
+export async function reativarConsorcioAction(input: {
+  consorcioId: string;
+  usuarioId: string;
+}) {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: input.usuarioId } });
+    if (!user) return { success: false, error: "Usuário não encontrado." };
+
+    const consorcio = await prisma.consorcio.findUnique({
+      where: { id: input.consorcioId },
+      include: { criador: true },
+    });
+    if (!consorcio) return { success: false, error: "Consórcio não encontrado." };
+
+    const isAutorizado =
+      user.role === "SUPER_ADMIN" ||
+      user.role === "PRO_MASTER" ||
+      consorcio.criadorId === user.id;
+
+    if (!isAutorizado) {
+      return { success: false, error: "Você não tem permissão para reativar este consórcio." };
+    }
+
+    if (consorcio.status === "ATIVO") {
+      return { success: false, error: "Este consórcio já está ativo." };
+    }
+
+    const criador = consorcio.criador;
+    const vigencia = getVigenciaPlano(criador);
+
+    // Validação de limites na reativação
+    if (criador.role === "PRO") {
+      if (!vigencia.isAtivo) {
+        return {
+          success: false,
+          error: `Sua assinatura do Plano Pro expirou em ${vigencia.dataExpiracaoFormatada}. Para reativar consórcios, renove sua assinatura via Pix para Marcos Batista (markos.system@gmail.com).`,
+        };
+      }
+      const consorciosAtivos = await prisma.consorcio.count({
+        where: { criadorId: criador.id, status: "ATIVO" },
+      });
+      if (consorciosAtivos >= 3) {
+        return {
+          success: false,
+          error: "Você já possui 3 consórcios ativos no Plano Pro. Para reativar este, encerre outro consórcio ou migre para o Plano Pro Master.",
+        };
+      }
+    } else if (criador.role === "PRO_MASTER") {
+      if (!vigencia.isAtivo) {
+        return {
+          success: false,
+          error: `Sua assinatura do Plano Pro Master expirou em ${vigencia.dataExpiracaoFormatada}. Para reativar consórcios, renove sua assinatura via Pix para Marcos Batista (markos.system@gmail.com).`,
+        };
+      }
+    } else if (criador.role === "COMUM") {
+      const consorciosAtivos = await prisma.consorcio.count({
+        where: { criadorId: criador.id, status: "ATIVO" },
+      });
+      if (consorciosAtivos >= 1) {
+        return {
+          success: false,
+          error: "Você já possui 1 consórcio ativo no Plano Comum. Para gerenciar mais grupos simultâneos, migre para o Plano Pro.",
+        };
+      }
+    }
+
+    await prisma.$transaction([
+      prisma.consorcio.update({
+        where: { id: consorcio.id },
+        data: { status: "ATIVO" },
+      }),
+      prisma.auditoriaLog.create({
+        data: {
+          consorcioId: consorcio.id,
+          usuarioResponsavelId: user.id,
+          tipoAcao: "REATIVACAO_CONSORCIO",
+          detalhes: `Consórcio "${consorcio.nome}" foi reativado por ${user.name}.`,
+        },
+      }),
+    ]);
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message: `Consórcio "${consorcio.nome}" reativado com sucesso!`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao reativar consórcio." };
+  }
+}
+
+export async function excluirConsorcioAction(input: {
+  consorcioId: string;
+  usuarioId: string;
+  confirmacaoNome: string;
+}) {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: input.usuarioId } });
+    if (!user) return { success: false, error: "Usuário não encontrado." };
+
+    const consorcio = await prisma.consorcio.findUnique({ where: { id: input.consorcioId } });
+    if (!consorcio) return { success: false, error: "Consórcio não encontrado." };
+
+    const isAutorizado = user.role === "SUPER_ADMIN" || consorcio.criadorId === user.id;
+    if (!isAutorizado) {
+      return { success: false, error: "Apenas o criador ou o Super Admin pode excluir este consórcio." };
+    }
+
+    if (input.confirmacaoNome.trim().toLowerCase() !== consorcio.nome.trim().toLowerCase()) {
+      return {
+        success: false,
+        error: `Para confirmar a exclusão, você deve digitar o nome exato do consórcio: "${consorcio.nome}".`,
+      };
+    }
+
+    // Regra de Ouro: consórcio com qualquer pagamento confirmado NUNCA pode ser excluído fisicamente
+    const pagamentosConfirmados = await prisma.contribuicao.count({
+      where: {
+        consorcioId: consorcio.id,
+        status: "PAGO",
+      },
+    });
+
+    if (pagamentosConfirmados > 0) {
+      return {
+        success: false,
+        error: "Este consórcio já possui pagamentos confirmados e não pode ser excluído para garantir a integridade financeira e a prestação de contas dos cotistas. Utilize a opção 'Encerrar Consórcio' para arquivá-lo com segurança.",
+      };
+    }
+
+    const nomeConsorcio = consorcio.nome;
+
+    // Se for teste/rascunho sem pagamentos, realiza a exclusão física
+    await prisma.$transaction([
+      prisma.auditoriaLog.create({
+        data: {
+          usuarioResponsavelId: user.id,
+          tipoAcao: "EXCLUSAO_CONSORCIO_TESTE",
+          detalhes: `Consórcio de teste "${nomeConsorcio}" sem pagamentos foi excluído definitivamente por ${user.name}.`,
+          justificativa: "Exclusão de consórcio teste/rascunho sem movimentação financeira.",
+        },
+      }),
+      prisma.consorcio.delete({
+        where: { id: consorcio.id },
+      }),
+    ]);
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message: `O consórcio "${nomeConsorcio}" foi excluído com sucesso. Como não possuía pagamentos, sua vaga de degustação foi liberada!`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao excluir consórcio." };
+  }
+}
+
 
 
 

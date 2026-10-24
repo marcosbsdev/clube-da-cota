@@ -21,6 +21,9 @@ import {
   TrendingUp,
   X,
   Check,
+  Archive,
+  Sparkles,
+  ExternalLink,
 } from "lucide-react";
 import {
   getPainelAssinaturasAction,
@@ -28,6 +31,7 @@ import {
   recusarAssinaturaAction,
   renovarAssinaturaManualAction,
   cancelarAssinaturaAction,
+  encerrarConsorcioAction,
 } from "@/app/actions";
 import { gerarLinkWhatsApp } from "@/lib/finance";
 
@@ -54,17 +58,26 @@ export function GestaoAssinaturasAdmin({
   const [solicitacoesPendentes, setSolicitacoesPendentes] = useState<any[]>([]);
   const [assinantes, setAssinantes] = useState<any[]>([]);
   const [historico, setHistorico] = useState<any[]>([]);
+  const [consorciosConcluidos, setConsorciosConcluidos] = useState<any[]>([]);
   const [metricas, setMetricas] = useState({
     totalAssinantesAtivos: 0,
     totalPendentes: 0,
     mrrEstimado: 0,
     prestesAVencer: 0,
+    totalCiclosConcluidos: 0,
+    totalCiclosQuitados: 0,
+    totalCiclosComPendencias: 0,
   });
 
   // Filtros de busca
-  const [abaAtiva, setAbaAtiva] = useState<"pendentes" | "assinantes" | "historico">("pendentes");
+  const [abaAtiva, setAbaAtiva] = useState<
+    "pendentes" | "assinantes" | "ciclosConcluidos" | "historico"
+  >("pendentes");
   const [busca, setBusca] = useState("");
   const [filtroPlano, setFiltroPlano] = useState<"TODOS" | "PRO" | "PRO_MASTER">("TODOS");
+  const [filtroQuitacaoConcluidos, setFiltroQuitacaoConcluidos] = useState<
+    "TODOS" | "QUITADOS" | "PENDENTES"
+  >("TODOS");
 
   // Modais de ação
   const [modalComprovante, setModalComprovante] = useState<{
@@ -111,6 +124,20 @@ export function GestaoAssinaturasAdmin({
     observacao: "",
   });
 
+  const [modalEncerrarAdmin, setModalEncerrarAdmin] = useState<{
+    aberto: boolean;
+    consorcioId: string | null;
+    consorcioNome: string;
+    criadorNome: string;
+    motivo: string;
+  }>({
+    aberto: false,
+    consorcioId: null,
+    consorcioNome: "",
+    criadorNome: "",
+    motivo: "Encerramento administrativo acordado via WhatsApp após conclusão de ciclo.",
+  });
+
   const carregarDados = useCallback(async () => {
     try {
       setCarregando(true);
@@ -119,6 +146,7 @@ export function GestaoAssinaturasAdmin({
         setSolicitacoesPendentes(res.data.solicitacoesPendentes || []);
         setAssinantes(res.data.assinantes || []);
         setHistorico(res.data.historico || []);
+        setConsorciosConcluidos(res.data.consorciosConcluidos || []);
         setMetricas(res.data.metricas);
       } else {
         setMensagemErro(res.error || "Erro ao carregar dados de assinaturas.");
@@ -258,6 +286,38 @@ export function GestaoAssinaturasAdmin({
     }
   };
 
+  const handleConfirmarEncerramentoAdmin = async () => {
+    if (!modalEncerrarAdmin.consorcioId) return;
+    try {
+      setProcessandoAcao(modalEncerrarAdmin.consorcioId);
+      const res = await encerrarConsorcioAction({
+        consorcioId: modalEncerrarAdmin.consorcioId,
+        usuarioId: currentUser.id,
+        motivo:
+          modalEncerrarAdmin.motivo.trim() ||
+          "Encerramento administrativo a pedido do criador via WhatsApp após conclusão de ciclo.",
+      });
+      if (res.success) {
+        exibirFeedback(res.message || "Consórcio encerrado com sucesso!");
+        setModalEncerrarAdmin({
+          aberto: false,
+          consorcioId: null,
+          consorcioNome: "",
+          criadorNome: "",
+          motivo: "Encerramento administrativo acordado via WhatsApp após conclusão de ciclo.",
+        });
+        await carregarDados();
+        onAssinaturaAlterada?.();
+      } else {
+        exibirFeedback(res.error || "Erro ao encerrar consórcio.", true);
+      }
+    } catch (e: any) {
+      exibirFeedback(e.message || "Falha ao encerrar consórcio.", true);
+    } finally {
+      setProcessandoAcao(null);
+    }
+  };
+
   // Filtragem de assinantes
   const assinantesFiltrados = assinantes.filter((u) => {
     const matchesBusca =
@@ -265,6 +325,22 @@ export function GestaoAssinaturasAdmin({
       u.email.toLowerCase().includes(busca.toLowerCase());
     const matchesPlano = filtroPlano === "TODOS" || u.role === filtroPlano;
     return matchesBusca && matchesPlano;
+  });
+
+  // Filtragem de consórcios concluídos
+  const consorciosConcluidosFiltrados = consorciosConcluidos.filter((c) => {
+    const termo = busca.toLowerCase();
+    const matchesBusca =
+      c.nome.toLowerCase().includes(termo) ||
+      (c.criador?.name || "").toLowerCase().includes(termo) ||
+      (c.criador?.email || "").toLowerCase().includes(termo);
+
+    const matchesStatusQuitacao =
+      filtroQuitacaoConcluidos === "TODOS" ||
+      (filtroQuitacaoConcluidos === "QUITADOS" && c.statusCiclo.is100PorcentoQuitado) ||
+      (filtroQuitacaoConcluidos === "PENDENTES" && !c.statusCiclo.is100PorcentoQuitado);
+
+    return matchesBusca && matchesStatusQuitacao;
   });
 
   return (
@@ -402,6 +478,30 @@ export function GestaoAssinaturasAdmin({
         >
           <Users className="w-3.5 h-3.5" />
           <span>Assinantes ({assinantes.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setAbaAtiva("ciclosConcluidos")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+            abaAtiva === "ciclosConcluidos"
+              ? "bg-purple-600 text-white shadow-xs"
+              : "text-slate-600 hover:bg-slate-100"
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Ciclos Concluídos ({consorciosConcluidos.length})</span>
+          {consorciosConcluidos.length > 0 && (
+            <span
+              className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                abaAtiva === "ciclosConcluidos"
+                  ? "bg-white text-purple-700"
+                  : "bg-emerald-100 text-emerald-800"
+              }`}
+            >
+              {consorciosConcluidos.length}
+            </span>
+          )}
         </button>
 
         <button
@@ -691,6 +791,215 @@ export function GestaoAssinaturasAdmin({
         </div>
       )}
 
+      {/* CONTEÚDO DA ABA: CICLOS CONCLUÍDOS / OPORTUNIDADES */}
+      {abaAtiva === "ciclosConcluidos" && (
+        <div className="space-y-4">
+          {/* Banner Estratégico de CRM & Upsell */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-900 via-indigo-950 to-slate-900 text-white border border-purple-500/30 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center justify-center flex-shrink-0">
+                <Sparkles className="w-5 h-5 text-purple-300" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                  <span>Radar de Consórcios Concluídos & Oportunidades</span>
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-400 text-slate-950">
+                    CS & Upgrade
+                  </span>
+                </h4>
+                <p className="text-xs text-purple-100/80 mt-1 max-w-2xl leading-relaxed">
+                  Estes consórcios ativos já atingiram a data da última parcela programada. Use o botão do WhatsApp para parabenizar o organizador, orientar o encerramento para liberar sua vaga no Plano Comum ou oferecer o upgrade para o Plano Pro para gerenciar múltiplos grupos!
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs flex-shrink-0">
+              <div className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/10 text-center">
+                <span className="text-[10px] text-purple-200 block">Total</span>
+                <strong className="text-sm font-black">{consorciosConcluidos.length}</strong>
+              </div>
+              <div className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-center">
+                <span className="text-[10px] text-emerald-300 block">100% Quitados</span>
+                <strong className="text-sm font-black text-emerald-300">
+                  {consorciosConcluidos.filter((c) => c.statusCiclo.is100PorcentoQuitado).length}
+                </strong>
+              </div>
+              <div className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-center">
+                <span className="text-[10px] text-amber-300 block">Com Pendências</span>
+                <strong className="text-sm font-black text-amber-300">
+                  {consorciosConcluidos.filter((c) => !c.statusCiclo.is100PorcentoQuitado).length}
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Filtros da Lista de Consórcios Concluídos */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setFiltroQuitacaoConcluidos("TODOS")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  filtroQuitacaoConcluidos === "TODOS"
+                    ? "bg-white text-slate-800 shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Todos ({consorciosConcluidos.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFiltroQuitacaoConcluidos("QUITADOS")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  filtroQuitacaoConcluidos === "QUITADOS"
+                    ? "bg-emerald-600 text-white shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                100% Quitados ({consorciosConcluidos.filter((c) => c.statusCiclo.is100PorcentoQuitado).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFiltroQuitacaoConcluidos("PENDENTES")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  filtroQuitacaoConcluidos === "PENDENTES"
+                    ? "bg-amber-600 text-white shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Com Pendências ({consorciosConcluidos.filter((c) => !c.statusCiclo.is100PorcentoQuitado).length})
+              </button>
+            </div>
+
+            <div className="relative flex-1 sm:max-w-xs">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Buscar consórcio ou organizador..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+          </div>
+
+          {/* Listagem de Consórcios Concluídos */}
+          {consorciosConcluidosFiltrados.length === 0 ? (
+            <div className="text-center py-12 px-4 bg-slate-50/70 rounded-2xl border border-slate-200/80">
+              <Check className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
+              <h4 className="font-bold text-slate-800 text-sm">Nenhum consórcio vencido com o filtro atual</h4>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                Todos os consórcios ativos estão com os seus prazos em dia ou não correspondem ao filtro aplicado.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3.5">
+              {consorciosConcluidosFiltrados.map((item) => (
+                <div
+                  key={item.id}
+                  className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-xs transition flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4"
+                >
+                  <div className="space-y-2 min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="font-bold text-slate-900 text-sm truncate">{item.nome}</h4>
+                      <span
+                        className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                          item.criador.role === "PRO_MASTER"
+                            ? "bg-purple-100 text-purple-800 border-purple-200"
+                            : item.criador.role === "PRO"
+                            ? "bg-blue-100 text-blue-800 border-blue-200"
+                            : "bg-slate-100 text-slate-700 border-slate-200"
+                        }`}
+                      >
+                        Plano {item.criador.role === "PRO_MASTER" ? "Pro Master" : item.criador.role === "PRO" ? "Pro" : "Comum"}
+                      </span>
+
+                      {item.statusCiclo.is100PorcentoQuitado ? (
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>100% Quitado</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 text-amber-600" />
+                          <span>{item.statusCiclo.totalPendentes} parcela(s) pendente(s)</span>
+                        </span>
+                      )}
+
+                      <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                        {item.statusCiclo.diasDecorridos === 0
+                          ? "Venceu hoje"
+                          : `Venceu há ${item.statusCiclo.diasDecorridos} dia${item.statusCiclo.diasDecorridos > 1 ? "s" : ""}`}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                      <span>
+                        Organizador: <strong className="text-slate-800 font-bold">{item.criador.name}</strong>
+                      </span>
+                      <span>
+                        WhatsApp: <strong className="text-slate-800 font-bold">{item.criador.telefone || "Não informado"}</strong>
+                      </span>
+                      <span>
+                        Último Vencimento: <strong className="text-slate-800 font-bold">{item.statusCiclo.dataUltimoVencimentoFormatada}</strong>
+                      </span>
+                    </div>
+
+                    {/* Barra de Progresso de Quitação */}
+                    <div className="pt-1 max-w-md">
+                      <div className="flex items-center justify-between text-[11px] mb-1">
+                        <span className="text-slate-500">Progresso de Quitação das Mensalidades</span>
+                        <span className="font-bold text-slate-700">
+                          {item.statusCiclo.totalPagas} de {item.statusCiclo.totalContribuicoes} parcelas ({item.statusCiclo.porcentagemQuitado}%)
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/60">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            item.statusCiclo.is100PorcentoQuitado ? "bg-emerald-500" : "bg-amber-500"
+                          }`}
+                          style={{ width: `${item.statusCiclo.porcentagemQuitado}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ações Administrativas & WhatsApp */}
+                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full lg:w-auto justify-end flex-shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+                    <a
+                      href={item.linkWhatsapp}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer shadow-xs whitespace-nowrap"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      <span>WhatsApp (CS / Upgrade)</span>
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setModalEncerrarAdmin({
+                          aberto: true,
+                          consorcioId: item.id,
+                          consorcioNome: item.nome,
+                          criadorNome: item.criador.name,
+                          motivo: "Encerramento administrativo a pedido do criador via WhatsApp após conclusão do ciclo.",
+                        })
+                      }
+                      className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer border border-slate-200 whitespace-nowrap"
+                    >
+                      <Archive className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Encerrar Consórcio</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* CONTEÚDO DA ABA 3: HISTÓRICO & AUDITORIA */}
       {abaAtiva === "historico" && (
         <div className="space-y-3">
@@ -953,6 +1262,88 @@ export function GestaoAssinaturasAdmin({
               >
                 Confirmar Renovação
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SUPER ADMIN ENCERRAR CONSÓRCIO CONCLUÍDO */}
+      {modalEncerrarAdmin.aberto && (
+        <div className="fixed inset-0 z-[150] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden my-auto animate-in zoom-in-95">
+            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                  <Archive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm">Encerrar Consórcio</h4>
+                  <p className="text-xs text-slate-400">Ação Administrativa Super Admin</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setModalEncerrarAdmin((prev) => ({ ...prev, aberto: false }))
+                }
+                className="text-white/70 hover:text-white bg-white/10 rounded-full p-1.5 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed">
+                Você está prestes a encerrar o consórcio{" "}
+                <strong className="font-bold">{modalEncerrarAdmin.consorcioNome}</strong>{" "}
+                do organizador <strong className="font-bold">{modalEncerrarAdmin.criadorNome}</strong>.
+                O grupo passará para modo somente leitura e liberará a vaga de consórcio ativo para o criador.
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Justificativa / Registro de Auditoria:
+                </label>
+                <textarea
+                  value={modalEncerrarAdmin.motivo}
+                  onChange={(e) =>
+                    setModalEncerrarAdmin((prev) => ({ ...prev, motivo: e.target.value }))
+                  }
+                  rows={3}
+                  className="w-full p-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-purple-500"
+                  placeholder="Ex: Encerramento solicitado pelo organizador via WhatsApp."
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setModalEncerrarAdmin((prev) => ({ ...prev, aberto: false }))
+                  }
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={processandoAcao === modalEncerrarAdmin.consorcioId}
+                  onClick={handleConfirmarEncerramentoAdmin}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-xs"
+                >
+                  {processandoAcao === modalEncerrarAdmin.consorcioId ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Encerrando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Archive className="w-3.5 h-3.5" />
+                      <span>Confirmar Encerramento</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

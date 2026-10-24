@@ -45,7 +45,7 @@ export function CriarConsorcioWizard({
   const [planoSelecionadoLimite, setPlanoSelecionadoLimite] = useState<"PRO" | "PRO_MASTER">("PRO");
   const [chavePixCopiada, setChavePixCopiada] = useState(false);
 
-  // Cálculo de consórcios ativos criados pelo usuário
+  // Cálculo de consórcios ativos criados pelo usuário (Modelo A: Comum possui até 1 consórcio ativo simultâneo)
   const consorciosAtivosDoCriador = (todosConsorcios || []).filter(
     (c: any) => c.criadorId === currentUser.id && c.status === "ATIVO"
   ).length;
@@ -276,7 +276,7 @@ export function CriarConsorcioWizard({
                 Você já possui {consorciosAtivosDoCriador} de {maxConsorciosPlano} consórcio(s) ativo(s)
               </h2>
               <p className="text-xs sm:text-sm text-slate-600 mt-1 leading-relaxed">
-                No Plano {currentUser.role === "COMUM" ? "Comum" : "Pro"}, você pode manter até {maxConsorciosPlano} consórcio ativo simultaneamente. Selecione o plano desejado abaixo para migrar:
+                No Plano {currentUser.role === "COMUM" ? "Comum" : "Pro"}, você pode manter até {maxConsorciosPlano} consórcio ativo simultaneamente. Encerre o consórcio atual para abrir um novo, ou selecione o plano desejado abaixo para gerenciar múltiplos grupos:
               </p>
             </div>
           </div>
