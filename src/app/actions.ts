@@ -14,6 +14,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { sanitizarParaCliente } from "@/lib/sanitize";
 
 export async function getConsorcioData(usuarioId?: string, consorcioId?: string) {
   // Verifica se há sessão ativa via cookie ou id fornecido
@@ -183,10 +184,14 @@ export async function getConsorcioData(usuarioId?: string, consorcioId?: string)
     (consorcio as any).notificacoesDispensadasIds = dispensadasIds;
   }
 
+  // Remove hashes de senha e tokens antes de enviar ao navegador.
+  // Links de acesso (tokenAcesso) só seguem para o criador do consórcio e para admins.
+  const podeVerTokensAcesso = isAdminGeral || consorcio?.criadorId === user.id;
+
   return {
-    currentUser: user,
+    currentUser: sanitizarParaCliente(user, false),
     todosUsuarios,
-    consorcio,
+    consorcio: sanitizarParaCliente(consorcio, podeVerTokensAcesso),
     todosConsorcios,
   };
 }
