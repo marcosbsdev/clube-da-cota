@@ -111,6 +111,12 @@ console.log("🧪 Executando testes das regras financeiras do Clube da Cota...\n
     totalCotas: 3,
   });
   assert.strictEqual(total3Meses, 4545, "Total arrecadado deve ser 4545");
+  // Validação idêntica com o alias 'PROGRESSIVO'
+  const mes1Prog = calcularValorCiclo(1, 500, "PROGRESSIVO", 5);
+  const mes2Prog = calcularValorCiclo(2, 500, "PROGRESSIVO", 5);
+  assert.strictEqual(mes1Prog, 500, "Mês 1 (PROGRESSIVO) deve ser 500");
+  assert.strictEqual(mes2Prog, 505, "Mês 2 (PROGRESSIVO) deve ser 505");
+
   console.log("✅ Teste 5: Cálculo de acréscimo mensal progressivo aprovado.");
 }
 

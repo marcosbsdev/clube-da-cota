@@ -7,6 +7,7 @@ import {
   calcularValorCiclo,
   formatarMoedaBRL,
   formatarMesAnoCiclo,
+  isModeloAcrescimo,
 } from "@/lib/finance";
 import {
   confirmPaymentAction,
@@ -608,7 +609,7 @@ export function CriadorView({
                     <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center">
                       <span className="text-[10px] text-slate-400 font-semibold block">Bolada</span>
                       <span className="text-xs sm:text-sm font-black text-theme-text truncate block">
-                        {c.modeloContribuicao === "ACRESCIMO_MENSAL"
+                        {isModeloAcrescimo(c.modeloContribuicao)
                           ? `${formatarMoedaBRL(c.valorCota * c.totalCotas)} a ${formatarMoedaBRL(
                               calcularValorCiclo(c.totalCotas, c.valorCota, c.modeloContribuicao, c.valorAcrescimo) * c.totalCotas
                             )}`

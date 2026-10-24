@@ -3,7 +3,16 @@
  */
 
 export type FrequenciaTipo = "SEMANAL" | "QUINZENAL" | "MENSAL" | "OUTRA";
-export type ModeloContribuicao = "FIXO" | "ACRESCIMO_MENSAL";
+export type ModeloContribuicao = "FIXO" | "ACRESCIMO_MENSAL" | "PROGRESSIVO";
+
+/**
+ * Retorna se o consórcio adota o modelo com acréscimo mensal progressivo.
+ * Suporta os identificadores 'ACRESCIMO_MENSAL' e 'PROGRESSIVO'.
+ */
+export function isModeloAcrescimo(modelo?: string | null): boolean {
+  if (!modelo) return false;
+  return modelo === "ACRESCIMO_MENSAL" || modelo === "PROGRESSIVO";
+}
 
 export interface DateGenerationParams {
   dataPrimeiroVencimento: Date;
@@ -53,10 +62,10 @@ export function calcularResumoFinanceiroConsorcio({
 }: {
   valorCotaBase: number;
   valorAcrescimo?: number;
-  modeloContribuicao?: ModeloContribuicao;
+  modeloContribuicao?: ModeloContribuicao | string;
   totalCotas: number;
 }): ResumoFinanceiroCalculado {
-  const isAcrescimo = modeloContribuicao === "ACRESCIMO_MENSAL";
+  const isAcrescimo = isModeloAcrescimo(modeloContribuicao);
   const acrescimo = isAcrescimo ? Math.max(0, valorAcrescimo) : 0;
   const cotas = Math.max(1, totalCotas);
 
@@ -88,10 +97,10 @@ export function calcularResumoFinanceiroConsorcio({
 export function calcularValorCiclo(
   numeroCiclo: number, // 1, 2, 3...
   valorBase: number,
-  modelo: ModeloContribuicao = "FIXO",
+  modelo: ModeloContribuicao | string = "FIXO",
   acrescimo: number = 0
 ): number {
-  if (modelo === "ACRESCIMO_MENSAL") {
+  if (isModeloAcrescimo(modelo)) {
     return valorBase + (numeroCiclo - 1) * acrescimo;
   }
   return valorBase;
@@ -108,7 +117,7 @@ export function calcularTotalArrecadacaoConsorcio({
 }: {
   valorCotaBase: number;
   valorAcrescimo?: number;
-  modeloContribuicao?: ModeloContribuicao;
+  modeloContribuicao?: ModeloContribuicao | string;
   totalCotas: number;
 }): number {
   let total = 0;

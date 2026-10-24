@@ -27,8 +27,8 @@ Código-fonte principal: [`src/lib/finance.ts`](file:///C:/Users/tctat/.gemini/a
 * Esse dado é exibido tanto para o criador quanto para o participante, e também integrado nas mensagens automáticas geradas para WhatsApp.
 
 ### Modelos de Contribuição
-1. **Fixo:** Todos os participantes pagam a mesma mensalidade em todos os ciclos.
-2. **Progressivo com Acréscimo:** Há um acréscimo incremental a cada ciclo para compensar a inflação ou gerar poupança maior para quem recebe por último.
+1. **Fixo:** Todos os participantes pagam a mesma mensalidade em todos os ciclos (`FIXO`).
+2. **Progressivo com Acréscimo:** Há um acréscimo incremental a cada ciclo para compensar a inflação ou gerar poupança maior para quem recebe por último. O sistema unifica e aceita os identificadores `ACRESCIMO_MENSAL` e `PROGRESSIVO` através do utilitário `isModeloAcrescimo`, garantindo que a bolada de cada card no frontend (`calcularValorCiclo * totalCotas`) incremente fielmente mês a mês.
 
 ### Formatação Monetária
 * Todos os valores monetários seguem rigorosamente o padrão brasileiro BRL (`R$ 1.500,00`).
