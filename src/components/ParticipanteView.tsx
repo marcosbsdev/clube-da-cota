@@ -17,6 +17,10 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
   const [nomeArquivo, setNomeArquivo] = useState("");
   const [toast, setToast] = useState<ToastData | null>(null);
   const [pixCopiado, setPixCopiado] = useState(false);
+  const [filtroParcelas, setFiltroParcelas] = useState<"PENDENTES" | "PAGAS" | "TODAS">("PENDENTES");
+  const [filtroContemplacao, setFiltroContemplacao] = useState<
+    "TODAS" | "AGUARDANDO" | "CONTEMPLADAS" | "MINHA_COTA"
+  >("TODAS");
 
   const handleCopiarPix = (chave: string) => {
     if (!chave) return;
@@ -89,10 +93,6 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
   );
   const parcelasPagas = minhasContribuicoes.filter((c: any) => c.status === "PAGO");
 
-  const [filtroParcelas, setFiltroParcelas] = useState<"PENDENTES" | "PAGAS" | "TODAS">(
-    parcelasPendentes.length > 0 ? "PENDENTES" : "TODAS"
-  );
-
   const parcelasFiltradas = minhasContribuicoes.filter((c: any) => {
     if (filtroParcelas === "PENDENTES") {
       return c.status === "PENDENTE" || c.status === "EM_ATRASO";
@@ -102,10 +102,6 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
     }
     return true;
   });
-
-  const [filtroContemplacao, setFiltroContemplacao] = useState<
-    "TODAS" | "AGUARDANDO" | "CONTEMPLADAS" | "MINHA_COTA"
-  >("TODAS");
 
   const cotasAguardando = cotasOrdenadas.filter((c: any) => c.status !== "CONTEMPLADA");
   const cotasContempladas = cotasOrdenadas.filter((c: any) => c.status === "CONTEMPLADA");

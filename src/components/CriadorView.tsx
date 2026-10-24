@@ -472,6 +472,9 @@ export function CriadorView({
   const [cotaCompartilhar, setCotaCompartilhar] = useState<any>(null);
   const [linkCopiadoIdx, setLinkCopiadoIdx] = useState<number | null>(null);
 
+  // Filtro de visualização do sorteio/contemplação no painel
+  const [filtroSorteioCriador, setFiltroSorteioCriador] = useState<"TODAS" | "AGUARDANDO" | "CONTEMPLADAS">("TODAS");
+
   const handleCopiarLinkParticipante = (token: string, idx: number) => {
     if (!token) return;
     const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -961,8 +964,6 @@ export function CriadorView({
       setIsSalvandoContemplacao(false);
     }
   };
-
-  const [filtroSorteioCriador, setFiltroSorteioCriador] = useState<"TODAS" | "AGUARDANDO" | "CONTEMPLADAS">("TODAS");
 
   const cotasOrdenadas = [...(consorcio?.cotas || [])].sort((a: any, b: any) => {
     const posA = a.ordemSorteio || a.numero;
