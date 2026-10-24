@@ -5,7 +5,8 @@ import { useTheme, ThemeName } from "./ThemeProvider";
 import { updateUserThemeAction, updateUserRoleAction, updateUserPixSettingsAction } from "@/app/actions";
 import { TipoChavePix, TIPOS_CHAVE_PIX, getTipoChavePixLabel } from "@/lib/finance";
 import { ToastModal, ToastData } from "@/components/ToastModal";
-import { Palette, Shield, User, Check, RefreshCw, LogOut, ShieldCheck, CheckCircle2, Zap, CreditCard, AlertCircle, PlusCircle } from "lucide-react";
+import { ModalUpgradePlanos } from "./ModalUpgradePlanos";
+import { Palette, Shield, User, Check, RefreshCw, LogOut, ShieldCheck, CheckCircle2, Zap, CreditCard, AlertCircle, PlusCircle, Crown } from "lucide-react";
 
 interface PerfilViewProps {
   currentUser: any;
@@ -28,6 +29,7 @@ export function PerfilView({
   const [salvando, setSalvando] = useState(false);
   const [loadingRole, setLoadingRole] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
+  const [modalUpgradeAberto, setModalUpgradeAberto] = useState(false);
 
   // Estado das preferências de recebimento Pix
   const [receberPixDireto, setReceberPixDireto] = useState<boolean>(
@@ -205,16 +207,28 @@ export function PerfilView({
             </p>
             <p className="text-slate-500 mt-1 text-xs sm:text-sm leading-relaxed">{roleInfo.desc}</p>
           </div>
-          {onCriarNovoConsorcio && (
-            <button
-              type="button"
-              onClick={onCriarNovoConsorcio}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-theme-main hover:bg-theme-main/90 active:scale-95 text-white font-bold text-xs shadow-xs transition self-start sm:self-auto cursor-pointer flex-shrink-0"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>Criar Consórcio</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap flex-shrink-0 self-start sm:self-auto">
+            {onCriarNovoConsorcio && (
+              <button
+                type="button"
+                onClick={onCriarNovoConsorcio}
+                className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-theme-main hover:bg-theme-main/90 active:scale-95 text-white font-bold text-xs shadow-xs transition cursor-pointer"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>Criar Consórcio</span>
+              </button>
+            )}
+            {currentUser.role !== "SUPER_ADMIN" && (
+              <button
+                type="button"
+                onClick={() => setModalUpgradeAberto(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-bold text-xs transition cursor-pointer shadow-2xs"
+              >
+                <Crown className="w-4 h-4 text-purple-600" />
+                <span>Migrar de Plano</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -507,6 +521,13 @@ export function PerfilView({
           </button>
         </div>
       )}
+
+      {/* Modal de Upgrade de Planos com Pix para Marcos Batista */}
+      <ModalUpgradePlanos
+        aberto={modalUpgradeAberto}
+        onFechar={() => setModalUpgradeAberto(false)}
+        planoRecomendado={currentUser.role === "COMUM" ? "PRO" : "PRO_MASTER"}
+      />
     </div>
   );
 }

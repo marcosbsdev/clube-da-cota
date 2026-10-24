@@ -289,18 +289,34 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
     });
 
     if (criador.role === "COMUM" && consorciosAtivos >= 1) {
-      return { success: false, error: "Usuários no nível Comum podem ter apenas 1 consórcio ativo." };
+      return {
+        success: false,
+        error:
+          "Você atingiu o limite de 1 consórcio ativo do Plano Comum. Para gerenciar novos grupos, realize a migração de plano via Pix para Marcos Batista (markos.system@gmail.com): Plano Pro (R$ 19,90/mês para até 3 consórcios) ou Pro Master (R$ 29,90/mês para consórcios ilimitados).",
+      };
     }
     if (criador.role === "PRO" && consorciosAtivos >= 3) {
-      return { success: false, error: "Usuários no nível Pro podem ter até 3 consórcios ativos." };
+      return {
+        success: false,
+        error:
+          "Você atingiu o limite de 3 consórcios ativos do Plano Pro. Para criar grupos ilimitados, realize a migração para o Plano Pro Master (R$ 29,90/mês) via Pix para Marcos Batista (markos.system@gmail.com).",
+      };
     }
 
     const totalParticipantes = input.participantes.length;
     if (criador.role === "COMUM" && totalParticipantes > 10) {
-      return { success: false, error: "Nível Comum permite no máximo 10 participantes por consórcio." };
+      return {
+        success: false,
+        error:
+          "O Plano Comum permite no máximo 10 participantes por consórcio. Para grupos de até 20 participantes, realize a migração para o Plano Pro (R$ 19,90/mês) via Pix para Marcos Batista (markos.system@gmail.com).",
+      };
     }
     if (criador.role === "PRO" && totalParticipantes > 20) {
-      return { success: false, error: "Nível Pro permite no máximo 20 participantes por consórcio." };
+      return {
+        success: false,
+        error:
+          "O Plano Pro permite no máximo 20 participantes por consórcio. Para participantes ilimitados, realize a migração para o Plano Pro Master (R$ 29,90/mês) via Pix para Marcos Batista (markos.system@gmail.com).",
+      };
     }
 
     // Valida que o consórcio possui no mínimo 2 participantes
@@ -548,7 +564,7 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
     });
 
     revalidatePath("/");
-    return { success: true, consorcioId: novoConsorcio.id };
+    return { success: true, consorcioId: novoConsorcio.id, nome: novoConsorcio.nome };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

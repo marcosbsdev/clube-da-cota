@@ -2,7 +2,9 @@
 
 import React, { useState } from "react";
 import { createConsorcioAction } from "@/app/actions";
-import { Check, Plus, Trash2, Users, AlertCircle, ArrowRight, ArrowLeft, TrendingUp, User, Calendar, Flag, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, Plus, Trash2, Users, AlertCircle, ArrowRight, ArrowLeft, TrendingUp, User, Calendar, Flag, Clock, ChevronDown, ChevronUp, Crown, Copy, MessageCircle, CheckCircle2 } from "lucide-react";
+import { ModalUpgradePlanos } from "./ModalUpgradePlanos";
+import { DADOS_PAGAMENTO_UPGRADE, PLANOS_INFO } from "@/lib/plans";
 import {
   calcularTotalArrecadacaoConsorcio,
   calcularValorCiclo,
@@ -16,17 +18,44 @@ import {
   TIPOS_CHAVE_PIX,
   getTipoChavePixLabel,
   formatarTelefone,
+  gerarLinkWhatsApp,
 } from "@/lib/finance";
 
 interface CriarConsorcioWizardProps {
   currentUser: any;
-  onConcluido: () => void;
+  todosConsorcios?: any[];
+  onConcluido: (novoConsorcioId?: string, nomeConsorcio?: string) => void;
+  onVoltar?: () => void;
 }
 
-export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorcioWizardProps) {
+export function CriarConsorcioWizard({
+  currentUser,
+  todosConsorcios = [],
+  onConcluido,
+  onVoltar,
+}: CriarConsorcioWizardProps) {
   const [etapa, setEtapa] = useState<number>(1);
   const [loading, setLoading] = useState(false);
   const [erroMsg, setErroMsg] = useState("");
+
+  // Estados para Modal de Upgrade e Limites de Plano
+  const [modalUpgradeAberto, setModalUpgradeAberto] = useState(false);
+  const [upgradeMotivo, setUpgradeMotivo] = useState("");
+  const [planoRecomendado, setPlanoRecomendado] = useState<"PRO" | "PRO_MASTER">("PRO");
+  const [planoSelecionadoLimite, setPlanoSelecionadoLimite] = useState<"PRO" | "PRO_MASTER">("PRO");
+  const [chavePixCopiada, setChavePixCopiada] = useState(false);
+
+  // Cálculo de consórcios ativos criados pelo usuário
+  const consorciosAtivosDoCriador = (todosConsorcios || []).filter(
+    (c: any) => c.criadorId === currentUser.id && c.status === "ATIVO"
+  ).length;
+
+  const maxConsorciosPlano =
+    currentUser.role === "COMUM" ? 1 : currentUser.role === "PRO" ? 3 : Infinity;
+  const maxParticipantesPlano =
+    currentUser.role === "COMUM" ? 10 : currentUser.role === "PRO" ? 20 : Infinity;
+
+  const atingiuLimiteConsorcios = consorciosAtivosDoCriador >= maxConsorciosPlano;
 
   // Etapa 1: Dados Básicos
   const dataHojePadrao = new Date().toISOString().split("T")[0];
@@ -145,6 +174,22 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
       return;
     }
 
+    const novosAdicionados = isCompartilhada ? 2 : 1;
+    if (totalMembros + novosAdicionados > maxParticipantesPlano) {
+      setPlanoRecomendado(currentUser.role === "COMUM" ? "PRO" : "PRO_MASTER");
+      setUpgradeMotivo(
+        `Limite de participantes atingido! O Plano ${
+          currentUser.role === "COMUM" ? "Comum" : "Pro"
+        } permite no máximo ${maxParticipantesPlano} pessoas por grupo. Para expandir, migre para o Plano ${
+          currentUser.role === "COMUM"
+            ? "Pro (até 20 participantes por R$ 19,90/mês)"
+            : "Pro Master (participantes ilimitados por R$ 29,90/mês)"
+        } via Pix para Marcos Batista.`
+      );
+      setModalUpgradeAberto(true);
+      return;
+    }
+
     setParticipantes([
       ...participantes,
       {
@@ -199,11 +244,234 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
 
     setLoading(false);
     if (res.success) {
-      onConcluido();
+      onConcluido(res.consorcioId, nome.trim());
     } else {
       setErroMsg(res.error || "Ocorreu um erro ao criar o consórcio.");
     }
   };
+
+  if (atingiuLimiteConsorcios) {
+    const linkWhatsApp = gerarLinkWhatsApp({
+      telefone: DADOS_PAGAMENTO_UPGRADE.whatsapp,
+      mensagem: `Olá Marcos Batista! Gostaria de fazer upgrade do meu plano no Clube da Cota para o Plano ${
+        planoSelecionadoLimite === "PRO" ? "Pro (R$ 19,90/mês)" : "Pro Master (R$ 29,90/mês)"
+      }. Segue o comprovante da transferência Pix!`,
+    });
+
+    return (
+      <div className="max-w-3xl mx-auto space-y-6">
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-amber-300 shadow-sm space-y-6">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0 shadow-xs">
+              <Crown className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[11px] font-black uppercase tracking-wider text-amber-800 bg-amber-100 px-3 py-1 rounded-full border border-amber-200 inline-block mb-1.5">
+                Capacidade Máxima do Plano
+              </span>
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                Você já possui {consorciosAtivosDoCriador} de {maxConsorciosPlano} consórcio(s) ativo(s)
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 mt-1 leading-relaxed">
+                No Plano {currentUser.role === "COMUM" ? "Comum" : "Pro"}, você pode manter até {maxConsorciosPlano} consórcio ativo simultaneamente. Selecione o plano desejado abaixo para migrar:
+              </p>
+            </div>
+          </div>
+
+          {/* Cards Interativos e Selecionáveis dos Planos Pro e Pro Master */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Card Plano Pro */}
+            <div
+              onClick={() => setPlanoSelecionadoLimite("PRO")}
+              className={`p-5 rounded-2xl border-2 transition cursor-pointer relative flex flex-col justify-between ${
+                planoSelecionadoLimite === "PRO"
+                  ? "border-blue-600 bg-blue-50/70 shadow-md ring-2 ring-blue-500/20"
+                  : "border-slate-200 bg-white hover:border-slate-300 opacity-80 hover:opacity-100"
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                    Plano Pro
+                  </span>
+                  {planoSelecionadoLimite === "PRO" ? (
+                    <span className="flex items-center gap-1 text-[11px] font-bold text-blue-700">
+                      <CheckCircle2 className="w-4 h-4 text-blue-600" /> Selecionado
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-semibold text-slate-400 hover:text-slate-600">
+                      Toque para escolher
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-1 my-2">
+                  <span className="text-3xl font-black text-slate-900">R$ 19,90</span>
+                  <span className="text-xs text-slate-500 font-semibold">/ mês</span>
+                </div>
+                <p className="text-xs text-slate-600 font-medium mb-3">
+                  Até 3 consórcios ativos e até 20 participantes por grupo.
+                </p>
+                <ul className="text-xs text-slate-700 space-y-1.5 pt-2 border-t border-slate-200">
+                  <li className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Até 3 consórcios simultâneos</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Até 20 membros por consórcio</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Gestão de repasses e WhatsApp</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Card Plano Pro Master */}
+            <div
+              onClick={() => setPlanoSelecionadoLimite("PRO_MASTER")}
+              className={`p-5 rounded-2xl border-2 transition cursor-pointer relative flex flex-col justify-between ${
+                planoSelecionadoLimite === "PRO_MASTER"
+                  ? "border-purple-600 bg-purple-50/70 shadow-md ring-2 ring-purple-500/20"
+                  : "border-slate-200 bg-white hover:border-slate-300 opacity-80 hover:opacity-100"
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 flex items-center gap-1 w-max">
+                    <Crown className="w-3.5 h-3.5 text-purple-700" /> Pro Master
+                  </span>
+                  {planoSelecionadoLimite === "PRO_MASTER" ? (
+                    <span className="flex items-center gap-1 text-[11px] font-bold text-purple-700">
+                      <CheckCircle2 className="w-4 h-4 text-purple-600" /> Selecionado
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-semibold text-slate-400 hover:text-slate-600">
+                      Toque para escolher
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-1 my-2">
+                  <span className="text-3xl font-black text-slate-900">R$ 29,90</span>
+                  <span className="text-xs text-slate-500 font-semibold">/ mês</span>
+                </div>
+                <p className="text-xs text-slate-600 font-medium mb-3">
+                  Grupos ilimitados e governança com Trilha de Auditoria.
+                </p>
+                <ul className="text-xs text-slate-700 space-y-1.5 pt-2 border-t border-slate-200">
+                  <li className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Consórcios ativos ilimitados</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Participantes ilimitados</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Painel exclusivo de Auditoria</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Dados Pix para Marcos Batista com Valor Dinâmico do Plano Selecionado */}
+          <div className="bg-gradient-to-br from-slate-50 to-emerald-50/50 rounded-2xl p-4 sm:p-5 border-2 border-emerald-200/80 space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                Instruções de Pagamento via Pix:
+              </h4>
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-200">
+                Valor a pagar: {planoSelecionadoLimite === "PRO" ? "R$ 19,90" : "R$ 29,90"}
+              </span>
+            </div>
+            <p className="text-xs text-slate-600">
+              Realize a transferência Pix para ativação imediata do{" "}
+              <strong className="text-slate-900">
+                {planoSelecionadoLimite === "PRO" ? "Plano Pro (R$ 19,90/mês)" : "Plano Pro Master (R$ 29,90/mês)"}
+              </strong>
+              :
+            </p>
+            <div className="bg-white rounded-xl p-3.5 border border-slate-200 text-xs space-y-1.5 font-medium">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-semibold">Favorecido:</span>
+                <span className="font-bold text-slate-900">{DADOS_PAGAMENTO_UPGRADE.favorecido}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-semibold">Tipo de Chave:</span>
+                <span className="font-semibold text-slate-800">{DADOS_PAGAMENTO_UPGRADE.tipoChavePix}</span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-slate-100 flex-wrap gap-1">
+                <span className="text-slate-500 font-semibold">Chave Pix:</span>
+                <span className="font-mono font-bold text-slate-900 text-xs sm:text-sm select-all">
+                  {DADOS_PAGAMENTO_UPGRADE.chavePix}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-slate-100 flex-wrap gap-1">
+                <span className="text-slate-500 font-semibold">WhatsApp Oficial:</span>
+                <span className="font-bold text-emerald-700 text-xs sm:text-sm">
+                  {DADOS_PAGAMENTO_UPGRADE.whatsapp}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(DADOS_PAGAMENTO_UPGRADE.chavePix);
+                  setChavePixCopiada(true);
+                  setTimeout(() => setChavePixCopiada(false), 2500);
+                }}
+                className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer ${
+                  chavePixCopiada
+                    ? "bg-emerald-600 text-white"
+                    : "bg-slate-900 hover:bg-slate-800 text-white"
+                }`}
+              >
+                {chavePixCopiada ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Chave Copiada!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>Copiar Chave Pix</span>
+                  </>
+                )}
+              </button>
+
+              <a
+                href={linkWhatsApp}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-xs"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>
+                  Enviar Comprovante ({planoSelecionadoLimite === "PRO" ? "Plano Pro" : "Pro Master"}) via WhatsApp
+                </span>
+              </a>
+
+              {onVoltar && (
+                <button
+                  type="button"
+                  onClick={onVoltar}
+                  className="px-4 py-2.5 border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer ml-auto"
+                >
+                  Voltar para Consórcios
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -424,7 +692,9 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
             <div className="flex items-center gap-2.5 sm:border-l sm:border-white/20 sm:pl-5 self-start sm:self-auto">
               <div className="bg-white/15 px-3.5 py-1.5 rounded-xl border border-white/20 text-center min-w-[75px]">
                 <span className="text-[10px] text-white/80 font-bold uppercase block">Pessoas</span>
-                <span className="text-sm font-black text-white">{totalMembros}</span>
+                <span className="text-sm font-black text-white">
+                  {totalMembros}{maxParticipantesPlano !== Infinity ? `/${maxParticipantesPlano}` : ""}
+                </span>
               </div>
 
               <div
@@ -445,6 +715,32 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
               </div>
             </div>
           </div>
+
+          {/* Alerta de Capacidade do Plano */}
+          {maxParticipantesPlano !== Infinity && (
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+              <span className="text-slate-600">
+                Capacidade do Plano {currentUser.role === "COMUM" ? "Comum" : "Pro"}:{" "}
+                <strong className="text-slate-900">{totalMembros} de {maxParticipantesPlano} pessoas</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setPlanoRecomendado(currentUser.role === "COMUM" ? "PRO" : "PRO_MASTER");
+                  setUpgradeMotivo(
+                    `Seu consórcio já possui ${totalMembros} participantes. Para expandir a capacidade, migre para o Plano ${
+                      currentUser.role === "COMUM" ? "Pro (até 20 pessoas por R$ 19,90/mês)" : "Pro Master (ilimitado por R$ 29,90/mês)"
+                    } via Pix para Marcos Batista.`
+                  );
+                  setModalUpgradeAberto(true);
+                }}
+                className="text-theme-text font-bold hover:underline cursor-pointer flex items-center gap-1"
+              >
+                <span>Expandir Limite</span>
+                <Crown className="w-3.5 h-3.5 text-amber-500" />
+              </button>
+            </div>
+          )}
 
           {/* Atalho opcional para o criador se incluir */}
           {!participantes.some((p) => p.email?.toLowerCase() === currentUser.email?.toLowerCase()) && (
@@ -1219,6 +1515,14 @@ export function CriarConsorcioWizard({ currentUser, onConcluido }: CriarConsorci
           </div>
         </div>
       )}
+
+      {/* Modal Padronizado de Upgrade de Planos com Pix para Marcos Batista */}
+      <ModalUpgradePlanos
+        aberto={modalUpgradeAberto}
+        onFechar={() => setModalUpgradeAberto(false)}
+        motivo={upgradeMotivo}
+        planoRecomendado={planoRecomendado}
+      />
     </div>
   );
 }

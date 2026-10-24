@@ -12,6 +12,7 @@ import { AuthView } from "@/components/AuthView";
 import { AppLoadingScreen } from "@/components/AppLogo";
 import { useTheme, ThemeName } from "@/components/ThemeProvider";
 import { ConsorcioComboSelector } from "@/components/ConsorcioComboSelector";
+import { ToastModal, ToastData } from "@/components/ToastModal";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabType>("participante");
@@ -25,6 +26,7 @@ export default function Home() {
 
   const [selectedUserId, setSelectedUserId] = useState<string | undefined>(undefined);
   const [selectedConsorcioId, setSelectedConsorcioId] = useState<string | undefined>(undefined);
+  const [toast, setToast] = useState<ToastData | null>(null);
   const { setTheme } = useTheme();
 
   const carregarDados = async (userId?: string, consorcioId?: string, silent = false) => {
@@ -88,6 +90,9 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-100/70 flex flex-col relative pb-20 md:pb-10">
+      {/* Toast Modal Flutuante Global */}
+      <ToastModal toast={toast} onClose={() => setToast(null)} />
+
       {/* Top Header Responsivo com Navegação no Desktop */}
       <Header
         userName={currentUser.name}
@@ -139,10 +144,20 @@ export default function Home() {
         {activeTab === "assistente" && canCreate && (
           <CriarConsorcioWizard
             currentUser={currentUser}
-            onConcluido={() => {
-              carregarDados(currentUser.id);
+            todosConsorcios={todosConsorcios}
+            onConcluido={async (novoId?: string, nomeCriado?: string) => {
+              if (novoId) {
+                setSelectedConsorcioId(novoId);
+              }
+              await carregarDados(currentUser.id, novoId);
               setActiveTab("criador");
+              setToast({
+                titulo: "Consórcio Criado com Sucesso!",
+                mensagem: `O grupo "${nomeCriado || "Novo Consórcio"}" foi cadastrado com sucesso e já está ativo para gestão!`,
+                tipo: "success",
+              });
             }}
+            onVoltar={() => setActiveTab("participante")}
           />
         )}
 
