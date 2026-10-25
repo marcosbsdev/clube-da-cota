@@ -14,6 +14,9 @@ Bem-vindo à documentação oficial do **Clube da Cota**. Toda a base de conheci
 
 ## 🗺️ Mapa da Documentação
 
+### 🏛️ Arquitetura de Sistemas
+* **[Desenho de Arquitetura de Sistemas](./arquitetura-do-sistema.md):** Especificação técnica completa com diagramas visuais (Visão Geral, Camadas de Software, Stack Tecnológica, Diagrama ER, Matriz RBAC, Fluxos de Negócio e Infraestrutura Docker).
+
 ### 1. Módulos do Sistema (`docs/modulos/`)
 * **[Consórcio & Regras Financeiras](./modulos/consorcio.md):** Cálculos da bolada, progressão de valores, ciclos mensais de contemplação, ordenação de cotas e regras de transparência.
 * **[Governança & Trilha de Auditoria](./modulos/auditoria.md):** Registro imutável de eventos operacionais, filtros por tipo de evento, pesquisa textual e restrição RBAC exclusiva para Pro Master e Super Admin.
