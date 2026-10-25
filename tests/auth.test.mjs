@@ -99,8 +99,33 @@ async function runAuthTests() {
 
   // Teste 6: Validação dos 4 Níveis de Acesso e Transição de Papéis
   console.log("Testando os 4 Níveis de Acesso e transição de papéis...");
-  const userCamila = await prisma.user.findUnique({ where: { email: "camila.pro@exemplo.com" } });
-  const userRenato = await prisma.user.findUnique({ where: { email: "renato.master@exemplo.com" } });
+  let userCamila = await prisma.user.findUnique({ where: { email: "camila.pro@exemplo.com" } });
+  let camilaCriada = false;
+  if (!userCamila) {
+    userCamila = await prisma.user.create({
+      data: {
+        name: "Camila Pro",
+        email: "camila.pro@exemplo.com",
+        role: "PRO",
+        isActivated: true,
+      },
+    });
+    camilaCriada = true;
+  }
+
+  let userRenato = await prisma.user.findUnique({ where: { email: "renato.master@exemplo.com" } });
+  let renatoCriado = false;
+  if (!userRenato) {
+    userRenato = await prisma.user.create({
+      data: {
+        name: "Renato Master",
+        email: "renato.master@exemplo.com",
+        role: "PRO_MASTER",
+        isActivated: true,
+      },
+    });
+    renatoCriado = true;
+  }
 
   if (!userCamila || userCamila.role !== "PRO") {
     throw new Error("Usuário Camila com papel PRO não encontrado.");
@@ -132,6 +157,12 @@ async function runAuthTests() {
   if (promotedToMaster.role !== "PRO_MASTER") throw new Error("Falha ao promover para PRO_MASTER.");
 
   await prisma.user.delete({ where: { id: tempUser.id } });
+  if (camilaCriada) {
+    await prisma.user.delete({ where: { id: userCamila.id } });
+  }
+  if (renatoCriado) {
+    await prisma.user.delete({ where: { id: userRenato.id } });
+  }
   console.log("✅ Teste 6: Validação dos 4 níveis de acesso (COMUM, PRO, PRO_MASTER, SUPER_ADMIN) e transição de papéis aprovada.");
 
   console.log("\n🎉 Todos os 6 testes do Módulo de Autenticação passaram com 100% de sucesso!");

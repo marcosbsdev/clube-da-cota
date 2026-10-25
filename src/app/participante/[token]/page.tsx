@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   getParticipanteByToken,
-  submitReceiptByTokenAction,
   ativarContaComSenhaAction,
   completarCadastroParticipanteAction,
   updateParticipantPixByTokenAction,
@@ -15,7 +14,6 @@ import {
   AlertCircle,
   Copy,
   Check,
-  Upload,
   Calendar,
   Sparkles,
   ArrowRight,
@@ -30,6 +28,7 @@ import {
   Phone,
   KeyRound,
   ExternalLink,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -57,10 +56,6 @@ export default function ParticipanteTokenPage() {
 
   // Estados de ações
   const [pixCopiado, setPixCopiado] = useState(false);
-  const [modalUploadAberto, setModalUploadAberto] = useState(false);
-  const [contribuicaoSelecionada, setContribuicaoSelecionada] = useState<any>(null);
-  const [nomeArquivo, setNomeArquivo] = useState("");
-  const [enviandoComprovante, setEnviandoComprovante] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
 
   // Estados de Cadastro Completo & Vinculação
@@ -124,33 +119,18 @@ export default function ParticipanteTokenPage() {
     carregarDados();
   }, [token]);
 
-  const handleCopiarPix = (chave: string) => {
+  const handleCopiarPix = (chave: string, nomeFavorecido?: string) => {
     if (!chave) return;
     navigator.clipboard.writeText(chave);
     setPixCopiado(true);
     setTimeout(() => setPixCopiado(false), 2500);
-  };
-
-  const handleEnviarComprovante = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!contribuicaoSelecionada || !nomeArquivo) return;
-
-    setEnviandoComprovante(true);
-    const res = await submitReceiptByTokenAction(token, contribuicaoSelecionada.id, nomeArquivo);
-    setEnviandoComprovante(false);
-
-    if (res.success) {
-      setToast({
-        titulo: "Comprovante Enviado!",
-        mensagem: res.message || "Comprovante enviado com sucesso!",
-        tipo: "success",
-      });
-      setNomeArquivo("");
-      setModalUploadAberto(false);
-      carregarDados();
-    } else {
-      alert(res.error || "Erro ao enviar comprovante.");
-    }
+    setToast({
+      titulo: "Chave PIX Copiada!",
+      mensagem: nomeFavorecido
+        ? `A chave Pix de ${nomeFavorecido} foi copiada para sua área de transferência. Cole no app do seu banco para pagar.`
+        : "A chave Pix foi copiada para sua área de transferência. Cole no app do seu banco para pagar.",
+      tipo: "success",
+    });
   };
 
   const handleCompletarCadastro = async (e: React.FormEvent) => {
@@ -817,31 +797,59 @@ export default function ParticipanteTokenPage() {
 
             {/* Chave PIX: Condicionada (Contemplado com Pix Direto vs Organizador) */}
             {isSouEuContemplado && temPixDiretoContemplado ? (
-              <div className="bg-emerald-50/70 rounded-2xl p-4 border border-emerald-200 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">🎉</span>
+              <div className="bg-gradient-to-br from-emerald-50 via-teal-50/50 to-white rounded-2xl p-4 sm:p-5 border-2 border-emerald-300 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xl">🎉</span>
                   <div>
-                    <h5 className="text-xs font-bold text-emerald-950">
+                    <h5 className="text-xs sm:text-sm font-black text-emerald-950">
                       Você é o Contemplado do Ciclo #{cicloAlvoPagamento}!
                     </h5>
-                    <p className="text-[11px] text-emerald-700">Modalidade: Pix Direto na Conta</p>
+                    <p className="text-[11px] text-emerald-700 font-medium">Modalidade: Pix Direto na Conta</p>
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-700 leading-relaxed font-medium">
-                  Você não precisa realizar Pix neste ciclo. A sua cota fica com você no seu bolso, e os demais participantes transferirão os valores diretamente para a sua chave Pix ({chavePixEfetiva}).
+                <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                  Você <strong>não precisa realizar Pix</strong> neste ciclo. A sua cota fica com você no seu bolso, e os demais participantes transferirão os valores diretamente para a sua chave Pix ({chavePixEfetiva}).
                 </p>
+
+                {/* Campo e Botão para o contemplado conferir e copiar sua própria chave */}
+                <div className="pt-1 flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={chavePixEfetiva}
+                    className="flex-1 bg-white border border-emerald-300 text-emerald-950 text-xs font-mono font-bold py-2.5 px-3 rounded-xl focus:outline-none truncate shadow-2xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleCopiarPix(chavePixEfetiva, "Sua Chave")}
+                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer shrink-0"
+                  >
+                    {pixCopiado ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        <span>Copiar Minha Chave</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             ) : chavePixEfetiva ? (
-              <div className={`rounded-2xl p-4 border space-y-2.5 ${
+              <div className={`rounded-2xl p-4 sm:p-5 border-2 space-y-3 ${
                 temPixDiretoContemplado
-                  ? "bg-emerald-50/50 border-emerald-200"
-                  : "bg-blue-50/60 border-blue-100"
+                  ? "bg-gradient-to-b from-emerald-50/60 via-white to-white border-emerald-300"
+                  : "bg-gradient-to-b from-blue-50/60 via-white to-white border-blue-200"
               }`}>
                 <div className="flex items-center justify-between gap-2">
                   <span className={`text-xs font-bold flex items-center gap-1.5 ${
                     temPixDiretoContemplado ? "text-emerald-950" : "text-blue-900"
                   }`}>
-                    <span>⚡</span> {temPixDiretoContemplado ? "Chave PIX do Contemplado" : "Chave PIX do Organizador"}
+                    {temPixDiretoContemplado ? <Zap className="w-4 h-4 text-emerald-600" /> : <span>💳</span>}
+                    <span>{temPixDiretoContemplado ? "Pix Direto ao Contemplado" : "Chave Pix do Consórcio"}</span>
                   </span>
                   <div className="flex items-center gap-1.5">
                     <span className={`text-[11px] font-bold ${
@@ -865,30 +873,51 @@ export default function ParticipanteTokenPage() {
                     readOnly
                     value={chavePixEfetiva}
                     className={`flex-1 bg-white border text-slate-800 text-xs font-mono font-bold py-2.5 px-3 rounded-xl focus:outline-none ${
-                      temPixDiretoContemplado ? "border-emerald-200" : "border-blue-200"
+                      temPixDiretoContemplado ? "border-emerald-300" : "border-blue-200"
                     }`}
                   />
                   <button
-                    onClick={() => handleCopiarPix(chavePixEfetiva)}
-                    className={`px-4 py-2.5 active:scale-95 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer flex-shrink-0 ${
+                    type="button"
+                    onClick={() => handleCopiarPix(chavePixEfetiva, temPixDiretoContemplado ? cicloInfo.usuarioNome : consorcio.criadorNome)}
+                    className={`px-3.5 py-2.5 active:scale-95 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer flex-shrink-0 ${
                       temPixDiretoContemplado
                         ? "bg-emerald-600 hover:bg-emerald-700"
                         : "bg-blue-600 hover:bg-blue-700"
                     }`}
+                    title="Copiar Chave Pix"
                   >
-                    {pixCopiado ? (
-                      <>
-                        <Check className="w-4 h-4 text-white" />
-                        <span>Copiado!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4" />
-                        <span>Copiar PIX</span>
-                      </>
-                    )}
+                    {pixCopiado ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
+
+                {/* Botão de Destaque Primário para Copiar a Chave (Substitui o botão de enviar comprovante) */}
+                <button
+                  type="button"
+                  onClick={() => handleCopiarPix(chavePixEfetiva, temPixDiretoContemplado ? cicloInfo.usuarioNome : consorcio.criadorNome)}
+                  className={`w-full py-3.5 px-4 rounded-xl font-bold text-xs sm:text-sm shadow-xs transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer touch-target ${
+                    pixCopiado
+                      ? "bg-emerald-600 text-white"
+                      : temPixDiretoContemplado
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                      : "bg-slate-900 hover:bg-black text-white"
+                  }`}
+                >
+                  {pixCopiado ? (
+                    <>
+                      <Check className="w-4 h-4 text-white" />
+                      <span>✓ Chave PIX Copiada com Sucesso!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 text-white" />
+                      <span>
+                        {temPixDiretoContemplado
+                          ? `Copiar Chave PIX de ${cicloInfo.usuarioNome}`
+                          : "Copiar Chave PIX do Consórcio"}
+                      </span>
+                    </>
+                  )}
+                </button>
 
                 {temPixDiretoContemplado ? (
                   <p className="text-[11px] text-emerald-700 italic mt-1 leading-relaxed">
@@ -901,22 +930,6 @@ export default function ParticipanteTokenPage() {
                 ) : null}
               </div>
             ) : null}
-
-            {/* Botão de Enviar Comprovante */}
-            <button
-              onClick={() => {
-                setContribuicaoSelecionada(proximaParcela);
-                setModalUploadAberto(true);
-              }}
-              className="w-full py-3.5 px-4 bg-slate-900 hover:bg-black active:scale-[0.99] text-white font-bold rounded-2xl text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2 transition cursor-pointer"
-            >
-              <Upload className="w-4 h-4" />
-              <span>
-                {proximaParcela.comprovante
-                  ? "Reenviar Novo Comprovante"
-                  : "Enviar Comprovante PIX"}
-              </span>
-            </button>
           </div>
         ) : (
           <div className="bg-emerald-50 rounded-3xl p-6 border border-emerald-200 text-center space-y-2">
@@ -1148,60 +1161,7 @@ export default function ParticipanteTokenPage() {
             <span>Falar no WhatsApp</span>
           </a>
         </div>
-
-
       </div>
-
-      {/* Modal Informativo: Funcionalidade em Desenvolvimento */}
-      {modalUploadAberto && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100] animate-in fade-in duration-150">
-          <div className="bg-white rounded-t-[32px] sm:rounded-3xl p-6 pb-8 sm:pb-6 w-full sm:max-w-md shadow-2xl space-y-4 border-t sm:border border-slate-100 relative">
-            {/* Puxador visual da gaveta no mobile */}
-            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto sm:hidden mb-2"></div>
-
-            {/* Botão de Fechar no canto superior direito */}
-            <button
-              onClick={() => setModalUploadAberto(false)}
-              className="absolute right-5 top-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-xs transition cursor-pointer"
-              title="Fechar"
-            >
-              ✕
-            </button>
-
-            {/* Cabeçalho Centralizado e Equilibrado */}
-            <div className="text-center pt-1">
-              <div className="w-14 h-14 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-3xl mx-auto shadow-xs mb-3">
-                🚧
-              </div>
-              <h3 className="text-base sm:text-lg font-black text-slate-900 leading-snug px-4">
-                Funcionalidade em Desenvolvimento
-              </h3>
-              <span className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full inline-block mt-1.5">
-                Em breve disponível
-              </span>
-            </div>
-
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-2 text-xs text-slate-600 leading-relaxed text-left">
-              <p>
-                O envio e anexo direto de comprovantes via arquivo (JPG, PNG e PDF) está em fase de implementação final e estará disponível nas próximas versões.
-              </p>
-              <p className="font-semibold text-slate-800 pt-2 border-t border-slate-200/60">
-                💡 Por enquanto, você pode realizar o pagamento utilizando a chave PIX do consórcio informada nesta tela e encaminhar o comprovante diretamente ao organizador do grupo.
-              </p>
-            </div>
-
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => setModalUploadAberto(false)}
-                className="w-full py-4 bg-slate-900 hover:bg-black text-white font-bold text-sm rounded-2xl shadow-md transition active:scale-[0.99] cursor-pointer"
-              >
-                Entendi, obrigado!
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }

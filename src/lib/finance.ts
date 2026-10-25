@@ -634,5 +634,153 @@ Notei que o prazo programado do consórcio "${input.nomeConsorcio}" já terminou
 Gostaria de saber se precisa de algum suporte com a plataforma ou na conferência dos pagamentos para ajudar na finalização do seu grupo. Quando concluir tudo, você poderá encerrá-lo no painel para arquivar e liberar vaga para novos consórcios!`;
 }
 
+export interface DestinatarioPixResult {
+  modo: "DIRETO_CONTEMPLADO" | "CONSORCIO_CENTRALIZADO" | "PROPRIO_CONTEMPLADO_RECEBEDOR" | "SEM_PENDENCIA";
+  chavePix: string;
+  tipoChavePix: string;
+  tipoChavePixLabel: string;
+  nomeDestinatario: string;
+  cicloAlvo: number;
+  cotaNumero?: number;
+  contempladoDesejaPixDireto: boolean;
+  souEuOContemplado: boolean;
+  mensagemContextual: string;
+}
+
+/**
+ * Determina para quem deve ser feito o pagamento via Pix da parcela atual de um consórcio.
+ * Regra de Negócio:
+ * 1. Se o contemplado do mês/ciclo tiver cadastro e tiver marcado no seu perfil que deseja
+ *    receber o PIX direto na sua conta (receberPixDireto === true) e possuir chave cadastrada:
+ *    -> A chave Pix exibida na tela é a do próprio contemplado.
+ * 2. Se o contemplado não tiver cadastro ou marcou que não deseja receber na sua conta
+ *    (receberPixDireto === false ou sem chave):
+ *    -> Apresenta o PIX do consórcio (centralizado no organizador).
+ * 3. Se o próprio participante logado for o contemplado deste ciclo e tiver Pix direto ativado:
+ *    -> Identifica como recebedor (sua cota fica retida no bolso e ele recebe dos demais).
+ */
+export function determinarDestinatarioPixParcela({
+  consorcio,
+  proximaContribuicao,
+  currentUserId,
+}: {
+  consorcio: any;
+  proximaContribuicao?: any;
+  currentUserId?: string;
+}): DestinatarioPixResult {
+  if (!consorcio) {
+    return {
+      modo: "CONSORCIO_CENTRALIZADO",
+      chavePix: "",
+      tipoChavePix: "CHAVE_ALEATORIA",
+      tipoChavePixLabel: "Chave Aleatória",
+      nomeDestinatario: "Consórcio",
+      cicloAlvo: 1,
+      contempladoDesejaPixDireto: false,
+      souEuOContemplado: false,
+      mensagemContextual: "",
+    };
+  }
+
+  // Ciclo alvo: o ciclo da próxima contribuição pendente ou o primeiro ciclo não contemplado
+  const cicloAlvo =
+    proximaContribuicao?.numeroCiclo ||
+    consorcio.cotas?.find((c: any) => c.status !== "CONTEMPLADA")?.ordemSorteio ||
+    1;
+
+  // Localiza a cota vinculada a este ciclo
+  const cotaDoCiclo = consorcio.cotas?.find(
+    (c: any) => (c.ordemSorteio || c.numero) === cicloAlvo
+  );
+
+  // Participante contemplado da cota
+  const participanteContemplado = cotaDoCiclo?.participantes?.[0];
+  const usuarioContemplado = participanteContemplado?.usuario;
+
+  // Validação solicitada: Contemplado tem cadastro, marcou receberPixDireto === true e possui chave Pix válida
+  const chavePixContempladoLimpa = usuarioContemplado?.chavePix?.trim();
+  const contempladoDesejaPixDireto = Boolean(
+    usuarioContemplado &&
+    usuarioContemplado.receberPixDireto === true &&
+    chavePixContempladoLimpa &&
+    chavePixContempladoLimpa.length > 0
+  );
+
+  // Verifica se o usuário atual é o próprio contemplado
+  const souEuOContemplado = Boolean(
+    currentUserId &&
+    cotaDoCiclo?.participantes?.some(
+      (p: any) => p.usuarioId === currentUserId || p.usuario?.id === currentUserId
+    )
+  );
+
+  const chaveConsorcio = (consorcio.chavePix || consorcio.dadosBancarios || "").trim();
+  const nomeCriador = consorcio.criadorNome || consorcio.criador?.name || "Organizador do Consórcio";
+
+  // Se não houver pendência de contribuição para este usuário
+  if (!proximaContribuicao) {
+    return {
+      modo: "SEM_PENDENCIA",
+      chavePix: chaveConsorcio,
+      tipoChavePix: consorcio.tipoChavePix || "CHAVE_ALEATORIA",
+      tipoChavePixLabel: getTipoChavePixLabel(consorcio.tipoChavePix),
+      nomeDestinatario: nomeCriador,
+      cicloAlvo,
+      cotaNumero: cotaDoCiclo?.numero,
+      contempladoDesejaPixDireto: false,
+      souEuOContemplado,
+      mensagemContextual: "Todas as suas parcelas estão quitadas. Nenhuma transferência pendente no momento.",
+    };
+  }
+
+  // Se o próprio usuário logado é o contemplado e optou por receber Pix direto
+  if (souEuOContemplado && contempladoDesejaPixDireto) {
+    return {
+      modo: "PROPRIO_CONTEMPLADO_RECEBEDOR",
+      chavePix: chavePixContempladoLimpa!,
+      tipoChavePix: usuarioContemplado.tipoChavePix || "CHAVE_ALEATORIA",
+      tipoChavePixLabel: getTipoChavePixLabel(usuarioContemplado.tipoChavePix),
+      nomeDestinatario: usuarioContemplado.name || "Você",
+      cicloAlvo,
+      cotaNumero: cotaDoCiclo?.numero,
+      contempladoDesejaPixDireto: true,
+      souEuOContemplado: true,
+      mensagemContextual: `Você é o contemplado do Ciclo #${cicloAlvo}! Sua cota fica retida no seu bolso e os demais amigos transferem para a sua chave Pix.`,
+    };
+  }
+
+  // Se o contemplado marcou no seu cadastro que deseja receber direto
+  if (contempladoDesejaPixDireto) {
+    const nomeContemplado = usuarioContemplado?.name || participanteContemplado?.name || "Contemplado do Mês";
+    return {
+      modo: "DIRETO_CONTEMPLADO",
+      chavePix: chavePixContempladoLimpa!,
+      tipoChavePix: usuarioContemplado.tipoChavePix || "CHAVE_ALEATORIA",
+      tipoChavePixLabel: getTipoChavePixLabel(usuarioContemplado.tipoChavePix),
+      nomeDestinatario: nomeContemplado,
+      cicloAlvo,
+      cotaNumero: cotaDoCiclo?.numero,
+      contempladoDesejaPixDireto: true,
+      souEuOContemplado: false,
+      mensagemContextual: `O participante contemplado deste mês (${nomeContemplado}) marcou em seu cadastro que deseja receber diretamente via Pix.`,
+    };
+  }
+
+  // Se o contemplado NÃO tem cadastro OU marcou que não deseja receber na sua conta OU não tem chave
+  const nomeContemplado = participanteContemplado?.usuario?.name || participanteContemplado?.name || "do mês";
+  return {
+    modo: "CONSORCIO_CENTRALIZADO",
+    chavePix: chaveConsorcio,
+    tipoChavePix: consorcio.tipoChavePix || "CHAVE_ALEATORIA",
+    tipoChavePixLabel: getTipoChavePixLabel(consorcio.tipoChavePix),
+    nomeDestinatario: nomeCriador,
+    cicloAlvo,
+    cotaNumero: cotaDoCiclo?.numero,
+    contempladoDesejaPixDireto: false,
+    souEuOContemplado: false,
+    mensagemContextual: `Pagamento centralizado para o organizador. O contemplado deste ciclo (${nomeContemplado}) não optou por Pix direto ou não possui chave cadastrada. O organizador recolherá os pagamentos e fará o repasse da bolada.`,
+  };
+}
+
 
 

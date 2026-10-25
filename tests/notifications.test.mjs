@@ -289,7 +289,7 @@ async function runTests() {
 
     // Teste 3: Confirmação de recebimento com justificativa gera log de auditoria e status PAGO
     console.log("Testando confirmação de recebimento e trilha de auditoria...");
-    const consorcio = await prisma.consorcio.findFirst({
+    let consorcio = await prisma.consorcio.findFirst({
       include: {
         criador: true,
         contribuicoes: {
@@ -297,6 +297,79 @@ async function runTests() {
         }
       }
     });
+
+    let consorcioCriadoNesteTeste = false;
+    let usuarioCriadoId = null;
+
+    if (!consorcio || consorcio.contribuicoes.length === 0) {
+      let criador = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN" } });
+      if (!criador) {
+        criador = await prisma.user.findFirst();
+      }
+
+      const usuarioParticipante = await prisma.user.create({
+        data: {
+          name: "Participante Teste Notif",
+          email: `part_notif_${Date.now()}@test.local`,
+          role: "COMUM",
+          isActivated: true,
+        },
+      });
+      usuarioCriadoId = usuarioParticipante.id;
+
+      consorcio = await prisma.consorcio.create({
+        data: {
+          nome: "Consórcio Teste Notificações",
+          valorCota: 200,
+          valorTotalBolada: 1000,
+          totalCotas: 5,
+          criadorId: criador.id,
+          dataInicio: new Date(),
+          dataPrimeiroVencimento: new Date(),
+          cotas: {
+            create: {
+              numero: 1,
+              ordemSorteio: 1,
+              participantes: {
+                create: {
+                  usuarioId: usuarioParticipante.id,
+                  percentual: 100,
+                  valorParcela: 200,
+                },
+              },
+            },
+          },
+        },
+        include: {
+          criador: true,
+          cotas: true,
+        },
+      });
+
+      await prisma.contribuicao.create({
+        data: {
+          consorcioId: consorcio.id,
+          cotaId: consorcio.cotas[0].id,
+          usuarioId: usuarioParticipante.id,
+          numeroCiclo: 1,
+          valorPrevisto: 200,
+          dataVencimento: new Date(),
+          status: "PENDENTE",
+        },
+      });
+
+      consorcio = await prisma.consorcio.findUnique({
+        where: { id: consorcio.id },
+        include: {
+          criador: true,
+          contribuicoes: {
+            include: { usuario: true, cota: true },
+          },
+        },
+      });
+
+      consorcioCriadoNesteTeste = true;
+    }
     assert(consorcio, "Consórcio deve existir para teste");
 
     const contribPendente = consorcio.contribuicoes.find(c => c.status === "PENDENTE" || c.status === "EM_ATRASO");
@@ -433,6 +506,13 @@ async function runTests() {
     // Limpeza dos logs gerados pelo teste
     if (auditConfirm) await prisma.auditoriaLog.delete({ where: { id: auditConfirm.id } });
     if (auditRevert) await prisma.auditoriaLog.delete({ where: { id: auditRevert.id } });
+
+    if (consorcioCriadoNesteTeste && consorcio) {
+      await prisma.consorcio.delete({ where: { id: consorcio.id } });
+      if (usuarioCriadoId) {
+        await prisma.user.delete({ where: { id: usuarioCriadoId } });
+      }
+    }
 
     console.log("\n🎉 Todos os 6 testes de Notificações, Confirmação e Auditoria passaram com 100% de sucesso!");
   } finally {

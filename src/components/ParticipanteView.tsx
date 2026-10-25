@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { CheckCircle2, Clock, AlertCircle, Upload, FileText, Check, ChevronRight, Calendar, Sparkles, Copy, Zap, Share2, Download } from "lucide-react";
-import { submitReceiptAction } from "@/app/actions";
-import { formatarDataSegura, formatarMoedaBRL, calcularValorCiclo, formatarMesAnoCiclo, calcularBoladaCiclo, getTipoChavePixLabel, calcularDataCiclo } from "@/lib/finance";
+import { CheckCircle2, Clock, AlertCircle, Check, ChevronRight, Calendar, Sparkles, Copy, Zap, Share2, Download } from "lucide-react";
+import { formatarDataSegura, formatarMoedaBRL, calcularValorCiclo, formatarMesAnoCiclo, calcularBoladaCiclo, getTipoChavePixLabel, calcularDataCiclo, determinarDestinatarioPixParcela } from "@/lib/finance";
 import { ToastModal, ToastData } from "@/components/ToastModal";
 import { ModalCronogramaPreview } from "@/components/ModalCronogramaPreview";
 import {
@@ -20,9 +19,6 @@ interface ParticipanteViewProps {
 }
 
 export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewProps) {
-  const [modalUploadAberto, setModalUploadAberto] = useState(false);
-  const [contribuicaoSelecionada, setContribuicaoSelecionada] = useState<any>(null);
-  const [nomeArquivo, setNomeArquivo] = useState("");
   const [toast, setToast] = useState<ToastData | null>(null);
   const [pixCopiado, setPixCopiado] = useState(false);
   const [filtroParcelas, setFiltroParcelas] = useState<"PENDENTES" | "PAGAS" | "TODAS">("PENDENTES");
@@ -37,11 +33,18 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
   const [previewCronogramaUrl, setPreviewCronogramaUrl] = useState<string | null>(null);
   const [previewCronogramaResultado, setPreviewCronogramaResultado] = useState<any>(null);
 
-  const handleCopiarPix = (chave: string) => {
+  const handleCopiarPix = (chave: string, nomeFavorecido?: string) => {
     if (!chave) return;
     navigator.clipboard.writeText(chave);
     setPixCopiado(true);
     setTimeout(() => setPixCopiado(false), 2500);
+    setToast({
+      titulo: "Chave PIX Copiada!",
+      mensagem: nomeFavorecido
+        ? `A chave Pix de ${nomeFavorecido} foi copiada para sua área de transferência. Cole no app do seu banco para pagar.`
+        : "A chave Pix foi copiada para a área de transferência. Cole no app do seu banco para pagar.",
+      tipo: "success",
+    });
   };
 
   if (!consorcio) {
@@ -247,20 +250,6 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
     }
   };
 
-  const handleEnviarComprovante = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!contribuicaoSelecionada || !nomeArquivo) return;
-
-    await submitReceiptAction(contribuicaoSelecionada.id, currentUser.id, nomeArquivo);
-    setToast({
-      titulo: "Comprovante Enviado!",
-      mensagem: "Seu comprovante foi enviado com sucesso para conferência do criador.",
-      tipo: "success",
-    });
-    setModalUploadAberto(false);
-    setNomeArquivo("");
-  };
-
   const formatarData = (d: string) => {
     return formatarDataSegura(d);
   };
@@ -352,248 +341,352 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
             </div>
           </div>
 
-          {/* Próximo Vencimento & Envio de Comprovante */}
-          {proximaContribuicao && (
-            <div className="bg-amber-50/90 border-2 border-amber-300 rounded-3xl p-5 sm:p-6 shadow-sm">
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">
-                  📅
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-amber-900 uppercase tracking-wide whitespace-nowrap">
-                      Próxima Parcela
-                    </span>
-                    <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap ${
-                      proximaContribuicao.status === "EM_ATRASO"
-                        ? "bg-rose-200 text-rose-900"
-                        : "bg-amber-200 text-amber-900"
-                    }`}>
-                      {proximaContribuicao.status === "EM_ATRASO" ? "Vencida" : "Em aberto"}
-                    </span>
-                  </div>
-                  <p className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 whitespace-nowrap">
-                    R$ {proximaContribuicao.valorPrevisto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </p>
-                  <p className="text-xs text-slate-600 font-medium whitespace-nowrap">
-                    Vence em {formatarData(proximaContribuicao.dataVencimento)}
-                  </p>
-                </div>
-              </div>
-
-              {consorcio?.status !== "ENCERRADO" ? (
-                <button
-                  onClick={() => {
-                    setContribuicaoSelecionada(proximaContribuicao);
-                    setModalUploadAberto(true);
-                  }}
-                  className="w-full mt-4 py-3.5 px-4 bg-theme-main hover:opacity-95 active:scale-[0.99] text-white font-bold rounded-2xl text-sm shadow-md flex items-center justify-center gap-2 transition touch-target cursor-pointer"
-                >
-                  <Upload className="w-5 h-5" />
-                  <span>Enviar Comprovante PIX</span>
-                </button>
-              ) : (
-                <div className="mt-4 p-3 rounded-2xl bg-slate-200/80 text-slate-700 text-xs text-center font-bold">
-                  Consórcio encerrado (novos pagamentos bloqueados)
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Dados para Realizar o Pagamento (Condicionado: Pix Direto do Contemplado vs Pix do Consórcio) */}
+          {/* ======================================================== */}
+          {/* ÁREA DE PAGAMENTO DA PARCELA VIA PIX (REPAGINADA)        */}
+          {/* ======================================================== */}
           {(() => {
-            const cicloAlvoPagamento = proximaContribuicao?.numeroCiclo || 1;
-            const cotaDoCiclo = consorcio.cotas?.find(
-              (c: any) => (c.ordemSorteio || c.numero) === cicloAlvoPagamento
+            // Determina as regras de negócio de resolução da Chave Pix (Contemplado com Pix Direto vs Consórcio Centralizado)
+            const infoPix = determinarDestinatarioPixParcela({
+              consorcio,
+              proximaContribuicao,
+              currentUserId: currentUser?.id,
+            });
+
+            const cicloAlvoPagamento = infoPix.cicloAlvo;
+            const contempladoDesejaPixDireto = infoPix.contempladoDesejaPixDireto;
+            const souEuOContempladoDesteCiclo = infoPix.souEuOContemplado;
+            const chaveDestino = infoPix.chavePix;
+            const tipoChaveDestino = infoPix.tipoChavePixLabel;
+            const nomeDestinatario = infoPix.nomeDestinatario;
+            const chaveConsorcio = consorcio.chavePix || consorcio.dadosBancarios || "";
+
+            // Todas as pendências deste usuário
+            const parcelasPendentesUsuario = minhasContribuicoes.filter(
+              (c: any) => c.status === "PENDENTE" || c.status === "EM_ATRASO"
             );
-            const participanteContemplado = cotaDoCiclo?.participantes?.[0]?.usuario;
-            const temPixDiretoContemplado = Boolean(
-              participanteContemplado?.isActivated &&
-              participanteContemplado?.receberPixDireto &&
-              participanteContemplado?.chavePix
-            );
-            const souEuOContempladoDesteCiclo = Boolean(
-              cotaDoCiclo?.participantes?.some(
-                (p: any) => p.usuarioId === currentUser.id || p.usuario?.id === currentUser.id
-              )
+            const valorTotalPendentePessoal = parcelasPendentesUsuario.reduce(
+              (acc: number, c: any) => acc + c.valorPrevisto, 0
             );
 
-            // Cenário 1: O próprio usuário logado é o contemplado do ciclo e optou por receber Pix direto
-            if (souEuOContempladoDesteCiclo && temPixDiretoContemplado) {
+            // Caso 1: Usuário NÃO possui nenhuma parcela pendente
+            if (!proximaContribuicao) {
               return (
-                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-3xl p-5 sm:p-6 border border-emerald-200/90 shadow-sm space-y-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-black text-sm shadow-2xs">
+                <div className="bg-white rounded-3xl p-5 sm:p-6 border border-emerald-200/90 shadow-sm space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl flex-shrink-0 shadow-2xs">
                       🎉
-                    </span>
+                    </div>
                     <div>
-                      <h4 className="font-bold text-emerald-950 text-xs sm:text-sm">
-                        Você é o Contemplado do Ciclo #{cicloAlvoPagamento}!
-                      </h4>
-                      <p className="text-[11px] text-emerald-700 font-medium">
-                        Modalidade: Pix Direto na Conta Ativado
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-slate-900 text-sm sm:text-base">
+                          Tudo em Dia!
+                        </h4>
+                        <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full uppercase">
+                          Quitado
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Você não possui parcelas pendentes para pagamento no momento.
                       </p>
                     </div>
                   </div>
 
-                  <div className="p-3.5 bg-white/90 rounded-2xl border border-emerald-200/70 text-xs space-y-2">
-                    <p className="text-slate-700 leading-relaxed font-medium">
-                      Você <strong>não realiza Pix</strong> neste ciclo. A sua cota fica retida no seu bolso e os demais participantes enviarão os pagamentos diretamente para a sua chave Pix:
-                    </p>
-                    <div className="flex items-center justify-between bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200">
-                      <div className="min-w-0 pr-2">
-                        <span className="text-[10px] text-emerald-700 font-bold uppercase block">
-                          Sua Chave ({getTipoChavePixLabel(participanteContemplado?.tipoChavePix)})
-                        </span>
-                        <span className="font-mono font-bold text-emerald-950 text-xs truncate block">
-                          {participanteContemplado?.chavePix}
-                        </span>
+                  {chaveConsorcio && (
+                    <div className="pt-3 border-t border-slate-100 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500 font-medium">Chave Pix do Consórcio:</span>
+                        <span className="font-bold text-slate-700">{tipoChaveDestino}</span>
                       </div>
-                      <span className="text-[10px] font-extrabold bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded-md shrink-0">
-                        Pronto para Receber
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={chaveConsorcio}
+                          className="flex-1 bg-slate-50 border border-slate-200 text-slate-800 text-xs font-mono font-bold py-2.5 px-3 rounded-xl focus:outline-none truncate"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleCopiarPix(chaveConsorcio, nomeDestinatario)}
+                          className="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer shrink-0"
+                        >
+                          {pixCopiado ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{pixCopiado ? "Copiado!" : "Copiar"}</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               );
             }
 
-            // Cenário 2: Outro participante é o contemplado e optou por Pix Direto
-            if (temPixDiretoContemplado && participanteContemplado) {
-              const chaveDestino = participanteContemplado.chavePix;
+            // Caso 2: O próprio usuário logado é o Contemplado do ciclo E ativou o Pix Direto
+            if (souEuOContempladoDesteCiclo && contempladoDesejaPixDireto) {
               return (
-                <div className="bg-white rounded-3xl p-5 sm:p-6 border border-emerald-200/90 shadow-sm space-y-3.5">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wide flex items-center gap-1.5">
-                      <Zap className="w-4 h-4 text-emerald-600" />
-                      <span>Pagamento Direto ao Contemplado</span>
-                    </h4>
-                    <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold px-2 py-0.5 rounded-md">
-                      Ciclo #{cicloAlvoPagamento}
-                    </span>
+                <div className="bg-gradient-to-br from-emerald-50 via-teal-50/50 to-white rounded-3xl p-5 sm:p-6 border-2 border-emerald-300 shadow-sm space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">
+                      🎉
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wide text-emerald-800">
+                          Ciclo #{cicloAlvoPagamento}
+                        </span>
+                        <span className="text-[11px] font-black bg-emerald-200 text-emerald-950 px-2.5 py-0.5 rounded-full">
+                          Sua Contemplação
+                        </span>
+                      </div>
+                      <h4 className="text-base sm:text-lg font-black text-slate-900 mt-0.5">
+                        Você é o Contemplado do Mês!
+                      </h4>
+                    </div>
                   </div>
 
-                  <div className="p-3.5 bg-emerald-50/40 rounded-2xl border border-emerald-100 text-xs space-y-2.5">
-                    <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-slate-500">Destinatário:</span>
-                      <strong className="text-slate-900">{participanteContemplado.name}</strong>
-                    </div>
+                  <div className="p-4 bg-white/95 rounded-2xl border border-emerald-200/80 space-y-3">
+                    <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                      Neste ciclo você <strong>não realiza pagamento Pix</strong>. O valor da sua cota (R$ {proximaContribuicao.valorPrevisto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}) fica retido com você, e os demais participantes transferem as parcelas diretamente para sua chave Pix:
+                    </p>
 
-                    <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-slate-500">Tipo de Chave:</span>
-                      <span className="font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md text-[10px]">
-                        {getTipoChavePixLabel(participanteContemplado.tipoChavePix)}
-                      </span>
-                    </div>
-
-                    <div className="space-y-1 pt-1">
-                      <label className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-                        Chave Pix do Participante
-                      </label>
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="text-emerald-800 font-bold uppercase tracking-wide text-[10px]">
+                          Sua Chave Pix ({tipoChaveDestino})
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                          Ativa para Recebimento
+                        </span>
+                      </div>
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
                           readOnly
                           value={chaveDestino}
-                          className="flex-1 bg-white border border-emerald-200 text-slate-900 text-xs font-mono font-bold py-2.5 px-3 rounded-xl focus:outline-none truncate"
+                          className="flex-1 bg-emerald-50/50 border border-emerald-300 text-emerald-950 text-xs font-mono font-bold py-3 px-3 rounded-xl focus:outline-none truncate"
                         />
                         <button
                           type="button"
-                          onClick={() => handleCopiarPix(chaveDestino)}
-                          className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer shrink-0"
-                          title="Copiar Chave Pix"
+                          onClick={() => handleCopiarPix(chaveDestino, "Sua Chave")}
+                          className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer shrink-0"
                         >
                           {pixCopiado ? (
                             <>
-                              <Check className="w-3.5 h-3.5 text-white" />
+                              <Check className="w-4 h-4" />
                               <span>Copiado!</span>
                             </>
                           ) : (
                             <>
-                              <Copy className="w-3.5 h-3.5 text-white" />
-                              <span>Copiar</span>
+                              <Copy className="w-4 h-4" />
+                              <span>Copiar Minha Chave</span>
                             </>
                           )}
                         </button>
                       </div>
                     </div>
-
-                    <p className="text-[11px] text-slate-500 italic mt-1 leading-relaxed">
-                      💡 O participante completou cadastro e optou por receber o Pix diretamente em sua conta pessoal.
-                    </p>
                   </div>
                 </div>
               );
             }
 
-            // Cenário 3: Centralizado no Consórcio (Participante optou por Não ou não fez cadastro completo)
-            const chaveConsorcio = consorcio.chavePix || consorcio.dadosBancarios;
-            if (!chaveConsorcio) return null;
+            // Caso 3: Usuário precisa realizar o pagamento da parcela
+            // (Verifica se paga direto ao Contemplado ou ao Consórcio)
+            const isAtrasado = proximaContribuicao.status === "EM_ATRASO";
+            const isEncerrado = consorcio?.status === "ENCERRADO";
 
             return (
-              <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm space-y-3.5">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wide flex items-center gap-2">
-                    <span>💳</span> Chave Pix do Consórcio
-                  </h4>
-                  <span className="text-[10px] bg-slate-100 text-slate-700 border border-slate-200 font-bold px-2 py-0.5 rounded-md">
-                    Centralizado
+              <div className={`rounded-3xl p-5 sm:p-6 border-2 shadow-sm space-y-4 transition-all ${
+                isAtrasado
+                  ? "bg-rose-50/70 border-rose-300"
+                  : contempladoDesejaPixDireto
+                  ? "bg-gradient-to-b from-emerald-50/60 via-white to-white border-emerald-300"
+                  : "bg-gradient-to-b from-amber-50/60 via-white to-white border-amber-300"
+              }`}>
+                {/* Cabeçalho da Próxima Parcela */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 shadow-2xs border ${
+                      isAtrasado
+                        ? "bg-rose-100 border-rose-300 text-rose-800"
+                        : "bg-amber-100 border-amber-300 text-amber-900"
+                    }`}>
+                      📅
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                          Próxima Parcela • Ciclo #{proximaContribuicao.numeroCiclo}
+                        </span>
+                      </div>
+                      <p className="text-2xl sm:text-3xl font-black text-slate-900 mt-0.5 tracking-tight">
+                        R$ {proximaContribuicao.valorPrevisto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </p>
+                      <p className={`text-xs font-semibold mt-0.5 ${isAtrasado ? "text-rose-700" : "text-slate-600"}`}>
+                        Vence em {formatarData(proximaContribuicao.dataVencimento)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className={`text-[11px] font-black px-2.5 py-1 rounded-full whitespace-nowrap shadow-2xs ${
+                    isAtrasado
+                      ? "bg-rose-200 text-rose-900"
+                      : "bg-amber-200 text-amber-950"
+                  }`}>
+                    {isAtrasado ? "⚠️ Vencida" : "⏳ Em aberto"}
                   </span>
                 </div>
 
-                <div className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/70 text-xs space-y-2.5">
-                  <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-slate-500">Organizador:</span>
-                    <strong className="text-slate-900">{consorcio.criadorNome}</strong>
+                {/* Se o usuário possuir mais de 1 cota com parcela em aberto */}
+                {parcelasPendentesUsuario.length > 1 && (
+                  <div className="p-2.5 rounded-xl bg-slate-100/80 border border-slate-200/80 text-[11px] text-slate-600 flex items-center justify-between">
+                    <span>Você possui <strong>{parcelasPendentesUsuario.length} parcelas</strong> em aberto:</span>
+                    <strong className="text-slate-900 font-bold">
+                      Total: R$ {valorTotalPendentePessoal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </strong>
                   </div>
+                )}
 
-                  {consorcio.tipoChavePix && (
-                    <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-slate-500">Tipo de Chave:</span>
-                      <span className="font-bold text-slate-700 bg-slate-200/80 px-2 py-0.5 rounded-md text-[10px]">
-                        {getTipoChavePixLabel(consorcio.tipoChavePix)}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="space-y-1 pt-1">
-                    <label className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-                      Chave Pix
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        readOnly
-                        value={chaveConsorcio}
-                        className="flex-1 bg-white border border-slate-200 text-slate-900 text-xs font-mono font-bold py-2.5 px-3 rounded-xl focus:outline-none truncate"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleCopiarPix(chaveConsorcio)}
-                        className="px-3.5 py-2.5 bg-theme-main hover:opacity-90 active:scale-95 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer shrink-0"
-                        title="Copiar Chave Pix"
-                      >
-                        {pixCopiado ? (
+                {/* Se consórcio estiver encerrado */}
+                {isEncerrado ? (
+                  <div className="p-3.5 rounded-2xl bg-slate-100 text-slate-700 text-xs text-center font-bold">
+                    🔒 Consórcio encerrado (novos pagamentos bloqueados)
+                  </div>
+                ) : (
+                  /* Divisor Visual & Bloco PIX */
+                  <div className="border-t border-slate-200/80 pt-3.5 space-y-3">
+                    {/* Identificação de Quem Recebe o Pix (Validação de Negócio) */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        {contempladoDesejaPixDireto ? (
                           <>
-                            <Check className="w-3.5 h-3.5 text-white" />
-                            <span>Copiado!</span>
+                            <Zap className="w-4 h-4 text-emerald-600" />
+                            <span className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
+                              Pix Direto ao Contemplado
+                            </span>
                           </>
                         ) : (
                           <>
-                            <Copy className="w-3.5 h-3.5 text-white" />
-                            <span>Copiar</span>
+                            <span className="text-sm">💳</span>
+                            <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                              Chave Pix do Consórcio
+                            </span>
+                          </>
+                        )}
+                      </div>
+
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border ${
+                        contempladoDesejaPixDireto
+                          ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                          : "bg-slate-100 text-slate-700 border-slate-300"
+                      }`}>
+                        {contempladoDesejaPixDireto ? "Direto na Conta" : "Centralizado"}
+                      </span>
+                    </div>
+
+                    {/* Detalhes do Destinatário & Tipo de Chave */}
+                    <div className={`p-3.5 rounded-2xl border space-y-2.5 ${
+                      contempladoDesejaPixDireto
+                        ? "bg-emerald-50/50 border-emerald-200"
+                        : "bg-slate-50/80 border-slate-200"
+                    }`}>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500 font-medium">Favorecido:</span>
+                        <strong className="text-slate-900 font-bold truncate max-w-[200px] text-right">
+                          {nomeDestinatario}
+                        </strong>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500 font-medium">Tipo de Chave:</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                          contempladoDesejaPixDireto
+                            ? "bg-emerald-200/70 text-emerald-900"
+                            : "bg-slate-200 text-slate-800"
+                        }`}>
+                          {tipoChaveDestino}
+                        </span>
+                      </div>
+
+                      {/* Campo da Chave Pix em Destaque */}
+                      <div className="space-y-1.5 pt-1">
+                        <label className="text-[10px] uppercase font-bold text-slate-500 block tracking-wider">
+                          Chave Pix para Transferência
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={chaveDestino || "Não cadastrada"}
+                            className={`flex-1 border text-xs font-mono font-bold py-3 px-3.5 rounded-xl focus:outline-none truncate shadow-2xs ${
+                              contempladoDesejaPixDireto
+                                ? "bg-white border-emerald-300 text-emerald-950"
+                                : "bg-white border-slate-300 text-slate-900"
+                            }`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleCopiarPix(chaveDestino, nomeDestinatario)}
+                            disabled={!chaveDestino}
+                            className={`p-3 rounded-xl transition cursor-pointer flex items-center justify-center shrink-0 border shadow-2xs active:scale-95 ${
+                              pixCopiado
+                                ? "bg-emerald-600 border-emerald-600 text-white"
+                                : "bg-white border-slate-300 text-slate-700 hover:bg-slate-100"
+                            }`}
+                            title="Copiar Chave Pix"
+                          >
+                            {pixCopiado ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Botão de Ação Primária em Destaque Máximo */}
+                      <button
+                        type="button"
+                        onClick={() => handleCopiarPix(chaveDestino, nomeDestinatario)}
+                        disabled={!chaveDestino}
+                        className={`w-full py-3.5 px-4 rounded-2xl font-black text-xs sm:text-sm shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer touch-target ${
+                          pixCopiado
+                            ? "bg-emerald-600 text-white shadow-emerald-200"
+                            : contempladoDesejaPixDireto
+                            ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200"
+                            : "bg-theme-main hover:opacity-95 text-white"
+                        }`}
+                      >
+                        {pixCopiado ? (
+                          <>
+                            <Check className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                            <span>✓ Chave PIX Copiada com Sucesso!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                            <span>
+                              {contempladoDesejaPixDireto
+                                ? "Copiar Chave PIX do Contemplado"
+                                : "Copiar Chave PIX do Consórcio"}
+                            </span>
                           </>
                         )}
                       </button>
+
+                      {/* Mensagem Explicativa Amigável */}
+                      <p className="text-[11px] text-slate-500 italic mt-1 leading-relaxed">
+                        {contempladoDesejaPixDireto ? (
+                          <span>💡 {infoPix.mensagemContextual}</span>
+                        ) : (
+                          <span>ℹ️ {infoPix.mensagemContextual}</span>
+                        )}
+                      </p>
+
+                      {/* Regras do consórcio (se houver) */}
+                      {consorcio.regras && (
+                        <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-600">
+                          <p className="whitespace-pre-line leading-relaxed italic">
+                            <strong>Regras:</strong> {consorcio.regras}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
-
-                  {consorcio.regras && (
-                    <div className="pt-2 border-t border-slate-200/70 text-[11px] text-slate-600">
-                      <p className="whitespace-pre-line leading-relaxed italic">Regras: {consorcio.regras}</p>
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
             );
           })()}
@@ -1118,56 +1211,6 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
         </div>
       </div>
 
-      {/* Modal Informativo: Funcionalidade em Desenvolvimento */}
-      {modalUploadAberto && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100] animate-in fade-in duration-150">
-          <div className="bg-white rounded-t-[32px] sm:rounded-3xl p-6 pb-8 sm:pb-6 w-full sm:max-w-md shadow-2xl space-y-4 border-t sm:border border-slate-100 relative">
-            {/* Puxador visual da gaveta no mobile */}
-            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto sm:hidden mb-2"></div>
-
-            {/* Botão de Fechar no canto superior direito */}
-            <button
-              onClick={() => setModalUploadAberto(false)}
-              className="absolute right-5 top-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-xs transition"
-              title="Fechar"
-            >
-              ✕
-            </button>
-
-            {/* Cabeçalho Centralizado e Equilibrado */}
-            <div className="text-center pt-1">
-              <div className="w-14 h-14 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-3xl mx-auto shadow-xs mb-3">
-                🚧
-              </div>
-              <h3 className="text-base sm:text-lg font-black text-slate-900 leading-snug px-4">
-                Funcionalidade em Desenvolvimento
-              </h3>
-              <span className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full inline-block mt-1.5">
-                Em breve disponível
-              </span>
-            </div>
-
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-2 text-xs text-slate-600 leading-relaxed text-left">
-              <p>
-                O envio e anexo direto de comprovantes via arquivo (JPG, PNG e PDF) está em fase de implementação final e estará disponível nas próximas versões.
-              </p>
-              <p className="font-semibold text-slate-800 pt-2 border-t border-slate-200/60">
-                💡 Por enquanto, você pode realizar o pagamento utilizando a chave PIX do consórcio informada nesta tela e encaminhar o comprovante diretamente ao organizador do grupo.
-              </p>
-            </div>
-
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => setModalUploadAberto(false)}
-                className="w-full py-4 bg-slate-900 hover:bg-black text-white font-bold text-sm rounded-2xl shadow-md transition active:scale-[0.99] cursor-pointer"
-              >
-                Entendi, obrigado!
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {/* Modal de Pré-visualização e Envio do Cronograma Oficial */}
       <ModalCronogramaPreview
         aberto={modalCronogramaAberto}

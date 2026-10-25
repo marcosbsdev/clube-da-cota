@@ -259,7 +259,7 @@ async function executarSubstituicaoParticipante(input) {
 async function runTests() {
   console.log("🧪 Iniciando testes de Edição e Substituição/Repasse de Participantes...\n");
 
-  const consorcio = await prisma.consorcio.findFirst({
+  let consorcio = await prisma.consorcio.findFirst({
     where: { status: "ATIVO" },
     include: {
       criador: true,
@@ -273,8 +273,88 @@ async function runTests() {
     },
   });
 
+  let consorcioCriadoNesteTeste = false;
+  let participanteCriadoNesteTeste = false;
+
   if (!consorcio || consorcio.cotas.length === 0) {
-    throw new Error("Consórcio ativo com cotas não encontrado no banco.");
+    let criador = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN" } });
+    if (!criador) {
+      criador = await prisma.user.findFirst();
+    }
+
+    const participanteAntigo = await prisma.user.create({
+      data: {
+        name: "Participante Teste Repasse",
+        email: `part_repasse_${Date.now()}@test.local`,
+        role: "COMUM",
+        isActivated: true,
+      },
+    });
+    participanteCriadoNesteTeste = true;
+
+    consorcio = await prisma.consorcio.create({
+      data: {
+        nome: "Consórcio Teste Repasse",
+        valorCota: 100,
+        valorTotalBolada: 500,
+        totalCotas: 5,
+        criadorId: criador.id,
+        dataInicio: new Date(),
+        dataPrimeiroVencimento: new Date(),
+        cotas: {
+          create: {
+            numero: 1,
+            ordemSorteio: 1,
+            participantes: {
+              create: {
+                usuarioId: participanteAntigo.id,
+                percentual: 100,
+                valorParcela: 100,
+              },
+            },
+          },
+        },
+      },
+      include: {
+        criador: true,
+        cotas: {
+          include: {
+            participantes: { include: { usuario: true } },
+            contribuicoes: true,
+          },
+          orderBy: { numero: "asc" },
+        },
+      },
+    });
+
+    await prisma.contribuicao.create({
+      data: {
+        consorcioId: consorcio.id,
+        cotaId: consorcio.cotas[0].id,
+        usuarioId: participanteAntigo.id,
+        numeroCiclo: 1,
+        valorPrevisto: 100,
+        dataVencimento: new Date(),
+        status: "PENDENTE",
+      },
+    });
+
+    // Re-busca com contribuições
+    consorcio = await prisma.consorcio.findUnique({
+      where: { id: consorcio.id },
+      include: {
+        criador: true,
+        cotas: {
+          include: {
+            participantes: { include: { usuario: true } },
+            contribuicoes: true,
+          },
+          orderBy: { numero: "asc" },
+        },
+      },
+    });
+
+    consorcioCriadoNesteTeste = true;
   }
 
   const criador = consorcio.criador;
@@ -522,6 +602,14 @@ async function runTests() {
   assert.strictEqual(resMesmaPessoa.success, false, "Deve rejeitar substituir participante por ele mesmo");
   assert.ok(resMesmaPessoa.error?.includes("diferente"));
   console.log("✅ Teste 7: Rejeição de substituição idêntica aprovada.");
+
+  // Limpeza de dados gerados exclusivamente para este teste
+  if (consorcioCriadoNesteTeste) {
+    await prisma.consorcio.delete({ where: { id: consorcio.id } });
+    if (participanteCriadoNesteTeste) {
+      await prisma.user.delete({ where: { id: participanteAntigo.id } });
+    }
+  }
 
   console.log("\n🎉 Todos os 7 testes de Edição e Substituição de Participantes passaram com 100% de sucesso!");
 }

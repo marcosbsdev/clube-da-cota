@@ -1,12 +1,15 @@
 import { PrismaClient } from "@prisma/client";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
 async function run() {
   console.log("🚀 Iniciando carga do consórcio 'Amigos do Pau Darco 2026'...");
 
-  // 1. Identificar ou obter o criador (Marcos Batista)
+  const defaultPasswordHash = await bcrypt.hash("123456", 10);
+
+  // 1. Identificar ou atualizar o criador (Marcos Batista)
   let criador = await prisma.user.findUnique({
     where: { email: "markos.system@gmail.com" },
   });
@@ -16,8 +19,22 @@ async function run() {
       data: {
         name: "Marcos Batista",
         email: "markos.system@gmail.com",
+        passwordHash: defaultPasswordHash,
+        telefone: "(11) 96303-0266",
         role: "SUPER_ADMIN",
         preferredTheme: "blue",
+        isActivated: true,
+        tipoChavePix: "CELULAR",
+        chavePix: "11963030266",
+      },
+    });
+  } else {
+    criador = await prisma.user.update({
+      where: { id: criador.id },
+      data: {
+        telefone: "(11) 96303-0266",
+        tipoChavePix: "CELULAR",
+        chavePix: "11963030266",
         isActivated: true,
       },
     });
@@ -55,9 +72,10 @@ async function run() {
         data: {
           name: p.nome,
           email: p.email,
+          passwordHash: defaultPasswordHash,
           role: "COMUM",
           preferredTheme: "blue",
-          isActivated: false,
+          isActivated: true,
         },
       });
     }
@@ -89,7 +107,7 @@ async function run() {
     data: {
       nome: consorcioNome,
       finalidade: "Consórcio entre amigos com progressão mensal de R$ 5,00 por ciclo",
-      regras: "Vencimento no dia 05 de cada mês. Pagamentos via Pix. Contemplação mensal conforme ordem acordada.",
+      regras: "Vencimento no dia 05 de cada mês. Pagamentos via Pix Celular: 11963030266. Contemplação mensal conforme ordem acordada.",
       dataInicio,
       dataPrimeiroVencimento,
       frequencia: "MENSAL",
@@ -98,6 +116,8 @@ async function run() {
       valorAcrescimo: 5.0,
       valorTotalBolada: 12250.0, // 1000 + 1050 + 1100 + 1150 + 1200 + 1250 + 1300 + 1350 + 1400 + 1450
       totalCotas: 10,
+      tipoChavePix: "CELULAR",
+      chavePix: "11963030266",
       status: "ATIVO",
       criadorId: criador.id,
     },
@@ -106,8 +126,8 @@ async function run() {
   console.log(`✅ Consórcio criado com ID: ${consorcio.id}`);
 
   // 4. Definição das 10 Cotas (Sorteio Original x Sorteio Final)
-  // ordemSorteio representa a posição final (Ciclo no qual recebe)
-  // numero representa o número da cota sorteada originalmente
+  // ordemFinal: ciclo de recebimento acordado no grupo
+  // numeroOriginal: número da cota sorteada no sorteio original
   const cotasConfig = [
     {
       numeroOriginal: 6,
@@ -285,6 +305,8 @@ async function run() {
         valorCota: 100.0,
         valorAcrescimo: 5.0,
         valorTotalBolada: 12250.0,
+        chavePix: "11963030266",
+        tipoChavePix: "CELULAR",
         retroativo: true,
         dataInicio: "2026-02-05",
       }),
@@ -326,15 +348,15 @@ async function run() {
       tipoAcao: "CONTEMPLACAO_MARCADA",
       detalhes: JSON.stringify({
         contemplados: [
-          "Ciclo 1: Junior Brito",
-          "Ciclo 2: Patrick Guedes",
-          "Ciclo 3: Marcos Batista",
-          "Ciclo 4: Josivan Ferreira",
-          "Ciclo 5: Wilson Maracajá",
-          "Ciclo 6: Lucas Nunes",
-          "Ciclo 7: Patrick Guedes",
-          "Ciclo 8: Marcos Batista",
-          "Ciclo 9: Fábio Junior",
+          "Ciclo 1: Junior Brito (05/02/2026)",
+          "Ciclo 2: Patrick Guedes (05/03/2026)",
+          "Ciclo 3: Marcos Batista (05/04/2026)",
+          "Ciclo 4: Josivan Ferreira (05/05/2026)",
+          "Ciclo 5: Wilson Maracajá (05/06/2026)",
+          "Ciclo 6: Lucas Nunes (05/07/2026)",
+          "Ciclo 7: Patrick Guedes (05/08/2026)",
+          "Ciclo 8: Marcos Batista (05/09/2026)",
+          "Ciclo 9: Fábio Junior (05/10/2026)",
         ],
       }),
       justificativa: "Marcação das 9 cotas sorteadas e recebidas entre Fevereiro e Outubro de 2026.",
