@@ -33,9 +33,16 @@ Bem-vindo à documentação oficial do **Clube da Cota**. Toda a base de conheci
 * **[ADR 010 - Alerta de Ciclo Concluído, Encerramento Proativo e Radar CRM de Upgrade para o Administrador](./decisoes/010-aviso-ciclo-concluido-e-crm-upgrade-admin.md):** Identificação automática de consórcios com último vencimento no passado, banner interativo para o criador decidir entre manter ativo ou encerrar (liberando vaga), e aba de oportunidades no painel Super Admin com botão de WhatsApp contextualizado para CS/Upgrade e encerramento administrativo.
 * **[ADR 011 - Arquitetura Docker Multi-Stage, Multiplataforma e Suporte Nativo a PostgreSQL](./decisoes/011-arquitetura-docker-multiplataforma-e-postgresql.md):** Dockerfile multi-stage com build standalone Next.js (~150MB), orquestração via Docker Compose com PostgreSQL 16 Alpine, volumes persistentes e sincronização automática via entrypoint.
 * **[ADR 012 - Humanização Completa de Notificações e Auditoria (Eliminação de JSON Bruto)](./decisoes/012-humanizacao-notificacoes-e-auditoria-sem-json-bruto.md):** Eliminação de strings JSON cruas em ações em lote, criação de cards visuais estruturados na trilha de auditoria e implementação de trava de proteção anti-JSON no sininho.
+* **[ADR 013 - Cadastro Oficial e Vinculação de Conta via Link de Participante](./decisoes/013-cadastro-e-vinculacao-via-link-participante.md):** Onboarding fluido com criação de senha, unificação de cotas a contas existentes e gestão autônoma de chave Pix.
+* **[ADR 014 - Edição Cadastral de Perfil e Link Direto no WhatsApp do Organizador](./decisoes/014-edicao-perfil-e-whatsapp-direto-organizador.md):** Formulário completo de dados pessoais (Nome, Telefone com máscara, Senha) na aba Perfil & Tema, conexão direta do botão de WhatsApp ao chat privado do organizador e obrigatoriedade de feedback visual de sucesso.
 
-### 3. Guias de Operação e Infraestrutura (`docs/guias/`)
+### 3. Diretrizes Globais de Interface & Feedback ao Usuário
+* 🚨 **Regra Obrigatória de Feedback Visual em Mutações de Dados:** Toda e qualquer alteração de dados realizada pelo usuário (dados cadastrais, preferências Pix, pagamentos, trocas de cota, configurações ou planos) **DEVE OBRIGATORIAMENTE apresentar mensagem visual imediata de sucesso** ao usuário (notificação flutuante `ToastModal` e/ou banner afirmativo/feedback no botão). Mutações silenciosas são estritamente proibidas.
+* 🔒 **Regra Estrita de Auditoria & Notificações de Perfil:** Toda alteração de perfil **DEVE ser registrada na Auditoria (`EDICAO_PERFIL_USUARIO`) e apresentada nas Notificações do usuário autenticado**. **Somente alterações relacionadas ao cadastro do mesmo** devem ser exibidas em seu painel (isolamento e confidencialidade estrita entre usuários).
+* ⚡ **Revalidação Não-Destrutiva (`silent = true`):** Ao invocar rotinas de atualização de dados em segundo plano após mutações (ex: `carregarDados`), deve-se sempre utilizar o modo silencioso (`silent = true`). Isso previne a montagem de telas de loading de página inteira que desmontem as views ativas ou destruam os modais/toasts antes da leitura pelo usuário.
+
+### 4. Guias de Operação e Infraestrutura (`docs/guias/`)
 * **[Execução Local com Docker e Deploy em Servidor Dedicado](./guias/docker-deploy.md):** Manual completo de comandos `docker compose up`, variáveis de ambiente e deploy em VPS com reverse proxy SSL (Caddy/Nginx).
 
-### 4. Backlog e Plano de Produção
+### 5. Backlog e Plano de Produção
 * **[Pendências & Segurança para Produção](./pendencias.md):** Plano detalhado para endurecimento de segurança (sessão assinada, proteção de recuperação de senha e flags de ambiente).

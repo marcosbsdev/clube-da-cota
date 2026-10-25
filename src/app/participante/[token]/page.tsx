@@ -43,6 +43,7 @@ import {
   TIPOS_CHAVE_PIX,
   TipoChavePix,
   formatarTelefone,
+  gerarLinkWhatsApp,
 } from "@/lib/finance";
 import { ToastModal, ToastData } from "@/components/ToastModal";
 
@@ -1135,9 +1136,10 @@ export default function ParticipanteTokenPage() {
           </div>
 
           <a
-            href={`https://wa.me/?text=${encodeURIComponent(
-              `Olá ${consorcio.criadorNome}! Sou ${participante.nome}, da cota #${cota.numero} do consórcio ${consorcio.nome}. Gostaria de tirar uma dúvida.`
-            )}`}
+            href={gerarLinkWhatsApp({
+              telefone: consorcio.criadorTelefone,
+              mensagem: `Olá ${consorcio.criadorNome}! Sou ${participante.nome}, da cota #${cota.numero} do consórcio ${consorcio.nome}. Gostaria de tirar uma dúvida.`,
+            })}
             target="_blank"
             rel="noopener noreferrer"
             className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer self-start sm:self-auto"

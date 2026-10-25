@@ -2,13 +2,37 @@
 
 import React, { useState, useEffect } from "react";
 import { useTheme, ThemeName } from "./ThemeProvider";
-import { updateUserThemeAction, updateUserRoleAction, updateUserPixSettingsAction } from "@/app/actions";
-import { TipoChavePix, TIPOS_CHAVE_PIX, getTipoChavePixLabel } from "@/lib/finance";
+import {
+  updateUserThemeAction,
+  updateUserRoleAction,
+  updateUserPixSettingsAction,
+  updateUserProfileDadosAction,
+} from "@/app/actions";
+import { TipoChavePix, TIPOS_CHAVE_PIX, getTipoChavePixLabel, formatarTelefone } from "@/lib/finance";
 import { getVigenciaPlano } from "@/lib/plans";
 import { ToastModal, ToastData } from "@/components/ToastModal";
 import { ModalUpgradePlanos } from "./ModalUpgradePlanos";
 import { GestaoAssinaturasAdmin } from "./GestaoAssinaturasAdmin";
-import { Palette, Shield, User, Check, RefreshCw, LogOut, ShieldCheck, CheckCircle2, Zap, CreditCard, AlertCircle, PlusCircle, Crown, AlertTriangle } from "lucide-react";
+import {
+  Palette,
+  Shield,
+  User,
+  Check,
+  RefreshCw,
+  LogOut,
+  ShieldCheck,
+  CheckCircle2,
+  Zap,
+  CreditCard,
+  AlertCircle,
+  PlusCircle,
+  Crown,
+  AlertTriangle,
+  Phone,
+  Mail,
+  KeyRound,
+  Lock,
+} from "lucide-react";
 
 interface PerfilViewProps {
   currentUser: any;
@@ -33,6 +57,20 @@ export function PerfilView({
   const [toast, setToast] = useState<ToastData | null>(null);
   const [modalUpgradeAberto, setModalUpgradeAberto] = useState(false);
 
+  // Estado dos Dados Cadastrais e Contato
+  const [nome, setNome] = useState(currentUser?.name || "");
+  const [telefone, setTelefone] = useState(
+    currentUser?.telefone ? formatarTelefone(currentUser.telefone) : ""
+  );
+  const [alterarSenhaAberto, setAlterarSenhaAberto] = useState(false);
+  const [senhaAtual, setSenhaAtual] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
+  const [confirmaNovaSenha, setConfirmaNovaSenha] = useState("");
+  const [salvandoPerfil, setSalvandoPerfil] = useState(false);
+  const [perfilMsgErro, setPerfilMsgErro] = useState("");
+  const [perfilMsgSucesso, setPerfilMsgSucesso] = useState("");
+  const [salvoComSucesso, setSalvoComSucesso] = useState(false);
+
   // Estado das preferências de recebimento Pix
   const [receberPixDireto, setReceberPixDireto] = useState<boolean>(
     Boolean(currentUser?.receberPixDireto)
@@ -43,17 +81,104 @@ export function PerfilView({
   const [chavePix, setChavePix] = useState<string>(currentUser?.chavePix || "");
   const [salvandoPix, setSalvandoPix] = useState(false);
   const [pixMsgErro, setPixMsgErro] = useState("");
+  const [pixMsgSucesso, setPixMsgSucesso] = useState("");
+  const [salvoPixComSucesso, setSalvoPixComSucesso] = useState(false);
 
   useEffect(() => {
+    setNome(currentUser?.name || "");
+    setTelefone(currentUser?.telefone ? formatarTelefone(currentUser.telefone) : "");
+    setSenhaAtual("");
+    setNovaSenha("");
+    setConfirmaNovaSenha("");
+    setAlterarSenhaAberto(false);
+    setPerfilMsgErro("");
+
     setReceberPixDireto(Boolean(currentUser?.receberPixDireto));
     setTipoChavePix((currentUser?.tipoChavePix as TipoChavePix) || "CELULAR");
     setChavePix(currentUser?.chavePix || "");
     setPixMsgErro("");
   }, [currentUser]);
 
+  const handleSalvarDadosCadastrais = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPerfilMsgErro("");
+
+    const trimmedNome = nome.trim();
+    if (!trimmedNome || trimmedNome.length < 2) {
+      setPerfilMsgErro("O nome completo deve ter no mínimo 2 caracteres.");
+      setToast({
+        titulo: "Nome Inválido",
+        mensagem: "O nome completo deve ter no mínimo 2 caracteres.",
+        tipo: "warning",
+      });
+      return;
+    }
+
+    if (alterarSenhaAberto) {
+      if (!novaSenha || novaSenha.trim().length < 6) {
+        setPerfilMsgErro("A nova senha deve ter no mínimo 6 dígitos.");
+        setToast({
+          titulo: "Senha Muito Curta",
+          mensagem: "A nova senha deve ter no mínimo 6 dígitos.",
+          tipo: "warning",
+        });
+        return;
+      }
+      if (novaSenha !== confirmaNovaSenha) {
+        setPerfilMsgErro("A confirmação da nova senha não confere.");
+        setToast({
+          titulo: "Senhas Divergentes",
+          mensagem: "A confirmação da nova senha não confere com a nova senha digitada.",
+          tipo: "warning",
+        });
+        return;
+      }
+    }
+
+    setSalvandoPerfil(true);
+    const res = await updateUserProfileDadosAction({
+      usuarioId: currentUser.id,
+      name: trimmedNome,
+      telefone: telefone.trim() || null,
+      tipoChavePix,
+      chavePix: chavePix.trim() || null,
+      receberPixDireto,
+      senhaAtual: alterarSenhaAberto ? senhaAtual : undefined,
+      novaSenha: alterarSenhaAberto ? novaSenha.trim() : undefined,
+    });
+    setSalvandoPerfil(false);
+
+    if (res.success) {
+      setToast({
+        titulo: "Perfil Atualizado!",
+        mensagem: res.message || "Seus dados cadastrais foram atualizados com sucesso.",
+        tipo: "success",
+      });
+      setPerfilMsgSucesso("✓ Dados cadastrais salvos com sucesso!");
+      setSalvoComSucesso(true);
+      setTimeout(() => {
+        setSalvoComSucesso(false);
+        setPerfilMsgSucesso("");
+      }, 4000);
+      setAlterarSenhaAberto(false);
+      setSenhaAtual("");
+      setNovaSenha("");
+      setConfirmaNovaSenha("");
+      if (onRoleAtualizado) onRoleAtualizado();
+    } else {
+      setPerfilMsgErro(res.error || "Erro ao atualizar dados do perfil.");
+      setToast({
+        titulo: "Erro ao Atualizar",
+        mensagem: res.error || "Erro ao atualizar dados do perfil.",
+        tipo: "error",
+      });
+    }
+  };
+
   const handleSalvarPix = async (e: React.FormEvent) => {
     e.preventDefault();
     setPixMsgErro("");
+    setPixMsgSucesso("");
 
     if (receberPixDireto && !chavePix.trim()) {
       setPixMsgErro("Por favor, informe sua chave Pix para receber diretamente.");
@@ -80,6 +205,12 @@ export function PerfilView({
         mensagem: res.message || "Suas configurações de recebimento da bolada foram atualizadas.",
         tipo: "success",
       });
+      setPixMsgSucesso("✓ Preferências Pix salvas com sucesso!");
+      setSalvoPixComSucesso(true);
+      setTimeout(() => {
+        setSalvoPixComSucesso(false);
+        setPixMsgSucesso("");
+      }, 4000);
       if (onRoleAtualizado) onRoleAtualizado();
     } else {
       setPixMsgErro(res.error || "Erro ao salvar preferências Pix.");
@@ -284,6 +415,265 @@ export function PerfilView({
         )}
       </div>
 
+      {/* Dados Cadastrais & Contato */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-5">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+              <User className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="font-bold text-slate-900 text-sm sm:text-base">
+                Dados Pessoais & Contato
+              </h4>
+              <p className="text-xs text-slate-500">
+                Mantenha suas informações de contato e WhatsApp atualizadas
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {perfilMsgErro && (
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-semibold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            <span>{perfilMsgErro}</span>
+          </div>
+        )}
+
+        {perfilMsgSucesso && (
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl text-xs font-bold flex items-center gap-2.5 animate-in fade-in duration-200 shadow-2xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <span>{perfilMsgSucesso}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSalvarDadosCadastrais} className="space-y-4 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Nome Completo *
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  required
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  placeholder="Seu nome completo"
+                  className="w-full p-2.5 pl-9 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold bg-white focus:border-theme-main focus:outline-none shadow-2xs"
+                />
+                <User className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                WhatsApp / Celular
+              </label>
+              <div className="relative">
+                <input
+                  type="tel"
+                  value={telefone}
+                  onChange={(e) => setTelefone(formatarTelefone(e.target.value))}
+                  placeholder="(11) 98765-4321"
+                  className="w-full p-2.5 pl-9 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold bg-white focus:border-theme-main focus:outline-none shadow-2xs"
+                />
+                <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">
+                Utilizado para o botão de WhatsApp direto nos links dos seus consórcios.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-[11px] font-semibold text-slate-600">
+                E-mail de Acesso
+              </label>
+              <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                <Lock className="w-3 h-3" />
+                Identificador exclusivo da conta
+              </span>
+            </div>
+            <div className="relative">
+              <input
+                type="email"
+                disabled
+                value={currentUser.email || ""}
+                className="w-full p-2.5 pl-9 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold bg-slate-100 text-slate-500 cursor-not-allowed shadow-2xs"
+              />
+              <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Chave Pix e Tipo de Chave Pix (Dados Cadastrais da Conta) */}
+          <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-200/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-900">
+                <CreditCard className="w-4 h-4 text-emerald-600" />
+                <span>Chave Pix da Conta (Recebimento)</span>
+              </div>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
+                {receberPixDireto ? "Pix Direto Ativo" : "Pix Centralizado"}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Tipo da Chave
+                </label>
+                <select
+                  value={tipoChavePix}
+                  onChange={(e) => setTipoChavePix(e.target.value as TipoChavePix)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-white focus:border-theme-main focus:outline-none"
+                >
+                  {TIPOS_CHAVE_PIX.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Chave Pix
+                </label>
+                <input
+                  type="text"
+                  value={chavePix}
+                  onChange={(e) => setChavePix(e.target.value)}
+                  placeholder={
+                    TIPOS_CHAVE_PIX.find((t) => t.value === tipoChavePix)?.placeholder ||
+                    "Informe sua chave Pix"
+                  }
+                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono font-bold bg-white focus:border-theme-main focus:outline-none shadow-2xs"
+                />
+              </div>
+            </div>
+
+            <label className="flex items-start gap-2.5 cursor-pointer text-xs text-emerald-950 pt-1">
+              <input
+                type="checkbox"
+                checked={receberPixDireto}
+                onChange={(e) => setReceberPixDireto(e.target.checked)}
+                className="mt-0.5 w-4 h-4 text-emerald-600 rounded border-emerald-300 focus:ring-emerald-500 cursor-pointer"
+              />
+              <span className="text-[11px] leading-relaxed">
+                <strong>Desejo receber pagamentos da bolada diretamente nesta chave Pix</strong> quando eu for contemplado(a) nos consórcios.
+              </span>
+            </label>
+          </div>
+
+          {/* Seção Opcional: Alterar Senha */}
+          <div className="pt-2 border-t border-slate-100">
+            {!alterarSenhaAberto ? (
+              <button
+                type="button"
+                onClick={() => setAlterarSenhaAberto(true)}
+                className="text-xs font-bold text-theme-text hover:underline flex items-center gap-1.5 cursor-pointer py-1"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Desejo alterar minha senha de acesso</span>
+              </button>
+            ) : (
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <KeyRound className="w-4 h-4 text-theme-text" />
+                    <span>Alteração de Senha</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAlterarSenhaAberto(false);
+                      setSenhaAtual("");
+                      setNovaSenha("");
+                      setConfirmaNovaSenha("");
+                    }}
+                    className="text-[11px] text-slate-500 hover:text-slate-800 font-bold cursor-pointer"
+                  >
+                    Cancelar troca de senha
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Senha Atual *
+                    </label>
+                    <input
+                      type="password"
+                      value={senhaAtual}
+                      onChange={(e) => setSenhaAtual(e.target.value)}
+                      placeholder="Sua senha atual"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-white focus:border-theme-main focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Nova Senha *
+                    </label>
+                    <input
+                      type="password"
+                      value={novaSenha}
+                      onChange={(e) => setNovaSenha(e.target.value)}
+                      placeholder="Mínimo 6 dígitos"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-white focus:border-theme-main focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Confirmar Nova Senha *
+                    </label>
+                    <input
+                      type="password"
+                      value={confirmaNovaSenha}
+                      onChange={(e) => setConfirmaNovaSenha(e.target.value)}
+                      placeholder="Repita a nova senha"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-white focus:border-theme-main focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="submit"
+              disabled={salvandoPerfil}
+              className={`py-2.5 px-5 font-bold text-xs sm:text-sm rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50 ${
+                salvoComSucesso
+                  ? "bg-emerald-600 text-white shadow-emerald-200"
+                  : "bg-theme-main hover:opacity-90 text-white"
+              }`}
+            >
+              {salvandoPerfil ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Salvando Dados...</span>
+                </>
+              ) : salvoComSucesso ? (
+                <>
+                  <Check className="w-4 h-4 text-white" />
+                  <span>Salvo com Sucesso!</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>Salvar Dados Cadastrais</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+
       {/* Configuração de Recebimento da Bolada (Pix Direto vs Centralizado) */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-5">
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -316,6 +706,13 @@ export function PerfilView({
           <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-semibold flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
             <span>{pixMsgErro}</span>
+          </div>
+        )}
+
+        {pixMsgSucesso && (
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl text-xs font-bold flex items-center gap-2.5 animate-in fade-in duration-200 shadow-2xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <span>{pixMsgSucesso}</span>
           </div>
         )}
 
@@ -390,12 +787,21 @@ export function PerfilView({
             <button
               type="submit"
               disabled={salvandoPix}
-              className="py-2.5 px-5 bg-theme-main hover:opacity-90 text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+              className={`py-2.5 px-5 font-bold text-xs sm:text-sm rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50 ${
+                salvoPixComSucesso
+                  ? "bg-emerald-600 text-white shadow-emerald-200"
+                  : "bg-theme-main hover:opacity-90 text-white"
+              }`}
             >
               {salvandoPix ? (
                 <>
                   <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   <span>Salvando...</span>
+                </>
+              ) : salvoPixComSucesso ? (
+                <>
+                  <Check className="w-4 h-4 text-white" />
+                  <span>Salvo com Sucesso!</span>
                 </>
               ) : (
                 <>

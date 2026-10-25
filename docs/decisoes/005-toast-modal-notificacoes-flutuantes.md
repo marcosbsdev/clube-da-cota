@@ -30,3 +30,12 @@ Foi criado o componente padronizado `ToastModal` (`src/components/ToastModal.tsx
 * Layout 100% estável sem saltos verticais.
 * Feedback claro, moderno e consistente para qualquer operação realizada pelo usuário.
 * Código mais limpo e componentizado nas views.
+
+---
+
+## 🚨 Adendo de Governança: Obrigatoriedade de Feedback Visual e Revalidação Silenciosa
+
+1. **Obrigatoriedade Estrita de Mensagem de Sucesso:**
+   Toda e qualquer alteração de dados no sistema (cadastrais, preferências Pix, parcelas, comprovantes, trocas ou configurações) **DEVE, SEM EXCEÇÃO, emitir notificação visual de sucesso** confirmando a conclusão da operação ao usuário.
+2. **Prevenção de Desmontagem de Componentes (`silent = true`):**
+   Ao recarregar dados do servidor após uma mutação (`carregarDados`), a chamada DEVE sempre passar a flag de atualização silenciosa (`silent = true`). Isso evita a ativação de spinners ou telas de loading globais que destruam a árvore de componentes DOM e apaguem o `ToastModal` antes do tempo estipulado de leitura.

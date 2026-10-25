@@ -16,7 +16,7 @@ Este documento consolida o diagnóstico de maturidade do **Clube da Cota**, seus
 
 - **Regras de Negócio e Cálculos Financeiros:** 100% Concluído (Fixo, Variável e Progressivo).
 - **Interface do Usuário (Mobile-First / PWA):** 95% Concluído (Tailwind CSS, design system em Verde Floresta `#044E3A`).
-- **Suíte de Testes Automatizados:** 100% Concluído (66 testes passando em 10 suítes).
+- **Suíte de Testes Automatizados:** 100% Concluído (73 testes passando em 11 suítes).
 - **Infraestrutura Docker & Multi-DB:** 100% Concluído (PostgreSQL 16 Alpine + SQLite backup + script switcher).
 - **Hardening de Segurança & Serviços Reais:** ~75% Concluído (demanda fechamento das portas de desenvolvimento).
 
@@ -69,3 +69,4 @@ Estes itens devem ser implementados **antes** de aceitar cadastros de usuários 
 - [x] **Ambiente Docker Multiplataforma & Suporte Nativo a PostgreSQL:** Suporte duplo PostgreSQL 16 Alpine e SQLite local com comutador automático ([ADR 011](./decisoes/011-arquitetura-docker-multiplataforma-e-postgresql.md)).
 - [x] **Humanização Completa de Notificações e Auditoria:** Eliminação definitiva de JSON bruto e apresentação temática amigável ([ADR 012](./decisoes/012-humanizacao-notificacoes-e-auditoria-sem-json-bruto.md)).
 - [x] **Cadastro e Vinculação de Conta via Link de Participante:** Onboarding fluido com criação de senha, unificação de contas e gestão de chave Pix ([ADR 013](./decisoes/013-cadastro-e-vinculacao-via-link-participante.md)).
+- [x] **Edição Cadastral de Perfil & WhatsApp Direto do Organizador:** Gestão de Nome, WhatsApp, alteração de senha e abertura direta da conversa com organizador no portal do participante ([ADR 014](./decisoes/014-edicao-perfil-e-whatsapp-direto-organizador.md)).

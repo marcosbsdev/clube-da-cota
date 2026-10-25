@@ -206,6 +206,27 @@ export async function getConsorcioData(usuarioId?: string, consorcioId?: string)
     (consorcio as any).notificacoesDispensadasIds = dispensadasIds;
   }
 
+  // Notificações pessoais do usuário autenticado (Regra: auditoria de perfil exclusiva do usuário)
+  if (user && consorcio) {
+    const notificacoesPessoaisUsuario = await prisma.auditoriaLog.findMany({
+      where: {
+        usuarioAfetadoId: user.id,
+        tipoAcao: { in: ["EDICAO_PERFIL_USUARIO", "ATIVACAO_CONTA_PARTICIPANTE"] },
+      },
+      include: { usuarioResponsavel: true },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    });
+
+    const mapa = new Map();
+    for (const a of [...(consorcio.auditorias || []), ...notificacoesPessoaisUsuario]) {
+      if (!mapa.has(a.id)) mapa.set(a.id, a);
+    }
+    consorcio.auditorias = Array.from(mapa.values()).sort(
+      (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
   // Remove hashes de senha e tokens antes de enviar ao navegador.
   // Links de acesso (tokenAcesso) só seguem para o criador do consórcio e para admins.
   const podeVerTokensAcesso = isAdminGeral || consorcio?.criadorId === user.id;
@@ -820,6 +841,7 @@ export async function registerAction(formData: {
   name: string;
   email: string;
   password: string;
+  telefone?: string;
   receberPixDireto?: boolean;
   tipoChavePix?: string;
   chavePix?: string;
@@ -827,6 +849,9 @@ export async function registerAction(formData: {
   const name = formData.name.trim();
   const email = formData.email.trim().toLowerCase();
   const password = formData.password;
+  const telefone = formData.telefone ? formatarTelefone(formData.telefone) : null;
+  const chavePix = formData.chavePix?.trim() || null;
+  const tipoChavePix = formData.tipoChavePix || (chavePix ? "CELULAR" : null);
 
   if (!name || name.length < 2) {
     return { success: false, error: "O nome deve ter pelo menos 2 caracteres." };
@@ -855,13 +880,14 @@ export async function registerAction(formData: {
     data: {
       name,
       email,
+      telefone,
       passwordHash,
       role: "COMUM",
       preferredTheme: "blue",
       isActivated: true,
       receberPixDireto: Boolean(formData.receberPixDireto),
-      tipoChavePix: formData.tipoChavePix || (formData.receberPixDireto ? "CELULAR" : null),
-      chavePix: formData.chavePix?.trim() || null,
+      tipoChavePix,
+      chavePix,
     },
   });
 
@@ -1215,6 +1241,128 @@ export async function updateUserPixSettingsAction(input: UpdateUserPixSettingsIn
   } catch (error: any) {
     console.error("Erro ao salvar preferências Pix do usuário:", error);
     return { success: false, error: error.message || "Erro ao salvar preferências Pix." };
+  }
+}
+
+export interface UpdateUserProfileDadosInput {
+  usuarioId: string;
+  name: string;
+  telefone?: string | null;
+  tipoChavePix?: string | null;
+  chavePix?: string | null;
+  receberPixDireto?: boolean;
+  senhaAtual?: string;
+  novaSenha?: string;
+}
+
+export async function updateUserProfileDadosAction(input: UpdateUserProfileDadosInput) {
+  try {
+    if (!input.usuarioId) {
+      return { success: false, error: "Usuário não autenticado." };
+    }
+
+    const trimmedName = input.name?.trim();
+    if (!trimmedName || trimmedName.length < 2) {
+      return { success: false, error: "O nome completo deve ter no mínimo 2 caracteres." };
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: input.usuarioId },
+    });
+
+    if (!user) {
+      return { success: false, error: "Usuário não encontrado." };
+    }
+
+    const updateData: {
+      name: string;
+      telefone?: string | null;
+      tipoChavePix?: string | null;
+      chavePix?: string | null;
+      receberPixDireto?: boolean;
+      passwordHash?: string;
+    } = {
+      name: trimmedName,
+      telefone: input.telefone ? formatarTelefone(input.telefone) : null,
+    };
+
+    if (input.tipoChavePix !== undefined) {
+      updateData.tipoChavePix = input.tipoChavePix || "CELULAR";
+    }
+    if (input.chavePix !== undefined) {
+      updateData.chavePix = input.chavePix ? input.chavePix.trim() : null;
+    }
+    if (input.receberPixDireto !== undefined) {
+      updateData.receberPixDireto = Boolean(input.receberPixDireto);
+    }
+
+    // Validação de alteração de senha (se informada)
+    if (input.novaSenha && input.novaSenha.trim().length > 0) {
+      if (input.novaSenha.trim().length < 6) {
+        return { success: false, error: "A nova senha deve ter no mínimo 6 dígitos." };
+      }
+
+      // Se já possui senha cadastrada, exige a senha atual correta
+      if (user.passwordHash) {
+        if (!input.senhaAtual) {
+          return {
+            success: false,
+            error: "Informe a sua senha atual para autorizar a alteração de senha.",
+          };
+        }
+        const senhaValida = await bcrypt.compare(input.senhaAtual, user.passwordHash);
+        if (!senhaValida) {
+          return { success: false, error: "A senha atual informada está incorreta." };
+        }
+      }
+
+      updateData.passwordHash = await bcrypt.hash(input.novaSenha.trim(), 10);
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: input.usuarioId },
+      data: updateData,
+    });
+
+    // Registra na trilha de auditoria
+    await prisma.auditoriaLog.create({
+      data: {
+        usuarioResponsavelId: user.id,
+        usuarioAfetadoId: user.id,
+        tipoAcao: "EDICAO_PERFIL_USUARIO",
+        detalhes: JSON.stringify({
+          nomeAnterior: user.name,
+          novoNome: updatedUser.name,
+          telefoneAnterior: user.telefone || "Não informado",
+          novoTelefone: updatedUser.telefone || "Não informado",
+          tipoChavePixAnterior: user.tipoChavePix || "Não informado",
+          novoTipoChavePix: updatedUser.tipoChavePix || "Não informado",
+          chavePixAnterior: user.chavePix || "Não informada",
+          novaChavePix: updatedUser.chavePix || "Não informada",
+          senhaAlterada: Boolean(input.novaSenha),
+        }),
+      },
+    });
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message: "Dados cadastrais atualizados com sucesso!",
+      data: {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        telefone: updatedUser.telefone,
+        tipoChavePix: updatedUser.tipoChavePix,
+        chavePix: updatedUser.chavePix,
+        receberPixDireto: updatedUser.receberPixDireto,
+      },
+    };
+  } catch (error: any) {
+    console.error("Erro ao atualizar dados cadastrais do perfil:", error);
+    return {
+      success: false,
+      error: error.message || "Erro interno ao atualizar os dados do perfil.",
+    };
   }
 }
 
@@ -1775,7 +1923,7 @@ export async function getParticipanteByToken(token: string) {
             consorcio: {
               include: {
                 criador: {
-                  select: { id: true, name: true, email: true },
+                  select: { id: true, name: true, email: true, telefone: true },
                 },
               },
             },
@@ -1796,7 +1944,7 @@ export async function getParticipanteByToken(token: string) {
         include: {
           consorcio: {
             include: {
-              criador: { select: { id: true, name: true, email: true } },
+              criador: { select: { id: true, name: true, email: true, telefone: true } },
             },
           },
           participantes: {
@@ -1929,6 +2077,7 @@ export async function getParticipanteByToken(token: string) {
           regras: consorcio.regras,
           criadorNome: consorcio.criador.name,
           criadorEmail: consorcio.criador.email,
+          criadorTelefone: (consorcio.criador as any).telefone || null,
         },
         contribuicoes: contribuicoes.map((cb) => ({
           id: cb.id,

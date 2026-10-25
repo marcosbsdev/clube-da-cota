@@ -133,6 +133,12 @@ function getNotificacaoMeta(tipoAcao: string) {
         bg: "bg-emerald-100 text-emerald-800 border-emerald-200",
         icon: UserCheck,
       };
+    case "EDICAO_PERFIL_USUARIO":
+      return {
+        label: "Perfil Atualizado",
+        bg: "bg-blue-100 text-blue-800 border-blue-200",
+        icon: UserCheck,
+      };
     case "CRIACAO_CONSORCIO":
       return {
         label: "Consórcio Criado",
@@ -262,6 +268,12 @@ function formatarTextoNotificacao(tipoAcao: string, detalhes: string): string {
     case "ATIVACAO_CONTA_PARTICIPANTE":
       return detalhes && !detalhes.startsWith("{") ? detalhes : "Participante concluiu cadastro oficial com senha.";
 
+    case "EDICAO_PERFIL_USUARIO":
+      if (parsed?.senhaAlterada) {
+        return "Dados de perfil e senha atualizados com sucesso.";
+      }
+      return "Dados cadastrais de contato do perfil atualizados com sucesso.";
+
     case "CRIACAO_CONSORCIO":
       if (parsed?.nome) {
         const cotas = parsed.totalCotas ? ` com ${parsed.totalCotas} cotas` : "";
@@ -370,8 +382,12 @@ export function Header({
     }
   }, [consorcioAtual?.id]);
 
-  // Filtra APENAS novas notificações (não lidas e não dispensadas)
+  // Filtra APENAS novas notificações (não lidas, não dispensadas e isolamento de perfil)
   const unreadAuditorias = auditorias.filter((a: any) => {
+    // Regra Estrita: Notificações de perfil são exclusivas e privadas do usuário afetado
+    if (a.tipoAcao === "EDICAO_PERFIL_USUARIO" && a.usuarioAfetadoId && a.usuarioAfetadoId !== currentUserId) {
+      return false;
+    }
     if (dispensadasIds.includes(a.id)) return false;
     if (lidasAte) {
       const dataCriacao = new Date(a.createdAt).getTime();
@@ -502,7 +518,7 @@ export function Header({
                   }`}
                 >
                   <BarChart3 className="w-4 h-4" />
-                  <span>Gestão do Grupo</span>
+                  <span>Gestão de Consórcios</span>
                 </button>
               )}
 
@@ -529,7 +545,7 @@ export function Header({
                 }`}
               >
                 <UserCircle className="w-4 h-4" />
-                <span>Perfil & Tema</span>
+                <span>Perfil</span>
               </button>
             </nav>
           )}
@@ -774,7 +790,7 @@ export function Header({
                         }}
                         className="w-full p-2 rounded-xl text-xs font-bold text-theme-text hover:bg-slate-50 flex items-center justify-center gap-1.5 transition cursor-pointer"
                       >
-                        <span>Ir para Gestão do Grupo</span>
+                        <span>Ir para Gestão de Consórcios</span>
                         <ExternalLink className="w-3.5 h-3.5" />
                       </button>
                     )}

@@ -160,6 +160,12 @@ function getAcaoAuditoriaMeta(tipoAcao: string) {
         bg: "bg-emerald-100 text-emerald-900 border-emerald-200/80",
         icon: UserCheck,
       };
+    case "EDICAO_PERFIL_USUARIO":
+      return {
+        label: "Perfil Atualizado",
+        bg: "bg-blue-100 text-blue-900 border-blue-200/80",
+        icon: UserCheck,
+      };
     case "CRIACAO_CONSORCIO":
       return {
         label: "Consórcio Criado",

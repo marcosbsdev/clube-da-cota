@@ -47,3 +47,18 @@ Toda ação relevante gera uma entrada na tabela `AuditoriaLog`:
 ## 4. Apresentação Humanizada & Trava Anti-JSON
 * **Eliminação de JSON Bruto:** Eventos com cargas úteis complexas (ex: quitação em lote de 9 ciclos ou contemplações de múltiplos cotistas) são transformados dinamicamente em cards visuais temáticos ([ADR 012](../decisoes/012-humanizacao-notificacoes-e-auditoria-sem-json-bruto.md)).
 * **Sininho de Notificações (`Header.tsx`):** O dropdown de notificações conta com badges semânticos coloridos e texto corrido amigável, protegido por uma trava universal que impede que qualquer caractere `{` ou `[` vaze para a interface.
+
+---
+
+## 5. 🚨 Regra Estrita: Auditoria de Perfil & Isolamento nas Notificações do Usuário
+
+1. **Obrigatoriedade de Registro na Auditoria:**
+   * Toda e qualquer alteração de dados no perfil do usuário (`name`, `telefone`, `tipoChavePix`, `chavePix`, `receberPixDireto` ou senha) **DEVE OBRIGATORIAMENTE** gerar um registro na tabela `AuditoriaLog` com o tipo de ação **`EDICAO_PERFIL_USUARIO`**, preenchendo tanto `usuarioResponsavelId` quanto `usuarioAfetadoId` com o ID do usuário.
+   * Cargas úteis devem conter snapshot antes/depois sanitizado, registrando se houve troca de senha (`senhaAlterada: boolean`) sem nunca expor senhas em texto puro.
+
+2. **Apresentação Obrigatória nas Notificações do Usuário Autenticado:**
+   * O evento de alteração de perfil **DEVE ser apresentado no Sininho de Notificações** do usuário autenticado no [`Header.tsx`](file:///C:/Users/tctat/.gemini/antigravity/scratch/clube-da-cota/src/components/Header.tsx), com badge azul *"Perfil Atualizado"* e texto afirmativo.
+
+3. **Privacidade e Isolamento Estrito:**
+   * **Somente alterações relacionadas ao cadastro do próprio usuário autenticado devem ser apresentadas para ele.**
+   * Notificações de alteração de perfil são privadas e confidenciais: nenhum outro cotista, organizador de consórcio ou usuário comum pode visualizar notificações de edição de perfil de terceiros no seu painel. O isolamento é garantido tanto na camada de consulta do servidor ([`getConsorcioData`](file:///C:/Users/tctat/.gemini/antigravity/scratch/clube-da-cota/src/app/actions.ts)) quanto no filtro estrito do cliente ([`Header.tsx`](file:///C:/Users/tctat/.gemini/antigravity/scratch/clube-da-cota/src/components/Header.tsx)).

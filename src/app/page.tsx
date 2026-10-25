@@ -170,7 +170,7 @@ export default function Home() {
               setActiveTab("participante");
             }}
             onLogout={handleLogout}
-            onRoleAtualizado={() => carregarDados(selectedUserId, selectedConsorcioId)}
+            onRoleAtualizado={() => carregarDados(selectedUserId, selectedConsorcioId, true)}
             onCriarNovoConsorcio={canCreate ? () => setActiveTab("assistente") : undefined}
           />
         )}
