@@ -17,27 +17,32 @@ Desenvolveu-se um gerador nativo em Canvas 2D (`src/lib/exportCronogramaImage.ts
   - **Header Superior (Deep Navy `#08101E` a `#162846`):**
     - Logo oficial do Clube da Cota com cantos arredondados (`/icon-192x192.png`).
     - Tipografia de alto impacto: `CLUBE DA COTA • CONTROLE INTELIGENTE DE CONSÓRCIOS`.
-    - Selo auditado: `✓ ORDEM OFICIAL DO SORTEIO`.
-    - Nome do consórcio e subtítulo com contagem de ciclos.
+    - Selo auditado dinâmico: `✓ ORDEM OFICIAL DO SORTEIO`, `✓ X/Y CONTEMPLADOS` ou `✓ CONSÓRCIO CONCLUÍDO`.
+    - Nome do consórcio e subtítulo inteligente informando o progresso de contemplações (`X Contemplados • Y Aguardando`).
     - 4 Cards de Métricas: Valor da Cota, Bolada Total, Duração e Chave Pix.
-  - **Tabela Completa de Ciclos:**
+  - **Tabela Completa de Ciclos & Situação da Cota:**
     - Cabeçalho escuro contrastante (`#0F172A`).
+    - Coluna de **Situação da Cota**: badge verde esmeralda `✓ CONTEMPLADO` para quem já recebeu sua bolada e `⏳ AGUARDANDO` para os próximos ciclos.
+    - Destaque em fundo verde esmeralda suave (`#ECFDF5`) nas linhas de participantes já contemplados.
     - Destaque em verde esmeralda no Ciclo 1 (`Início`).
     - Destaque em azul no Último Ciclo (`Fim 🏁`).
     - Linhas zebradas suaves (`#FFFFFF` e `#F8FAFC`) com separadores limpos.
-    - Exibição de: Ciclo, Data de Vencimento, Nome do Contemplado e Valor da Bolada.
+    - Exibição de: Ciclo, Data de Vencimento, Nome do Contemplado, Situação da Cota e Valor da Bolada.
   - **Rodapé Institucional:**
     - Linha divisória verde esmeralda (`#10B981`).
     - Assinatura: `Clube da Cota • Plataforma de Gestão de Consórcios entre Amigos`.
     - Link oficial: `www.clubedacota.com.br`.
     - Carimbo de auditoria com data e hora exatas da emissão.
 
-### 2. Integração com o WhatsApp & Download Direto:
-- **Compartilhar no WhatsApp:**
+### 2. Disponibilidade na Página Meu Consórcio & Assistente:
+- **Página Meu Consórcio (`ParticipanteView.tsx`):**
+  - Botões de ação rápida no bloco "🎲 Ordem de Contemplação & Sorteio": `[ Compartilhar Imagem ]` e `[ Baixar Imagem ]`.
+  - Barra de progresso de contemplações do grupo (`X de Y contemplados`).
+  - Lista de cotas enriquecida: badge `🏆 Já Contemplado`, tipo de cota (`Individual` ou `Compartilhada`), bolada líquida vs total.
+  - Modal interativo reutilizável [`ModalCronogramaPreview.tsx`](../../src/components/ModalCronogramaPreview.tsx) com visualização em alta resolução, botão de envio direto ao WhatsApp, cópia para a área de transferência (`Ctrl+V`) e download em arquivo PNG.
+- **Integração com o WhatsApp & Download Direto:**
   - Tenta primeiro o envio direto do arquivo via **Web Share API** (`navigator.share({ files: [file] })`), que em dispositivos móveis abre diretamente o WhatsApp com a imagem anexada.
-  - Caso o navegador não suporte compartilhamento de arquivos via Web Share (ex: navegadores desktop), executa o fallback transparente: faz o download automático da imagem `.png` em alta definição e abre o WhatsApp com a mensagem de apresentação pronta.
-- **Baixar Imagem PNG:**
-  - Download imediato da imagem com nome amigável e sanitizado (`cronograma-[nome-do-consorcio].png`).
+  - Caso o navegador não suporte compartilhamento de arquivos via Web Share (ex: navegadores desktop), executa o fallback transparente: faz o download automático da imagem `.png` em alta definição e abre o modal com o link do WhatsApp e mensagem de apresentação contextualizada (informando quantas cotas já foram contempladas).
 
 ---
 

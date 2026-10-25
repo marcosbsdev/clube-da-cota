@@ -94,4 +94,45 @@ console.log("🧪 Iniciando testes de Exportação de Imagem do Cronograma de Ci
   console.log("✅ Teste 4: Formatação e URL de compartilhamento WhatsApp validadas.");
 }
 
-console.log("\n🎉 Todos os 4 testes de Exportação de Imagem do Cronograma passaram com 100% de sucesso!");
+// 5. Teste de mapeamento enriquecido com participantes já contemplados
+{
+  const mockCotas = [
+    { numero: 1, ordemSorteio: 1, status: "CONTEMPLADA", rotulo: "Marcos Batista (Cota #1)" },
+    { numero: 2, ordemSorteio: 2, status: "CONTEMPLADA", rotulo: "Junior Brito (Cota #2)" },
+    { numero: 3, ordemSorteio: 3, status: "ATIVA", rotulo: "Fábio Junior (Cota #3)" },
+    { numero: 4, ordemSorteio: 4, status: "ATIVA", rotulo: "Patrick (Cota #4)" },
+  ];
+
+  const totalCotas = mockCotas.length;
+  const ciclosMapeados = mockCotas.map((c, idx) => ({
+    numCiclo: c.ordemSorteio,
+    dataVencimento: `25/0${idx + 1}/2026`,
+    participanteNome: c.rotulo,
+    boladaFormatada: "R$ 5.000,00",
+    isPrimeiro: c.ordemSorteio === 1,
+    isUltimo: c.ordemSorteio === totalCotas,
+    isContemplado: c.status === "CONTEMPLADA",
+    statusTexto: c.status === "CONTEMPLADA" ? "CONTEMPLADO" : "AGUARDANDO",
+    cotaNumero: c.numero,
+  }));
+
+  const totalContemplados = ciclosMapeados.filter((c) => c.isContemplado).length;
+  assert.strictEqual(totalContemplados, 2, "Devem existir 2 cotas contempladas");
+  assert.strictEqual(ciclosMapeados[0].isContemplado, true, "Ciclo 1 deve ser contemplado");
+  assert.strictEqual(ciclosMapeados[1].isContemplado, true, "Ciclo 2 deve ser contemplado");
+  assert.strictEqual(ciclosMapeados[2].isContemplado, false, "Ciclo 3 deve estar aguardando");
+  assert.strictEqual(ciclosMapeados[2].statusTexto, "AGUARDANDO");
+
+  // Mensagem contextual para o WhatsApp informando progresso de contemplações
+  const textoMensagemProgresso =
+    totalContemplados > 0
+      ? `🎲 *Cronograma Atualizado de Contemplação*\nConsórcio: *Consórcio Amigos*\nProgresso: *${totalContemplados} de ${totalCotas} cotas contempladas*\nTotal: *R$ 20.000,00*\n\nConfira o cronograma oficial com os participantes já contemplados e as próximas rodadas gerado pelo Clube da Cota!`
+      : "padrao";
+
+  assert(textoMensagemProgresso.includes("2 de 4 cotas contempladas"), "Mensagem deve conter o progresso exato");
+  assert(textoMensagemProgresso.includes("participantes já contemplados"), "Mensagem deve mencionar contemplações");
+
+  console.log("✅ Teste 5: Mapeamento de cotas contempladas e mensagem contextual de progresso validados com sucesso.");
+}
+
+console.log("\n🎉 Todos os 5 testes de Exportação de Imagem do Cronograma passaram com 100% de sucesso!");

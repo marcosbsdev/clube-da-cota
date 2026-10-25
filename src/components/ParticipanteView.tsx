@@ -1,10 +1,18 @@
 "use client";
 
 import React, { useState } from "react";
-import { CheckCircle2, Clock, AlertCircle, Upload, FileText, Check, ChevronRight, Calendar, Sparkles, Copy, Zap } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, Upload, FileText, Check, ChevronRight, Calendar, Sparkles, Copy, Zap, Share2, Download } from "lucide-react";
 import { submitReceiptAction } from "@/app/actions";
-import { formatarDataSegura, formatarMoedaBRL, calcularValorCiclo, formatarMesAnoCiclo, calcularBoladaCiclo, getTipoChavePixLabel } from "@/lib/finance";
+import { formatarDataSegura, formatarMoedaBRL, calcularValorCiclo, formatarMesAnoCiclo, calcularBoladaCiclo, getTipoChavePixLabel, calcularDataCiclo } from "@/lib/finance";
 import { ToastModal, ToastData } from "@/components/ToastModal";
+import { ModalCronogramaPreview } from "@/components/ModalCronogramaPreview";
+import {
+  gerarImagemCronogramaCanvas,
+  baixarBlobComoArquivo,
+  compartilharCronogramaWhatsApp,
+  DadosCronogramaExport,
+  CicloExportItem,
+} from "@/lib/exportCronogramaImage";
 
 interface ParticipanteViewProps {
   consorcio: any;
@@ -21,6 +29,13 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
   const [filtroContemplacao, setFiltroContemplacao] = useState<
     "TODAS" | "AGUARDANDO" | "CONTEMPLADAS" | "MINHA_COTA"
   >("TODAS");
+
+  // Estados para exportação de imagem do Cronograma Oficial
+  const [modalCronogramaAberto, setModalCronogramaAberto] = useState(false);
+  const [exportandoCronograma, setExportandoCronograma] = useState(false);
+  const [previewCronogramaBlob, setPreviewCronogramaBlob] = useState<Blob | null>(null);
+  const [previewCronogramaUrl, setPreviewCronogramaUrl] = useState<string | null>(null);
+  const [previewCronogramaResultado, setPreviewCronogramaResultado] = useState<any>(null);
 
   const handleCopiarPix = (chave: string) => {
     if (!chave) return;
@@ -123,6 +138,114 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
     }
     return true;
   });
+
+  const handleExportarCronograma = async (modo: "whatsapp" | "download" | "visualizar") => {
+    try {
+      setExportandoCronograma(true);
+
+      const ciclosMapeados: CicloExportItem[] = cotasOrdenadas.map((cota: any) => {
+        const cicloNum = cota.ordemSorteio || cota.numero;
+        const isContemplada = cota.status === "CONTEMPLADA";
+        const nomes = cota.participantes.map((p: any) => p.usuario?.name || p.name).join(" & ");
+        const participantePrincipal = cota.participantes?.[0]?.usuario;
+        const temPixDireto = Boolean(
+          participantePrincipal?.isActivated &&
+          participantePrincipal?.receberPixDireto &&
+          participantePrincipal?.chavePix
+        );
+        const { boladaTotal, boladaLiquida, cotaPropriaRetida } = calcularBoladaCiclo({
+          numeroCiclo: cicloNum,
+          valorBase: consorcio.valorCota,
+          modelo: consorcio.modeloContribuicao,
+          acrescimo: consorcio.valorAcrescimo,
+          totalCotas: consorcio.totalCotas,
+          temPixDireto,
+        });
+        const dataCiclo = calcularDataCiclo(consorcio, cicloNum);
+        const rotuloCota = `Cota #${cota.numero}${cota.isCompartilhada ? " (Compartilhada)" : ""}`;
+
+        return {
+          numCiclo: cicloNum,
+          dataVencimento: formatarDataSegura(dataCiclo),
+          participanteNome: `${nomes} (${rotuloCota})`,
+          // Conforme diretriz, a última coluna "Bolada Entregue" exibe sempre o valor total da bolada
+          boladaFormatada: formatarMoedaBRL(boladaTotal),
+          isPrimeiro: cicloNum === 1,
+          isUltimo: cicloNum === consorcio.totalCotas,
+          isContemplado: isContemplada,
+          statusTexto: isContemplada ? "CONTEMPLADO" : "AGUARDANDO",
+          cotaNumero: cota.numero,
+          isCompartilhada: cota.isCompartilhada,
+        };
+      });
+
+      const frequenciaTexto =
+        consorcio.frequencia === "SEMANAL"
+          ? `${consorcio.totalCotas} semanas`
+          : consorcio.frequencia === "QUINZENAL"
+          ? `${consorcio.totalCotas} quinzenas`
+          : `${consorcio.totalCotas} meses`;
+
+      const dadosExport: DadosCronogramaExport = {
+        nomeConsorcio: consorcio.nome || "Consórcio Entre Amigos",
+        totalCotas: consorcio.totalCotas,
+        valorCotaFormatado: formatarMoedaBRL(consorcio.valorCota),
+        valorTotalFormatado: formatarMoedaBRL(
+          consorcio.valorTotalBolada || consorcio.valorCota * consorcio.totalCotas
+        ),
+        frequencia: frequenciaTexto,
+        chavePix: consorcio.chavePix || "A definir",
+        tipoChavePix: getTipoChavePixLabel(consorcio.tipoChavePix),
+        organizadorNome: consorcio.criador?.name || "Organizador",
+        totalContemplados: cotasContempladas.length,
+        ciclos: ciclosMapeados,
+      };
+
+      const blob = await gerarImagemCronogramaCanvas(dadosExport);
+      const url = URL.createObjectURL(blob);
+      setPreviewCronogramaBlob(blob);
+      setPreviewCronogramaUrl(url);
+
+      const slug = (consorcio.nome || "consorcio")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]/g, "-");
+      const nomeArquivo = `cronograma-${slug}.png`;
+
+      if (modo === "download") {
+        baixarBlobComoArquivo(blob, nomeArquivo);
+        setToast({
+          titulo: "Imagem Baixada com Sucesso!",
+          mensagem: `O cronograma oficial "${nomeArquivo}" foi salvo no seu dispositivo com o status de contemplações atualizado.`,
+          tipo: "success",
+        });
+        return;
+      }
+
+      const res = await compartilharCronogramaWhatsApp(dadosExport, blob);
+      setPreviewCronogramaResultado(res);
+
+      if (res.compartilhadoDireto) {
+        setToast({
+          titulo: "Cronograma Compartilhado!",
+          mensagem: "A imagem do cronograma atualizado foi compartilhada com sucesso.",
+          tipo: "success",
+        });
+      } else {
+        setModalCronogramaAberto(true);
+      }
+    } catch (err: any) {
+      console.error("Erro ao gerar cronograma:", err);
+      setToast({
+        titulo: "Erro ao Gerar Imagem",
+        mensagem: "Não foi possível gerar a imagem do cronograma. Tente novamente.",
+        tipo: "error",
+      });
+    } finally {
+      setExportandoCronograma(false);
+    }
+  };
 
   const handleEnviarComprovante = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -625,9 +748,9 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
             </div>
           </div>
 
-          {/* Ordem de Contemplação & Sorteio com Filtros e Scroll Interno */}
+          {/* Ordem de Contemplação & Sorteio com Filtros, Botão de Exportação e Scroll Interno */}
           <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
                 <h4 className="font-bold text-slate-900 text-sm sm:text-base flex items-center gap-2">
                   <span>🎲</span> Ordem de Contemplação & Sorteio
@@ -637,19 +760,67 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                 </p>
               </div>
 
+              {/* Botões de Compartilhamento e Download da Imagem do Cronograma */}
+              <div className="flex items-center gap-2 flex-wrap self-start md:self-auto">
+                <button
+                  type="button"
+                  onClick={() => handleExportarCronograma("whatsapp")}
+                  disabled={exportandoCronograma}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-xs transition cursor-pointer disabled:opacity-50"
+                  title="Compartilhar imagem do cronograma oficial no WhatsApp"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span>{exportandoCronograma ? "Gerando..." : "Compartilhar Imagem"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleExportarCronograma("download")}
+                  disabled={exportandoCronograma}
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 border border-slate-200/80 shadow-2xs"
+                  title="Baixar imagem em PNG de alta resolução"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="hidden sm:inline">Baixar Imagem</span>
+                  <span className="sm:hidden">Baixar</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Barra de Progresso de Contemplações e Filtros Rápidos */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-slate-50 border border-slate-200/80 rounded-2xl p-2.5 sm:px-3.5">
+              <div className="flex items-center gap-2 flex-wrap text-xs">
+                <span className="font-bold text-slate-700">Contemplações:</span>
+                <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 font-extrabold px-2.5 py-0.5 rounded-lg text-[11px]">
+                  <Sparkles className="w-3 h-3 text-emerald-600" />
+                  {cotasContempladas.length} de {consorcio.totalCotas} contemplados
+                </span>
+                {cotasAguardando.length > 0 && (
+                  <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
+                    • {cotasAguardando.length} aguardando bolada
+                  </span>
+                )}
+              </div>
+
               {/* Filtros Rápidos de Contemplação */}
-              <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl self-start sm:self-auto flex-wrap">
+              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200/60 shadow-2xs self-start sm:self-auto flex-wrap">
                 <button
                   type="button"
                   onClick={() => setFiltroContemplacao("TODAS")}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
                     filtroContemplacao === "TODAS"
-                      ? "bg-white text-slate-900 shadow-2xs"
+                      ? "bg-slate-900 text-white shadow-2xs"
                       : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
                   <span>Todas</span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 font-extrabold">
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                      filtroContemplacao === "TODAS"
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-200 text-slate-700"
+                    }`}
+                  >
                     {cotasOrdenadas.length}
                   </span>
                 </button>
@@ -659,12 +830,18 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                   onClick={() => setFiltroContemplacao("AGUARDANDO")}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
                     filtroContemplacao === "AGUARDANDO"
-                      ? "bg-white text-slate-900 shadow-2xs"
+                      ? "bg-amber-600 text-white shadow-2xs"
                       : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
                   <span>Aguardando</span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 font-extrabold">
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                      filtroContemplacao === "AGUARDANDO"
+                        ? "bg-white/20 text-white"
+                        : "bg-amber-100 text-amber-900"
+                    }`}
+                  >
                     {cotasAguardando.length}
                   </span>
                 </button>
@@ -674,12 +851,18 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                   onClick={() => setFiltroContemplacao("CONTEMPLADAS")}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
                     filtroContemplacao === "CONTEMPLADAS"
-                      ? "bg-white text-slate-900 shadow-2xs"
+                      ? "bg-emerald-600 text-white shadow-2xs"
                       : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
                   <span>Contempladas</span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-900 font-extrabold">
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                      filtroContemplacao === "CONTEMPLADAS"
+                        ? "bg-white/20 text-white"
+                        : "bg-emerald-100 text-emerald-900"
+                    }`}
+                  >
                     {cotasContempladas.length}
                   </span>
                 </button>
@@ -749,7 +932,9 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                     <div
                       key={cota.id}
                       className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
-                        isMinha
+                        isContemplada
+                          ? "bg-emerald-50/60 border-emerald-200/80 ring-1 ring-emerald-500/20"
+                          : isMinha
                           ? "bg-theme-light/40 border-theme-main/40 ring-1 ring-theme-main/20"
                           : "bg-slate-50/80 hover:bg-slate-50 border-slate-200/70"
                       }`}
@@ -757,7 +942,9 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                       <div className="flex items-center gap-3 min-w-0">
                         <div
                           className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shadow-2xs flex-shrink-0 ${
-                            isContemplada || isMinha
+                            isContemplada
+                              ? "bg-emerald-600 text-white ring-2 ring-emerald-400/30"
+                              : isMinha
                               ? "bg-theme-main text-white ring-2 ring-theme-main/20"
                               : "bg-white text-slate-700 border border-slate-200"
                           }`}
@@ -768,11 +955,21 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <p
                               className={`text-xs sm:text-sm font-bold truncate ${
-                                isMinha ? "text-theme-text" : "text-slate-800"
+                                isContemplada
+                                  ? "text-emerald-950 font-extrabold"
+                                  : isMinha
+                                  ? "text-theme-text"
+                                  : "text-slate-800"
                               }`}
                             >
                               {nomes}
                             </p>
+                            {isContemplada && (
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs">
+                                <Sparkles className="w-2.5 h-2.5 text-emerald-600" />
+                                <span>Já Contemplado</span>
+                              </span>
+                            )}
                             {isMinha && (
                               <span className="text-[10px] bg-theme-main text-white font-extrabold px-2 py-0.5 rounded-full shadow-2xs">
                                 Sua Cota
@@ -782,23 +979,27 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                           <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-500 mt-0.5 font-medium">
                             <span>
                               Cota #{cota.numero}
-                              {cota.isCompartilhada ? " (Compartilhada)" : ""}
+                              {cota.isCompartilhada ? " (Compartilhada)" : " (Individual)"}
                             </span>
                             <span>•</span>
                             {temPixDireto ? (
                               <span className="inline-flex items-center gap-1.5 flex-wrap">
                                 <span>
-                                  Bolada Líquida:{" "}
+                                  Bolada Total:{" "}
                                   <strong
                                     className={
-                                      isContemplada || isMinha ? "text-theme-text font-black" : "text-emerald-700 font-bold"
+                                      isContemplada
+                                        ? "text-emerald-800 font-black"
+                                        : isMinha
+                                        ? "text-theme-text font-black"
+                                        : "text-emerald-700 font-bold"
                                     }
                                   >
-                                    {formatarMoedaBRL(boladaLiquida)}
+                                    {formatarMoedaBRL(boladaTotal)}
                                   </strong>
                                 </span>
-                                <span className="text-[10px] text-slate-400 hidden sm:inline">
-                                  (Total: {formatarMoedaBRL(boladaTotal)}, retém {formatarMoedaBRL(cotaPropriaRetida)})
+                                <span className="text-[10px] text-slate-500 hidden sm:inline">
+                                  (Líquida: {formatarMoedaBRL(boladaLiquida)}, retém cota de {formatarMoedaBRL(cotaPropriaRetida)})
                                 </span>
                                 <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1 py-0.2 rounded font-bold">
                                   Pix Direto
@@ -809,7 +1010,11 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                                 Bolada:{" "}
                                 <strong
                                   className={
-                                    isContemplada || isMinha ? "text-theme-text font-bold" : "text-slate-900 font-bold"
+                                    isContemplada
+                                      ? "text-emerald-800 font-black"
+                                      : isMinha
+                                      ? "text-theme-text font-bold"
+                                      : "text-slate-900 font-bold"
                                   }
                                 >
                                   {formatarMoedaBRL(boladaTotal)}
@@ -823,21 +1028,37 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                       <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1.5 flex-shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-200/60">
                         <div>
                           {isContemplada ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-theme-main text-white shadow-2xs">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-600 text-white shadow-2xs">
                               <Sparkles className="w-3 h-3 text-amber-300 fill-amber-300" />
                               <span>Contemplada</span>
                             </span>
                           ) : (
                             <span className="text-[11px] font-bold text-slate-700 bg-white px-2.5 py-0.5 rounded-xl border border-slate-200 shadow-2xs inline-block">
-                              Ciclo #{cicloNum}
+                              Ciclo #{cicloNum} • Aguardando
                             </span>
                           )}
                         </div>
                         <p className="text-[11px] font-semibold text-slate-600 flex items-center gap-1">
-                          <Calendar className={`w-3.5 h-3.5 flex-shrink-0 ${isContemplada || isMinha ? "text-theme-main" : "text-slate-400"}`} />
+                          <Calendar
+                            className={`w-3.5 h-3.5 flex-shrink-0 ${
+                              isContemplada
+                                ? "text-emerald-600"
+                                : isMinha
+                                ? "text-theme-main"
+                                : "text-slate-400"
+                            }`}
+                          />
                           <span>
                             {isContemplada ? "Contemplado em " : "Recebe em: "}
-                            <strong className={isMinha ? "text-theme-text font-black" : "text-slate-900 font-bold"}>
+                            <strong
+                              className={
+                                isContemplada
+                                  ? "text-emerald-900 font-black"
+                                  : isMinha
+                                  ? "text-theme-text font-black"
+                                  : "text-slate-900 font-bold"
+                              }
+                            >
                               {mesAnoCiclo}
                             </strong>
                           </span>
@@ -947,6 +1168,17 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
           </div>
         </div>
       )}
+      {/* Modal de Pré-visualização e Envio do Cronograma Oficial */}
+      <ModalCronogramaPreview
+        aberto={modalCronogramaAberto}
+        onClose={() => setModalCronogramaAberto(false)}
+        imagemUrl={previewCronogramaUrl}
+        imagemBlob={previewCronogramaBlob}
+        resultado={previewCronogramaResultado}
+        nomeConsorcio={consorcio.nome}
+        totalContemplados={cotasContempladas.length}
+        totalCotas={consorcio.totalCotas}
+      />
     </div>
   );
 }

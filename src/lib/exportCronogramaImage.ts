@@ -10,6 +10,12 @@ export interface CicloExportItem {
   boladaFormatada: string;
   isPrimeiro: boolean;
   isUltimo: boolean;
+  isContemplado?: boolean;
+  statusTexto?: string;
+  cotaNumero?: number;
+  isCompartilhada?: boolean;
+  detalhesCota?: string;
+  tipoBolada?: string;
 }
 
 export interface DadosCronogramaExport {
@@ -21,6 +27,7 @@ export interface DadosCronogramaExport {
   chavePix: string;
   tipoChavePix?: string;
   organizadorNome?: string;
+  totalContemplados?: number;
   ciclos: CicloExportItem[];
 }
 
@@ -138,10 +145,15 @@ export async function gerarImagemCronogramaCanvas(
   ctx.fillText("CONTROLE INTELIGENTE DE CONSÓRCIOS ENTRE AMIGOS", logoX + logoSize + 18, logoY + 48);
 
   // Selo Auditado (Canto Superior Direito)
-  const sealWidth = 230;
+  const sealWidth = 240;
   const sealHeight = 36;
   const sealX = canvasWidth - sealWidth - 54;
   const sealY = logoY + 12;
+
+  const totalContemplados =
+    dados.totalContemplados !== undefined
+      ? dados.totalContemplados
+      : dados.ciclos.filter((c) => c.isContemplado).length;
 
   ctx.fillStyle = "rgba(16, 185, 129, 0.15)";
   roundRect(ctx, sealX, sealY, sealWidth, sealHeight, 18);
@@ -153,7 +165,13 @@ export async function gerarImagemCronogramaCanvas(
   ctx.fillStyle = "#34D399";
   ctx.font = "bold 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("✓ ORDEM OFICIAL DO SORTEIO", sealX + sealWidth / 2, sealY + 23);
+  if (totalContemplados === dados.totalCotas && dados.totalCotas > 0) {
+    ctx.fillText("✓ CONSÓRCIO CONCLUÍDO", sealX + sealWidth / 2, sealY + 23);
+  } else if (totalContemplados > 0) {
+    ctx.fillText(`✓ ${totalContemplados}/${dados.totalCotas} CONTEMPLADOS`, sealX + sealWidth / 2, sealY + 23);
+  } else {
+    ctx.fillText("✓ ORDEM OFICIAL DO SORTEIO", sealX + sealWidth / 2, sealY + 23);
+  }
 
   // Nome do Consórcio
   ctx.textAlign = "left";
@@ -164,11 +182,20 @@ export async function gerarImagemCronogramaCanvas(
 
   ctx.fillStyle = "#94A3B8";
   ctx.font = "500 15px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  ctx.fillText(
-    `Cronograma Completo dos ${dados.totalCotas} Ciclos de Pagamento & Contemplação`,
-    54,
-    180
-  );
+  if (totalContemplados > 0) {
+    const aguardando = Math.max(0, dados.totalCotas - totalContemplados);
+    ctx.fillText(
+      `Cronograma Oficial • ${dados.totalCotas} Ciclos (${totalContemplados} ${totalContemplados === 1 ? "Contemplado" : "Contemplados"} • ${aguardando} ${aguardando === 1 ? "Aguardando" : "Aguardando"})`,
+      54,
+      180
+    );
+  } else {
+    ctx.fillText(
+      `Cronograma Completo dos ${dados.totalCotas} Ciclos de Pagamento & Contemplação`,
+      54,
+      180
+    );
+  }
 
   // 4 Cards de Métricas no Header
   const metricCards = [
@@ -220,13 +247,15 @@ export async function gerarImagemCronogramaCanvas(
 
   // Colunas:
   // Ciclo: x = 54
-  // Vencimento: x = 200
-  // Contemplado: x = 400
+  // Vencimento: x = 180
+  // Participante & Cota: x = 325
+  // Situação da Cota: x = 685
   // Bolada: x = canvasWidth - 54 (Right aligned)
   ctx.textAlign = "left";
   ctx.fillText("CICLO", 54, tableY + 31);
-  ctx.fillText("VENCIMENTO", 190, tableY + 31);
-  ctx.fillText("PARTICIPANTE CONTEMPLADO (ORDEM DE RECEBIMENTO)", 380, tableY + 31);
+  ctx.fillText("VENCIMENTO", 180, tableY + 31);
+  ctx.fillText("PARTICIPANTE CONTEMPLADO (ORDEM DE RECEBIMENTO)", 325, tableY + 31);
+  ctx.fillText("SITUAÇÃO DA COTA", 685, tableY + 31);
   ctx.textAlign = "right";
   ctx.fillText("BOLADA ENTREGUE", canvasWidth - 54, tableY + 31);
 
@@ -235,10 +264,12 @@ export async function gerarImagemCronogramaCanvas(
     const rowY = tableY + tableHeaderHeight + idx * rowHeight;
 
     // Fundo da linha
-    if (ciclo.isUltimo) {
+    if (ciclo.isContemplado) {
+      ctx.fillStyle = "#ECFDF5"; // Destaque verde esmeralda no contemplado!
+    } else if (ciclo.isUltimo) {
       ctx.fillStyle = "#EFF6FF"; // Destaque azul suave no último
     } else if (ciclo.isPrimeiro) {
-      ctx.fillStyle = "#ECFDF5"; // Destaque verde suave no primeiro
+      ctx.fillStyle = "#F0FDF4"; // Destaque verde suave no primeiro
     } else if (idx % 2 === 0) {
       ctx.fillStyle = "#FFFFFF";
     } else {
@@ -247,13 +278,13 @@ export async function gerarImagemCronogramaCanvas(
     ctx.fillRect(0, rowY, canvasWidth, rowHeight);
 
     // Linha divisória fina
-    ctx.fillStyle = "#E2E8F0";
+    ctx.fillStyle = ciclo.isContemplado ? "#A7F3D0" : "#E2E8F0";
     ctx.fillRect(54, rowY + rowHeight - 1, canvasWidth - 108, 1);
 
     // Coluna 1: Ciclo (Badge ou texto)
     ctx.textAlign = "left";
     ctx.font = "800 15px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-    ctx.fillStyle = ciclo.isUltimo ? "#1D4ED8" : "#0F172A";
+    ctx.fillStyle = ciclo.isContemplado ? "#065F46" : ciclo.isUltimo ? "#1D4ED8" : "#0F172A";
     ctx.fillText(`#${ciclo.numCiclo}`, 54, rowY + 34);
 
     if (ciclo.isPrimeiro) {
@@ -275,21 +306,53 @@ export async function gerarImagemCronogramaCanvas(
     // Coluna 2: Vencimento
     ctx.fillStyle = "#334155";
     ctx.font = "600 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-    ctx.fillText(ciclo.dataVencimento, 190, rowY + 34);
+    ctx.fillText(ciclo.dataVencimento, 180, rowY + 34);
 
-    // Coluna 3: Participante Contemplado
-    ctx.fillStyle = "#0F172A";
-    ctx.font = "bold 15px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    // Coluna 3: Participante Contemplado & Cota
+    ctx.fillStyle = ciclo.isContemplado ? "#064E3B" : "#0F172A";
+    ctx.font = "bold 14.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
     let partNome = ciclo.participanteNome;
-    if (partNome.length > 40) {
-      partNome = partNome.substring(0, 38) + "...";
+    if (partNome.length > 34) {
+      partNome = partNome.substring(0, 32) + "...";
     }
-    ctx.fillText(partNome, 380, rowY + 34);
+    ctx.fillText(partNome, 325, rowY + 34);
 
-    // Coluna 4: Bolada Entregue
+    // Coluna 4: Situação (Pill Badge)
+    const badgeW = 124;
+    const badgeH = 24;
+    const badgeX = 685;
+    const badgeY = rowY + 16;
+
+    if (ciclo.isContemplado) {
+      ctx.fillStyle = "#DCFCE7";
+      roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 7);
+      ctx.fill();
+      ctx.strokeStyle = "#86EFAC";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = "#15803D";
+      ctx.font = "900 10.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("✓ CONTEMPLADO", badgeX + badgeW / 2, badgeY + 16);
+    } else {
+      ctx.fillStyle = "#F1F5F9";
+      roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 7);
+      ctx.fill();
+      ctx.strokeStyle = "#CBD5E1";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = "#64748B";
+      ctx.font = "800 10.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("⏳ AGUARDANDO", badgeX + badgeW / 2, badgeY + 16);
+    }
+
+    // Coluna 5: Bolada Entregue
     ctx.textAlign = "right";
-    ctx.fillStyle = ciclo.isUltimo ? "#1D4ED8" : "#047857";
-    ctx.font = "900 16px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.fillStyle = ciclo.isContemplado ? "#047857" : ciclo.isUltimo ? "#1D4ED8" : "#0F172A";
+    ctx.font = "900 15.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
     ctx.fillText(ciclo.boladaFormatada, canvasWidth - 54, rowY + 34);
   });
 
@@ -411,7 +474,16 @@ export async function compartilharCronogramaWhatsApp(
   const nomeArquivo = `cronograma-${slug}.png`;
   const file = new File([blob], nomeArquivo, { type: "image/png" });
 
-  const textoMensagem = `🎲 *Cronograma Oficial de Contemplação*\nConsórcio: *${dados.nomeConsorcio}*\nTotal: *${dados.valorTotalFormatado}* (${dados.totalCotas} Meses)\n\nConfira a ordem oficial de recebimento de cada mês gerada pelo Clube da Cota!`;
+  const totalContemplados =
+    dados.totalContemplados !== undefined
+      ? dados.totalContemplados
+      : dados.ciclos.filter((c) => c.isContemplado).length;
+
+  const textoMensagem =
+    totalContemplados > 0
+      ? `🎲 *Cronograma Atualizado de Contemplação*\nConsórcio: *${dados.nomeConsorcio}*\nProgresso: *${totalContemplados} de ${dados.totalCotas} cotas contempladas*\nTotal: *${dados.valorTotalFormatado}*\n\nConfira o cronograma oficial com os participantes já contemplados e as próximas rodadas gerado pelo Clube da Cota!`
+      : `🎲 *Cronograma Oficial de Contemplação*\nConsórcio: *${dados.nomeConsorcio}*\nTotal: *${dados.valorTotalFormatado}* (${dados.totalCotas} Meses)\n\nConfira a ordem oficial de recebimento de cada mês gerada pelo Clube da Cota!`;
+
   const urlWhatsApp = `https://api.whatsapp.com/send?text=${encodeURIComponent(textoMensagem)}`;
 
   // 1. Tentar Web Share API com arquivo (funciona nativamente no WhatsApp mobile / Android / iOS com HTTPS)
