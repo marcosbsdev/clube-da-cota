@@ -6,7 +6,7 @@ import {
   getAgendaParticipantesAction,
   ParticipanteAgendaItem,
 } from "@/app/actions";
-import { Check, Plus, Trash2, Users, AlertCircle, ArrowRight, ArrowLeft, TrendingUp, User, Calendar, Flag, Clock, ChevronDown, ChevronUp, Crown, Copy, MessageCircle, CheckCircle2, Search, Link2 } from "lucide-react";
+import { Check, Plus, Trash2, Users, AlertCircle, ArrowRight, ArrowLeft, TrendingUp, User, Calendar, Flag, Clock, ChevronDown, ChevronUp, Crown, Copy, MessageCircle, CheckCircle2, Search, Link2, Dices, Shuffle, ArrowUpDown, Lock, Unlock, ListOrdered, RotateCcw, Download, Share2, X } from "lucide-react";
 import { ModalUpgradePlanos } from "./ModalUpgradePlanos";
 import { DADOS_PAGAMENTO_UPGRADE, PLANOS_INFO, getVigenciaPlano } from "@/lib/plans";
 import {
@@ -24,6 +24,51 @@ import {
   formatarTelefone,
   gerarLinkWhatsApp,
 } from "@/lib/finance";
+import {
+  gerarImagemCronogramaCanvas,
+  baixarBlobComoArquivo,
+  compartilharCronogramaWhatsApp,
+  copiarImagemParaClipboard,
+  DadosCronogramaExport,
+  ResultadoCompartilhamento,
+} from "@/lib/exportCronogramaImage";
+
+export interface CotaOrdemItem {
+  id: string;
+  participanteIndex: number;
+  cotaSubIndex: number;
+  cotaNumeroOriginal: number;
+  ordemCiclo: number;
+  rotulo: string;
+  isCompartilhada: boolean;
+}
+
+function gerarCotasIniciais(parts: any[]): CotaOrdemItem[] {
+  const lista: CotaOrdemItem[] = [];
+  let numGlobal = 1;
+  parts.forEach((p, pIdx) => {
+    const qtd = p.cotasCount || 1;
+    for (let c = 0; c < qtd; c++) {
+      let rotulo = p.nome;
+      if (p.isCompartilhada && p.fraçãoNome) {
+        rotulo = `${p.nome} & ${p.fraçãoNome} (Cota Compartilhada)`;
+      } else if (qtd > 1) {
+        rotulo = `${p.nome} (Cota #${c + 1})`;
+      }
+      lista.push({
+        id: `cota_${pIdx}_${c}`,
+        participanteIndex: pIdx,
+        cotaSubIndex: c,
+        cotaNumeroOriginal: numGlobal,
+        ordemCiclo: numGlobal,
+        rotulo,
+        isCompartilhada: Boolean(p.isCompartilhada),
+      });
+      numGlobal++;
+    }
+  });
+  return lista;
+}
 
 interface CriarConsorcioWizardProps {
   currentUser: any;
@@ -268,7 +313,7 @@ export function CriarConsorcioWizard({
       return;
     }
 
-    setParticipantes([
+    const novosParticipantes = [
       ...participantes,
       {
         usuarioId: novoUsuarioId || undefined,
@@ -284,7 +329,11 @@ export function CriarConsorcioWizard({
         valorFração1: isCompartilhada ? valorCota / 2 : undefined,
         valorFração2: isCompartilhada ? valorCota / 2 : undefined,
       },
-    ]);
+    ];
+
+    setParticipantes(novosParticipantes);
+    setCotasOrdem(gerarCotasIniciais(novosParticipantes));
+    setSorteioOficial(null);
 
     // Limpa campos
     setNovoNome("");
@@ -303,12 +352,218 @@ export function CriarConsorcioWizard({
   };
 
   const handleRemoverParticipante = (index: number) => {
-    setParticipantes(participantes.filter((_, i) => i !== index));
+    const novos = participantes.filter((_, i) => i !== index);
+    setParticipantes(novos);
+    setCotasOrdem(gerarCotasIniciais(novos));
+    setSorteioOficial(null);
+  };
+
+  // Estados e Ações para Ordem de Contemplação e Sorteio (Etapa 4)
+  const [modoOrdem, setModoOrdem] = useState<"MANUAL" | "SORTEIO_AUTOMATICO">("MANUAL");
+  const [cotasOrdem, setCotasOrdem] = useState<CotaOrdemItem[]>([]);
+  // Guarda de forma imutável o resultado do 1º sorteio oficial realizado para este consórcio
+  const [sorteioOficial, setSorteioOficial] = useState<CotaOrdemItem[] | null>(null);
+  const sorteioRealizado = sorteioOficial !== null;
+
+  const sincronizarCotasSeNecessario = () => {
+    if (cotasOrdem.length !== totalCotas) {
+      setCotasOrdem(gerarCotasIniciais(participantes));
+      setSorteioOficial(null);
+    }
+  };
+
+  const handleSortearOrdem = () => {
+    // Regra Estrita: Sorteio automático só pode ser executado uma única vez
+    if (sorteioOficial !== null) {
+      // Se já foi sorteado, restaura estritamente o Sorteio #1
+      setCotasOrdem([...sorteioOficial]);
+      return;
+    }
+    const base = cotasOrdem.length === totalCotas ? [...cotasOrdem] : gerarCotasIniciais(participantes);
+    // Embaralha aleatoriamente com Fisher-Yates
+    for (let i = base.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [base[i], base[j]] = [base[j], base[i]];
+    }
+    const reordenadas = base.map((cota, idx) => ({
+      ...cota,
+      ordemCiclo: idx + 1,
+    }));
+    setCotasOrdem(reordenadas);
+    setSorteioOficial(reordenadas); // Gravado permanentemente
+    setErroMsg("");
+  };
+
+  const handleMudarParaManual = () => {
+    setModoOrdem("MANUAL");
+    setErroMsg("");
+  };
+
+  const handleMudarParaSorteio = () => {
+    setModoOrdem("SORTEIO_AUTOMATICO");
+    if (sorteioOficial !== null) {
+      // Restaura a ordem imutável do Sorteio 1 oficial
+      setCotasOrdem([...sorteioOficial]);
+    }
+    setErroMsg("");
+  };
+
+  const handleRestaurarOrdem = () => {
+    // No modo manual, restaura a ordem sequencial de cadastro (sem apagar o Sorteio Oficial #1)
+    setCotasOrdem(gerarCotasIniciais(participantes));
+    setErroMsg("");
+  };
+
+  const handleMoverCota = (cotaId: string, direcao: "cima" | "baixo") => {
+    // Regra Estrita: Se for sorteio automático oficial realizado, posições ficam travadas
+    if (modoOrdem === "SORTEIO_AUTOMATICO" && sorteioRealizado) return;
+
+    const cotaAtual = cotasOrdem.find((c) => c.id === cotaId);
+    if (!cotaAtual) return;
+
+    const cicloAtual = cotaAtual.ordemCiclo;
+    const cicloAlvo = direcao === "cima" ? cicloAtual - 1 : cicloAtual + 1;
+    if (cicloAlvo < 1 || cicloAlvo > cotasOrdem.length) return;
+
+    const cotaTroca = cotasOrdem.find((c) => c.ordemCiclo === cicloAlvo);
+    if (!cotaTroca) return;
+
+    const novas = cotasOrdem.map((c) => {
+      if (c.id === cotaAtual.id) return { ...c, ordemCiclo: cicloAlvo };
+      if (c.id === cotaTroca.id) return { ...c, ordemCiclo: cicloAtual };
+      return c;
+    });
+
+    setCotasOrdem(novas);
+  };
+
+  const handleSelecionarCotaNoCiclo = (cicloAlvo: number, novaCotaId: string) => {
+    // Regra Estrita: Se for sorteio automático oficial realizado, posições ficam travadas
+    if (modoOrdem === "SORTEIO_AUTOMATICO" && sorteioRealizado) return;
+
+    const cotaAtualNoCiclo = cotasOrdem.find((c) => c.ordemCiclo === cicloAlvo);
+    const cotaNova = cotasOrdem.find((c) => c.id === novaCotaId);
+    if (!cotaAtualNoCiclo || !cotaNova || cotaAtualNoCiclo.id === cotaNova.id) return;
+
+    const cicloAnteriorDaNova = cotaNova.ordemCiclo;
+    const novas = cotasOrdem.map((c) => {
+      if (c.id === cotaNova.id) return { ...c, ordemCiclo: cicloAlvo };
+      if (c.id === cotaAtualNoCiclo.id) return { ...c, ordemCiclo: cicloAnteriorDaNova };
+      return c;
+    });
+    setCotasOrdem(novas);
+  };
+
+  // Estados e Ação para Exportação do Cronograma em Imagem para WhatsApp
+  const [exportandoImagem, setExportandoImagem] = useState(false);
+  const [imagemExportadaSucesso, setImagemExportadaSucesso] = useState(false);
+  const [modalPreviewAberto, setModalPreviewAberto] = useState(false);
+  const [previewImagemUrl, setPreviewImagemUrl] = useState<string | null>(null);
+  const [previewImagemBlob, setPreviewImagemBlob] = useState<Blob | null>(null);
+  const [previewResultado, setPreviewResultado] = useState<ResultadoCompartilhamento | null>(null);
+  const [copiadoFeedback, setCopiadoFeedback] = useState(false);
+
+  const handleExportarCronograma = async (modo: "whatsapp" | "download" | "visualizar") => {
+    try {
+      setExportandoImagem(true);
+      setImagemExportadaSucesso(false);
+
+      const listaCotasEfetiva =
+        cotasOrdem.length === totalCotas ? cotasOrdem : gerarCotasIniciais(participantes);
+
+      const ciclosMapeados = datasCiclos.map((data, index) => {
+        const numCiclo = index + 1;
+        const valorNesseCiclo = calcularValorCiclo(
+          numCiclo,
+          valorCota,
+          modeloContribuicao,
+          valorAcrescimo
+        );
+        const boladaNesseCiclo = valorNesseCiclo * totalCotas;
+        const cotaContemplada = listaCotasEfetiva.find((c) => c.ordemCiclo === numCiclo);
+
+        return {
+          numCiclo,
+          dataVencimento: formatarDataSegura(data),
+          participanteNome: cotaContemplada?.rotulo || `Cota #${numCiclo}`,
+          boladaFormatada: formatarMoedaBRL(boladaNesseCiclo),
+          isPrimeiro: numCiclo === 1,
+          isUltimo: numCiclo === totalCotas,
+        };
+      });
+
+      const dadosExport: DadosCronogramaExport = {
+        nomeConsorcio: nome.trim() || "Consórcio Entre Amigos",
+        totalCotas,
+        valorCotaFormatado: formatarMoedaBRL(valorCota),
+        valorTotalFormatado: formatarMoedaBRL(
+          resumoFinanceiro.volumeTotalMovimentado || valorCota * totalCotas
+        ),
+        frequencia: textoFrequencia,
+        chavePix: chavePix || "A definir",
+        tipoChavePix: getTipoChavePixLabel(tipoChavePix),
+        organizadorNome: currentUser?.name || "Administrador",
+        ciclos: ciclosMapeados,
+      };
+
+      const blob = await gerarImagemCronogramaCanvas(dadosExport);
+      const url = URL.createObjectURL(blob);
+      setPreviewImagemBlob(blob);
+      setPreviewImagemUrl(url);
+
+      const slug = (nome.trim() || "consorcio")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]/g, "-");
+      const nomeArquivo = `cronograma-${slug}.png`;
+
+      if (modo === "download") {
+        baixarBlobComoArquivo(blob, nomeArquivo);
+        setImagemExportadaSucesso(true);
+        setTimeout(() => setImagemExportadaSucesso(false), 5000);
+        return;
+      }
+
+      if (modo === "whatsapp") {
+        const res = await compartilharCronogramaWhatsApp(dadosExport, blob);
+        setPreviewResultado(res);
+
+        if (res.compartilhadoDireto) {
+          // No mobile com HTTPS nativo, o sistema abre direto a folha com a imagem anexada
+          setImagemExportadaSucesso(true);
+          setTimeout(() => setImagemExportadaSucesso(false), 5000);
+        } else {
+          // No mobile HTTP ou desktop, abre o modal de preview e orientação para anexar a imagem
+          setModalPreviewAberto(true);
+        }
+      } else {
+        // modo === "visualizar"
+        setModalPreviewAberto(true);
+      }
+    } catch (err: any) {
+      console.error("Erro ao gerar imagem do cronograma:", err);
+      alert("Houve um problema ao gerar a imagem do cronograma. Tente novamente.");
+    } finally {
+      setExportandoImagem(false);
+    }
   };
 
   const handleFinalizar = async () => {
     setLoading(true);
     setErroMsg("");
+
+    const listaCotasEfetiva =
+      cotasOrdem.length === totalCotas ? cotasOrdem : gerarCotasIniciais(participantes);
+
+    const participantesComOrdem = participantes.map((p, pIdx) => {
+      const cotasDestePart = listaCotasEfetiva.filter((c) => c.participanteIndex === pIdx);
+      cotasDestePart.sort((a, b) => a.cotaSubIndex - b.cotaSubIndex);
+      return {
+        ...p,
+        ordensSorteio: cotasDestePart.map((c) => c.ordemCiclo),
+      };
+    });
 
     const res = await createConsorcioAction({
       criadorId: currentUser.id,
@@ -323,7 +578,7 @@ export function CriarConsorcioWizard({
       modeloContribuicao,
       valorCota,
       valorAcrescimo: modeloContribuicao === "ACRESCIMO_MENSAL" ? valorAcrescimo : 0,
-      participantes,
+      participantes: participantesComOrdem,
     });
 
     setLoading(false);
@@ -562,16 +817,17 @@ export function CriarConsorcioWizard({
       {/* Indicador de Passos Responsivo */}
       <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm">
         {/* Visual de passos para Desktop */}
-        <div className="hidden sm:grid grid-cols-4 gap-3 mb-4">
+        <div className="hidden sm:grid grid-cols-5 gap-2 mb-4">
           {[
             { num: 1, title: "Dados Básicos" },
             { num: 2, title: "Participantes" },
             { num: 3, title: "Valores & Prazos" },
-            { num: 4, title: "Revisão Final" },
+            { num: 4, title: "Ordem & Sorteio 🎲" },
+            { num: 5, title: "Revisão Final" },
           ].map((s) => (
             <div
               key={s.num}
-              className={`p-3 rounded-2xl border text-center transition ${
+              className={`p-2.5 rounded-2xl border text-center transition ${
                 etapa === s.num
                   ? "bg-theme-light border-theme-main text-theme-text font-bold shadow-sm"
                   : etapa > s.num
@@ -587,18 +843,19 @@ export function CriarConsorcioWizard({
 
         {/* Visual de passos para Mobile */}
         <div className="flex sm:hidden items-center justify-between text-xs font-semibold text-slate-500 mb-2">
-          <span className="text-theme-text font-bold">Passo {etapa} de 4</span>
+          <span className="text-theme-text font-bold">Passo {etapa} de 5</span>
           <span className="font-bold text-slate-700">
             {etapa === 1 && "Dados Básicos"}
             {etapa === 2 && "Participantes & Cotas"}
             {etapa === 3 && "Valores & Vencimentos"}
-            {etapa === 4 && "Revisão Final"}
+            {etapa === 4 && "Ordem & Sorteio 🎲"}
+            {etapa === 5 && "Revisão Final"}
           </span>
         </div>
         <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
           <div
             className="bg-theme-main h-full rounded-full transition-all duration-300"
-            style={{ width: `${(etapa / 4) * 100}%` }}
+            style={{ width: `${(etapa / 5) * 100}%` }}
           ></div>
         </div>
       </div>
@@ -1547,20 +1804,361 @@ export function CriarConsorcioWizard({
                   return;
                 }
                 setErroMsg("");
+                sincronizarCotasSeNecessario();
                 setEtapa(4);
               }}
               className="flex-1 py-3.5 bg-theme-main text-white font-bold rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md hover:opacity-90 transition cursor-pointer"
             >
-              <span>Revisão Final</span>
+              <span>Continuar para Ordem & Sorteio 🎲</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
       )}
 
-      {/* ETAPA 4: REVISÃO FINAL E ATIVAÇÃO */}
+      {/* ETAPA 4: ORDEM DE CONTEMPLAÇÃO E SORTEIO DOS MESES */}
       {etapa === 4 && (
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-5">
+        <div className="bg-white rounded-3xl p-4 sm:p-8 border border-slate-200/80 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-2 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-2xl bg-theme-light text-theme-main font-bold">
+                  <Dices className="w-5 h-5" />
+                </span>
+                <h3 className="font-bold text-slate-900 text-base sm:text-lg">
+                  Ordem de Contemplação dos Meses
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Escolha como as datas de recebimento da bolada serão definidas para cada participante.
+              </p>
+            </div>
+          </div>
+
+          {/* Seletor dos 2 Modos: Manual vs Sorteio Automático */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div
+              onClick={handleMudarParaManual}
+              className={`p-4 rounded-2xl border-2 transition cursor-pointer flex items-start gap-3 ${
+                modoOrdem === "MANUAL"
+                  ? "border-theme-main bg-theme-light/50 shadow-xs ring-1 ring-theme-main/30"
+                  : "border-slate-200 bg-white hover:border-slate-300 opacity-80 hover:opacity-100"
+              }`}
+            >
+              <div
+                className={`p-2.5 rounded-xl flex-shrink-0 ${
+                  modoOrdem === "MANUAL"
+                    ? "bg-theme-main text-white"
+                    : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                <ListOrdered className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-bold text-slate-900 text-xs sm:text-sm">
+                    Definição Manual / Acordo do Grupo
+                  </h4>
+                  {modoOrdem === "MANUAL" && (
+                    <span className="text-[10px] font-black bg-theme-main text-white px-2 py-0.2 rounded-full">
+                      Ativo
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Total liberdade para o criador alocar ou trocar quem recebe em cada mês, caso os cotistas já tenham combinado entre si.
+                </p>
+              </div>
+            </div>
+
+            <div
+              onClick={handleMudarParaSorteio}
+              className={`p-4 rounded-2xl border-2 transition cursor-pointer flex items-start gap-3 ${
+                modoOrdem === "SORTEIO_AUTOMATICO"
+                  ? "border-theme-main bg-theme-light/50 shadow-xs ring-1 ring-theme-main/30"
+                  : "border-slate-200 bg-white hover:border-slate-300 opacity-80 hover:opacity-100"
+              }`}
+            >
+              <div
+                className={`p-2.5 rounded-xl flex-shrink-0 ${
+                  modoOrdem === "SORTEIO_AUTOMATICO"
+                    ? "bg-theme-main text-white"
+                    : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                <Dices className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-bold text-slate-900 text-xs sm:text-sm">
+                    Sorteio Oficial do Sistema 🎲
+                  </h4>
+                  {modoOrdem === "SORTEIO_AUTOMATICO" && (
+                    <span className="text-[10px] font-black bg-theme-main text-white px-2 py-0.2 rounded-full">
+                      Ativo
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Embaralhamento 100% aleatório e auditado pelo sistema (executado <strong>uma única vez</strong>).
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Painel do Modo Manual */}
+          {modoOrdem === "MANUAL" && (
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Unlock className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Modo Manual Ativo: Posições 100% Livres</span>
+                </span>
+                <p className="text-[11px] text-slate-500">
+                  {sorteioOficial !== null
+                    ? "Você está ajustando manualmente as posições. O resultado do Sorteio Oficial #1 continua preservado e será recuperado se você clicar no card de Sorteio."
+                    : "Altere qualquer mês diretamente pelo seletor ou use os botões ▲ e ▼ para subir ou descer cotas."}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {sorteioOficial !== null && (
+                  <button
+                    type="button"
+                    onClick={handleMudarParaSorteio}
+                    className="py-2 px-3 bg-white hover:bg-slate-100 text-theme-main font-bold text-xs rounded-xl border border-slate-200 flex items-center gap-1.5 transition cursor-pointer self-start sm:self-auto shadow-2xs"
+                    title="Recuperar a ordem sorteada no Sorteio Oficial #1"
+                  >
+                    <Dices className="w-3.5 h-3.5 text-theme-main" />
+                    <span>Restaurar Sorteio #1</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleRestaurarOrdem}
+                  className="py-2 px-3 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 flex items-center gap-1.5 transition cursor-pointer self-start sm:self-auto shadow-2xs"
+                  title="Restaura a ordem original sequencial de cadastro dos participantes"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Ordem de Cadastro</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Painel do Modo Sorteio Automático */}
+          {modoOrdem === "SORTEIO_AUTOMATICO" && (
+            <div>
+              {!sorteioRealizado ? (
+                <div className="p-4 sm:p-5 bg-gradient-to-br from-theme-light/70 via-white to-slate-50 rounded-2xl border border-theme-main/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                        <Dices className="w-4 h-4 text-theme-main" />
+                        <span>Sorteio Automático Oficial</span>
+                      </span>
+                      <span className="text-[10px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">
+                        Execução Única
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 max-w-xl leading-relaxed">
+                      O sistema irá embaralhar os <strong>{totalCotas} meses</strong> de forma 100% justa e equiprobável. Por regra de lisura, após ser realizado as posições ficarão <strong>travadas</strong>.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSortearOrdem}
+                    className="py-3 px-5 bg-theme-main hover:opacity-95 text-white font-black text-xs sm:text-sm rounded-xl shadow-md flex items-center justify-center gap-2 transition cursor-pointer active:scale-95 whitespace-nowrap self-stretch sm:self-auto"
+                  >
+                    <Dices className="w-4 h-4 animate-bounce" />
+                    <span>Realizar Sorteio Agora 🎲</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="p-4 sm:p-5 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-2.5 animate-in fade-in duration-200 shadow-2xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2 text-emerald-950 font-bold text-xs sm:text-sm">
+                      <Lock className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span>Sorteio Oficial #1 Ativo (Posições Travadas)</span>
+                    </div>
+                    <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full border border-emerald-200 w-fit">
+                      ✓ Imparcial & Auditado
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    A ordem dos meses foi definida pelo <strong>Sorteio Oficial #1</strong> e está <strong>travada contra alterações manuais</strong>. O sorteio automático não pode ser refeito. Caso deseje outra ordem aleatória, cancele e crie um novo consórcio.
+                  </p>
+
+                  <div className="pt-2 border-t border-emerald-200/60 flex items-center justify-between flex-wrap gap-2 text-[11px]">
+                    <span className="text-slate-500 italic">
+                      Deseja mudar as datas manualmente por acordo do grupo?
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleMudarParaManual}
+                      className="font-bold text-theme-main hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <ListOrdered className="w-3.5 h-3.5" />
+                      <span>Alternar para Definição Manual Livre</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Lista de Ciclos e Contemplados */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between px-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              <span>Mês / Ciclo de Pagamento</span>
+              <span>
+                {modoOrdem === "SORTEIO_AUTOMATICO" && sorteioRealizado
+                  ? "Participante Sorteado (Travado 🔒)"
+                  : "Participante Contemplado (Selecione ou Troque)"}
+              </span>
+            </div>
+
+            {Array.from({ length: totalCotas }).map((_, idx) => {
+              const numCiclo = idx + 1;
+              const dataCiclo = datasCiclos[idx];
+              const valorNesseCiclo = calcularValorCiclo(
+                numCiclo,
+                valorCota,
+                modeloContribuicao,
+                valorAcrescimo
+              );
+              const boladaNesseCiclo = valorNesseCiclo * totalCotas;
+              const cotaNoCiclo = cotasOrdem.find((c) => c.ordemCiclo === numCiclo);
+              const isTravado = modoOrdem === "SORTEIO_AUTOMATICO" && sorteioRealizado;
+
+              return (
+                <div
+                  key={numCiclo}
+                  className={`p-3.5 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
+                    isTravado
+                      ? "bg-slate-50/70 border-slate-200/90"
+                      : "bg-slate-50 border-slate-200"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-10 h-10 rounded-xl border border-slate-200 bg-white text-slate-700 flex flex-col items-center justify-center flex-shrink-0 shadow-2xs"
+                    >
+                      <span className="text-[9px] font-black uppercase opacity-60">Ciclo</span>
+                      <span className="text-xs font-black">#{numCiclo}</span>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-800 text-xs sm:text-sm">
+                          {dataCiclo ? formatarDataSegura(dataCiclo) : `Mês ${numCiclo}`}
+                        </span>
+                        {numCiclo === 1 && (
+                          <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
+                            1º Mês
+                          </span>
+                        )}
+                        {numCiclo === totalCotas && (
+                          <span className="text-[9px] font-bold bg-theme-main text-white px-1.5 py-0.2 rounded">
+                            Último 🏁
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        Bolada prevista:{" "}
+                        <strong className="text-slate-700">
+                          {formatarMoedaBRL(boladaNesseCiclo)}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Participante Contemplado: Travado no Sorteio ou Livre no Modo Manual */}
+                  <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto min-w-0 justify-between sm:justify-end">
+                    {isTravado ? (
+                      <div className="p-2.5 px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-2 shadow-2xs w-full sm:w-auto sm:max-w-[320px] min-w-0">
+                        <Lock className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                        <span className="truncate flex-1 min-w-0">{cotaNoCiclo?.rotulo || "-"}</span>
+                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60 ml-auto flex-shrink-0">
+                          Sorteado 🔒
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex-1 min-w-0 sm:flex-initial sm:w-[260px] sm:max-w-[260px]">
+                          <select
+                            disabled={modoOrdem === "SORTEIO_AUTOMATICO" && !sorteioRealizado}
+                            value={cotaNoCiclo?.id || ""}
+                            onChange={(e) => handleSelecionarCotaNoCiclo(numCiclo, e.target.value)}
+                            className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-white text-slate-900 focus:border-theme-main focus:outline-none cursor-pointer truncate shadow-2xs"
+                          >
+                            {cotasOrdem.map((opt) => (
+                              <option key={opt.id} value={opt.id}>
+                                {opt.rotulo}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            type="button"
+                            disabled={numCiclo === 1}
+                            onClick={() => cotaNoCiclo && handleMoverCota(cotaNoCiclo.id, "cima")}
+                            className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer flex-shrink-0"
+                            title="Antecipar para o mês anterior"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={numCiclo === totalCotas}
+                            onClick={() => cotaNoCiclo && handleMoverCota(cotaNoCiclo.id, "baixo")}
+                            className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer flex-shrink-0"
+                            title="Adiar para o próximo mês"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => setEtapa(3)}
+              className="py-3 px-5 bg-slate-100 text-slate-700 font-bold rounded-2xl text-xs sm:text-sm flex items-center gap-1.5 hover:bg-slate-200 transition cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Voltar</span>
+            </button>
+            <button
+              onClick={() => {
+                if (modoOrdem === "SORTEIO_AUTOMATICO" && !sorteioRealizado) {
+                  setErroMsg("Por favor, clique no botão 'Realizar Sorteio Oficial Agora 🎲' para gerar a ordem das cotas antes de avançar.");
+                  return;
+                }
+                setErroMsg("");
+                setEtapa(5);
+              }}
+              className="flex-1 py-3.5 bg-theme-main text-white font-bold rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md hover:opacity-90 transition cursor-pointer"
+            >
+              <span>Avançar para Revisão Final</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ETAPA 5: REVISÃO FINAL E ATIVAÇÃO */}
+      {etapa === 5 && (
+        <div className="bg-white rounded-3xl p-4 sm:p-8 border border-slate-200/80 shadow-sm space-y-5">
           <div>
             <h3 className="font-bold text-slate-900 text-base sm:text-lg">Revisão e Ativação</h3>
             <p className="text-xs text-slate-500">
@@ -1650,6 +2248,71 @@ export function CriarConsorcioWizard({
             </div>
           </div>
 
+          {/* Card de Compartilhamento & Exportação em Imagem para WhatsApp */}
+          {datasCiclos.length > 0 && (
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-theme-light/70 via-white to-slate-50 border border-theme-main/30 shadow-2xs space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start sm:items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-theme-main text-white shadow-2xs flex-shrink-0 mt-0.5 sm:mt-0">
+                    <Share2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-2 flex-wrap">
+                      <span>Exportar Cronograma Oficial para WhatsApp</span>
+                      <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
+                        Imagem Oficial HD
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                      Envie para os participantes a tabela completa com a ordem do sorteio, valores e a marca oficial do Clube da Cota.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap self-stretch sm:self-auto">
+                  <button
+                    type="button"
+                    disabled={exportandoImagem}
+                    onClick={() => handleExportarCronograma("whatsapp")}
+                    className="flex-1 sm:flex-initial py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 disabled:opacity-50"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>{exportandoImagem ? "Gerando..." : "Compartilhar no WhatsApp"}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={exportandoImagem}
+                    onClick={() => handleExportarCronograma("visualizar")}
+                    className="py-2.5 px-3 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 shadow-2xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 disabled:opacity-50"
+                    title="Visualizar a imagem gerada do cronograma"
+                  >
+                    <Search className="w-4 h-4 text-slate-500" />
+                    <span>Visualizar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={exportandoImagem}
+                    onClick={() => handleExportarCronograma("download")}
+                    className="py-2.5 px-3.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 shadow-2xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 disabled:opacity-50"
+                    title="Baixar imagem em PNG alta definição"
+                  >
+                    <Download className="w-4 h-4 text-slate-500" />
+                    <span>Baixar Imagem</span>
+                  </button>
+                </div>
+              </div>
+
+              {imagemExportadaSucesso && (
+                <div className="p-2.5 px-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-[11px] font-semibold flex items-center gap-2 animate-in fade-in duration-200 shadow-2xs">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <span>Imagem do cronograma gerada com sucesso em alta definição e pronta para envio!</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Acordeão do Cronograma Completo na Revisão Final */}
           {datasCiclos.length > 0 && (
             <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
@@ -1685,11 +2348,11 @@ export function CriarConsorcioWizard({
 
               {cronogramaAbertoPasso4 && (
                 <div className="p-3.5 bg-slate-50/50 border-t border-slate-200 space-y-1.5 text-xs max-h-64 overflow-y-auto">
-                  <div className="grid grid-cols-4 font-bold text-[10px] uppercase text-slate-400 px-2 pb-1 border-b border-slate-200">
-                    <span>Ciclo</span>
-                    <span>Vencimento</span>
-                    <span>Valor Cota</span>
-                    <span className="text-right">Bolada Entregue</span>
+                  <div className="grid grid-cols-12 font-bold text-[10px] uppercase text-slate-400 px-2 pb-1 border-b border-slate-200">
+                    <span className="col-span-2">Ciclo</span>
+                    <span className="col-span-3">Vencimento</span>
+                    <span className="col-span-4">Contemplado</span>
+                    <span className="col-span-3 text-right">Bolada Entregue</span>
                   </div>
                   {datasCiclos.map((data, index) => {
                     const numCiclo = index + 1;
@@ -1702,11 +2365,12 @@ export function CriarConsorcioWizard({
                     const boladaNesseCiclo = valorNesseCiclo * totalCotas;
                     const isUltimo = numCiclo === totalCotas;
                     const isPrimeiro = numCiclo === 1;
+                    const cotaContemplada = cotasOrdem.find((c) => c.ordemCiclo === numCiclo);
 
                     return (
                       <div
                         key={numCiclo}
-                        className={`grid grid-cols-4 items-center p-2 rounded-xl transition ${
+                        className={`grid grid-cols-12 items-center p-2 rounded-xl transition text-xs ${
                           isUltimo
                             ? "bg-theme-main text-white font-bold shadow-xs"
                             : isPrimeiro
@@ -1714,7 +2378,7 @@ export function CriarConsorcioWizard({
                             : "bg-white border border-slate-100 text-slate-700"
                         }`}
                       >
-                        <div className="flex items-center gap-1">
+                        <div className="col-span-2 flex items-center gap-1">
                           <span className={isUltimo ? "text-white font-black" : "font-bold text-slate-900"}>
                             #{numCiclo}
                           </span>
@@ -1729,16 +2393,28 @@ export function CriarConsorcioWizard({
                             </span>
                           )}
                         </div>
-                        <span>{formatarDataSegura(data)}</span>
-                        <span className={isUltimo ? "text-white" : "font-medium text-slate-800"}>
-                          {formatarMoedaBRL(valorNesseCiclo)}
+                        <span className="col-span-3">{formatarDataSegura(data)}</span>
+                        <span className="col-span-4 font-bold truncate">
+                          {cotaContemplada ? cotaContemplada.rotulo : "-"}
                         </span>
-                        <span className={`text-right font-black ${isUltimo ? "text-white" : "text-slate-900"}`}>
+                        <span className={`col-span-3 text-right font-black ${isUltimo ? "text-white" : "text-slate-900"}`}>
                           {formatarMoedaBRL(boladaNesseCiclo)}
                         </span>
                       </div>
                     );
                   })}
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="button"
+                      disabled={exportandoImagem}
+                      onClick={() => handleExportarCronograma("download")}
+                      className="text-[11px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 py-1 px-2.5 bg-white border border-slate-200 rounded-lg shadow-2xs hover:bg-slate-50 transition cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Baixar Imagem deste Cronograma</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1746,9 +2422,9 @@ export function CriarConsorcioWizard({
 
           <div className="flex gap-3 pt-2">
             <button
-              onClick={() => setEtapa(3)}
+              onClick={() => setEtapa(4)}
               disabled={loading}
-              className="py-3 px-5 bg-slate-100 text-slate-700 font-bold rounded-2xl text-xs sm:text-sm flex items-center gap-1.5 hover:bg-slate-200 transition"
+              className="py-3 px-5 bg-slate-100 text-slate-700 font-bold rounded-2xl text-xs sm:text-sm flex items-center gap-1.5 hover:bg-slate-200 transition cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Voltar</span>
@@ -1761,6 +2437,126 @@ export function CriarConsorcioWizard({
               <Check className="w-4 h-4" />
               <span>{loading ? "Criando e Gerando Parcelas..." : "Confirmar & Ativar Consórcio"}</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Pré-visualização e Envio do Cronograma */}
+      {modalPreviewAberto && previewImagemUrl && (
+        <div className="fixed inset-0 z-[120] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 my-auto animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-theme-main text-white flex items-center justify-center shadow-xs">
+                  <Share2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm sm:text-base">
+                    Cronograma Oficial Gerado
+                  </h3>
+                  <span className="text-[10px] text-slate-400">
+                    Pronto para envio aos participantes
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalPreviewAberto(false)}
+                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Caixa de Orientação WhatsApp */}
+            <div className="p-3.5 bg-emerald-50/80 border border-emerald-200/90 rounded-2xl space-y-1.5 text-xs">
+              <div className="flex items-center gap-2 text-emerald-950 font-bold">
+                <MessageCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span>Imagem salva com sucesso no seu dispositivo!</span>
+              </div>
+              <p className="text-[11px] text-emerald-900/90 leading-relaxed">
+                Por limitações de segurança dos navegadores em rede local (HTTP), a imagem não pode ser injetada automaticamente no WhatsApp sem conexão segura HTTPS.
+              </p>
+              <div className="pt-1 text-[11px] text-emerald-950 font-semibold flex items-center gap-1.5 flex-wrap">
+                <span>👉 Como enviar:</span>
+                <span className="bg-white px-2 py-0.5 rounded-md border border-emerald-200 shadow-2xs font-bold text-emerald-800">
+                  Toque no clipe 📎 ou Galeria no WhatsApp e selecione o arquivo baixado!
+                </span>
+              </div>
+            </div>
+
+            {/* Pré-visualização da Imagem */}
+            <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-2 shadow-inner">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewImagemUrl}
+                alt="Pré-visualização do Cronograma"
+                className="w-full rounded-xl shadow-xs"
+              />
+            </div>
+
+            {/* Ações */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <a
+                href={
+                  previewResultado?.urlWhatsApp ||
+                  `https://api.whatsapp.com/send?text=${encodeURIComponent(
+                    "Confira a ordem oficial do consórcio gerada pelo Clube da Cota!"
+                  )}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-95"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>Abrir Conversa no WhatsApp</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (previewImagemBlob) {
+                    const copiou = await copiarImagemParaClipboard(previewImagemBlob);
+                    if (copiou) {
+                      setCopiadoFeedback(true);
+                      setTimeout(() => setCopiadoFeedback(false), 3000);
+                    } else {
+                      baixarBlobComoArquivo(
+                        previewImagemBlob,
+                        previewResultado?.nomeArquivo || "cronograma.png"
+                      );
+                    }
+                  }
+                }}
+                className="py-3 px-4 bg-white hover:bg-slate-100 text-slate-800 font-bold rounded-xl text-xs border border-slate-200 shadow-2xs flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer"
+              >
+                <Copy className="w-4 h-4 text-slate-500" />
+                <span>
+                  {copiadoFeedback
+                    ? "✓ Imagem Copiada (Cole no WhatsApp)!"
+                    : "Copiar Imagem (Ctrl+V)"}
+                </span>
+              </button>
+            </div>
+
+            <div className="flex justify-between items-center text-[10px] text-slate-400 px-1 pt-1">
+              <span>Em produção com HTTPS, o WhatsApp anexa a imagem direto.</span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (previewImagemBlob) {
+                    baixarBlobComoArquivo(
+                      previewImagemBlob,
+                      previewResultado?.nomeArquivo || "cronograma.png"
+                    );
+                  }
+                }}
+                className="text-theme-main font-bold hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <Download className="w-3 h-3" />
+                <span>Baixar Novamente</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

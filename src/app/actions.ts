@@ -448,6 +448,7 @@ export interface CreateConsorcioInput {
     fraçãoTelefone?: string;
     valorFração1?: number;
     valorFração2?: number;
+    ordensSorteio?: number[];
   }[];
 }
 
@@ -659,11 +660,12 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
         const qtdCotasCompartilhadas = part.cotasCount || 1;
         for (let c = 0; c < qtdCotasCompartilhadas; c++) {
           const numCota = numeroCotaGlobal++;
+          const cotaOrdem = part.ordensSorteio?.[c] ?? numCota;
           const cota = await prisma.cota.create({
             data: {
               consorcioId: novoConsorcio.id,
               numero: numCota,
-              ordemSorteio: numCota,
+              ordemSorteio: cotaOrdem,
               isCompartilhada: true,
               tokenAcesso: "cota_" + crypto.randomBytes(6).toString("hex"),
             },
@@ -727,11 +729,12 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
         // Cota(s) individuais
         for (let c = 0; c < (part.cotasCount || 1); c++) {
           const numCota = numeroCotaGlobal++;
+          const cotaOrdem = part.ordensSorteio?.[c] ?? numCota;
           const cota = await prisma.cota.create({
             data: {
               consorcioId: novoConsorcio.id,
               numero: numCota,
-              ordemSorteio: numCota,
+              ordemSorteio: cotaOrdem,
               isCompartilhada: false,
               tokenAcesso: "cota_" + crypto.randomBytes(6).toString("hex"),
             },
