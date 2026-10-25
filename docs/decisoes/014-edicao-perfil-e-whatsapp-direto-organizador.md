@@ -35,9 +35,14 @@ Implementamos a solução em camadas completas de backend e frontend:
   - Fallback gracioso mantido caso o criador não tenha informado telefone.
 
 ### 3. Interface do Usuário (`PerfilView.tsx`):
-- Novo card **"Dados Pessoais & Contato"**:
+- Card Unificado **"Dados Pessoais & Contato"**:
   - Campo de Nome Completo editável com ícone e validação.
   - Campo de Telefone / WhatsApp com máscara dinâmica e dica explicativa sobre o botão de WhatsApp nos consórcios.
+  - **Dados e Preferências Pix Centralizados**:
+    - Seletor de Tipo de Chave Pix (`CELULAR`, `CPF`, `CNPJ`, `EMAIL`, `ALEATORIA`).
+    - Campo de Chave Pix pessoal para recebimento.
+    - Checkbox explicativo de recebimento direto da bolada com instrução clara.
+    - Eliminação e remoção definitiva do card legado duplicado *"Recebimento da Bolada (Pix)"*, consolidando todas as configurações cadastrais e financeiras do usuário em um único formulário coeso.
   - E-mail com bloqueio visual e aviso de "Identificador exclusivo da conta".
   - Seção retrátil "Alterar Senha de Acesso" com Senha Atual, Nova Senha e Confirmação.
   - **Feedback Visual Obrigatório de Sucesso (Duplo Feedback):**
