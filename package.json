@@ -16,7 +16,7 @@
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f app",
-    "test": "node tests/finance.test.mjs && node tests/auth.test.mjs && node tests/sanitize.test.mjs && node tests/participantes_repasse.test.mjs && node tests/planos_upgrade.test.mjs && node tests/assinaturas_gestao.test.mjs && node tests/consorcio_ciclo_vida.test.mjs && node tests/consorcio_vencido_gestao.test.mjs && node tests/notifications.test.mjs && node tests/cadastro_participante_link.test.mjs && node tests/perfil_dados.test.mjs"
+    "test": "node tests/finance.test.mjs && node tests/auth.test.mjs && node tests/sanitize.test.mjs && node tests/participantes_repasse.test.mjs && node tests/planos_upgrade.test.mjs && node tests/assinaturas_gestao.test.mjs && node tests/consorcio_ciclo_vida.test.mjs && node tests/consorcio_vencido_gestao.test.mjs && node tests/notifications.test.mjs && node tests/cadastro_participante_link.test.mjs && node tests/perfil_dados.test.mjs && node tests/agenda_vinculo_participante.test.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

@@ -280,6 +280,147 @@ export async function dispensarNotificacaoAction(consorcioId: string, notificaca
   return { success: true };
 }
 
+export interface ParticipanteAgendaItem {
+  id: string; // usuarioId no banco
+  name: string;
+  email?: string;
+  telefone?: string;
+  tipoChavePix?: string;
+  chavePix?: string;
+  totalParticipacoes: number;
+  origem: "REDE_CRIADOR" | "SISTEMA";
+}
+
+/**
+ * Obtém a agenda de participantes do criador (Opção 1):
+ * Prioriza membros que já participaram de consórcios com o criador,
+ * e inclui outros usuários cadastrados na plataforma para busca rápida.
+ */
+export async function getAgendaParticipantesAction(
+  criadorId: string
+): Promise<ParticipanteAgendaItem[]> {
+  try {
+    if (!criadorId) return [];
+
+    // 1. Busca todos os consórcios onde o criador é administrador ou participante
+    const consorcios = await prisma.consorcio.findMany({
+      where: {
+        OR: [
+          { criadorId },
+          {
+            cotas: {
+              some: {
+                participantes: {
+                  some: { usuarioId: criadorId },
+                },
+              },
+            },
+          },
+        ],
+      },
+      include: {
+        cotas: {
+          include: {
+            participantes: {
+              include: {
+                usuario: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    telefone: true,
+                    tipoChavePix: true,
+                    chavePix: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const mapaParticipantes = new Map<string, ParticipanteAgendaItem>();
+
+    for (const c of consorcios) {
+      for (const cota of c.cotas) {
+        for (const p of cota.participantes) {
+          if (!p.usuario || p.usuario.id === criadorId) continue;
+
+          const isDummyEmail = p.usuario.email.endsWith("@clubedacota.local");
+          const emailLimpo = isDummyEmail ? undefined : p.usuario.email;
+          const existing = mapaParticipantes.get(p.usuario.id);
+
+          if (existing) {
+            existing.totalParticipacoes += 1;
+            if (!existing.email && emailLimpo) existing.email = emailLimpo;
+            if (!existing.telefone && p.usuario.telefone) existing.telefone = p.usuario.telefone;
+            if (!existing.chavePix && p.usuario.chavePix) {
+              existing.chavePix = p.usuario.chavePix;
+              existing.tipoChavePix = p.usuario.tipoChavePix || undefined;
+            }
+          } else {
+            mapaParticipantes.set(p.usuario.id, {
+              id: p.usuario.id,
+              name: p.usuario.name,
+              email: emailLimpo,
+              telefone: p.usuario.telefone || undefined,
+              tipoChavePix: p.usuario.tipoChavePix || undefined,
+              chavePix: p.usuario.chavePix || undefined,
+              totalParticipacoes: 1,
+              origem: "REDE_CRIADOR",
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Inclui outros usuários reais cadastrados no sistema (com totalParticipacoes = 0)
+    const outrosUsuarios = await prisma.user.findMany({
+      where: {
+        id: { not: criadorId },
+        NOT: {
+          email: { endsWith: "@clubedacota.local" },
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        telefone: true,
+        tipoChavePix: true,
+        chavePix: true,
+      },
+    });
+
+    for (const u of outrosUsuarios) {
+      if (!mapaParticipantes.has(u.id)) {
+        mapaParticipantes.set(u.id, {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          telefone: u.telefone || undefined,
+          tipoChavePix: u.tipoChavePix || undefined,
+          chavePix: u.chavePix || undefined,
+          totalParticipacoes: 0,
+          origem: "SISTEMA",
+        });
+      }
+    }
+
+    // 3. Ordena: quem já participou de mais consórcios do criador aparece primeiro
+    return Array.from(mapaParticipantes.values()).sort((a, b) => {
+      if (b.totalParticipacoes !== a.totalParticipacoes) {
+        return b.totalParticipacoes - a.totalParticipacoes;
+      }
+      return a.name.localeCompare(b.name, "pt-BR");
+    });
+  } catch (error) {
+    console.error("Erro ao carregar agenda de participantes:", error);
+    return [];
+  }
+}
+
 export interface CreateConsorcioInput {
   criadorId: string;
   nome: string;
@@ -295,11 +436,13 @@ export interface CreateConsorcioInput {
   valorCota: number;
   valorAcrescimo?: number;
   participantes: {
+    usuarioId?: string;
     nome: string;
     email?: string;
     telefone?: string;
     cotasCount: number;
     isCompartilhada?: boolean;
+    fraçãoUsuarioId?: string;
     fraçãoNome?: string;
     fraçãoEmail?: string;
     fraçãoTelefone?: string;
@@ -415,21 +558,38 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
     let numeroCotaGlobal = 1;
 
     for (const part of input.participantes) {
-      // Busca ou cria o usuário participante (com role COMUM por padrão)
-      const hasRealEmail = Boolean(part.email && part.email.trim().length > 0);
-      const emailFinal = hasRealEmail
-        ? part.email!.trim().toLowerCase()
-        : `participante_${Date.now()}_${Math.random().toString(36).substring(2, 8)}@clubedacota.local`;
+      // 1. Busca ou vincula o usuário participante:
+      // Prioridade 1: usuarioId selecionado explicitamente via Autocomplete / Agenda
+      let usuario: any = null;
+      if (part.usuarioId) {
+        usuario = await prisma.user.findUnique({ where: { id: part.usuarioId } });
+      }
 
-      let usuario = hasRealEmail
-        ? await prisma.user.findUnique({ where: { email: emailFinal } })
-        : null;
+      // Prioridade 2: E-mail real informado (não fictício)
+      const hasRealEmail = Boolean(
+        part.email &&
+        part.email.trim().length > 0 &&
+        !part.email.endsWith("@clubedacota.local")
+      );
+      const emailFinal = hasRealEmail ? part.email!.trim().toLowerCase() : null;
 
+      if (!usuario && emailFinal) {
+        usuario = await prisma.user.findUnique({ where: { email: emailFinal } });
+      }
+
+      // Prioridade 3: Telefone/WhatsApp (se válido e único)
+      if (!usuario && part.telefone && part.telefone.trim().length >= 10) {
+        const telFormatado = formatarTelefone(part.telefone);
+        usuario = await prisma.user.findFirst({ where: { telefone: telFormatado } });
+      }
+
+      // Se não encontrou usuário existente, cria uma nova conta
       if (!usuario) {
+        const dummyEmail = `participante_${Date.now()}_${Math.random().toString(36).substring(2, 8)}@clubedacota.local`;
         usuario = await prisma.user.create({
           data: {
             name: part.nome,
-            email: emailFinal,
+            email: emailFinal || dummyEmail,
             telefone: part.telefone ? formatarTelefone(part.telefone) : null,
             role: "COMUM",
             isActivated: false,
@@ -442,6 +602,7 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
           },
         });
       } else if (part.telefone && !usuario.telefone) {
+        // Se usuário existente não tinha telefone, atualiza
         await prisma.user.update({
           where: { id: usuario.id },
           data: { telefone: formatarTelefone(part.telefone) },
@@ -450,20 +611,33 @@ export async function createConsorcioAction(input: CreateConsorcioInput) {
 
       // Se for cota compartilhada
       if (part.isCompartilhada && part.fraçãoNome) {
-        const hasRealEmail2 = Boolean(part.fraçãoEmail && part.fraçãoEmail.trim().length > 0);
-        const emailFinal2 = hasRealEmail2
-          ? part.fraçãoEmail!.trim().toLowerCase()
-          : `participante_${Date.now()}_${Math.random().toString(36).substring(2, 8)}@clubedacota.local`;
+        let usuario2: any = null;
+        if (part.fraçãoUsuarioId) {
+          usuario2 = await prisma.user.findUnique({ where: { id: part.fraçãoUsuarioId } });
+        }
 
-        let usuario2 = hasRealEmail2
-          ? await prisma.user.findUnique({ where: { email: emailFinal2 } })
-          : null;
+        const hasRealEmail2 = Boolean(
+          part.fraçãoEmail &&
+          part.fraçãoEmail.trim().length > 0 &&
+          !part.fraçãoEmail.endsWith("@clubedacota.local")
+        );
+        const emailFinal2 = hasRealEmail2 ? part.fraçãoEmail!.trim().toLowerCase() : null;
+
+        if (!usuario2 && emailFinal2) {
+          usuario2 = await prisma.user.findUnique({ where: { email: emailFinal2 } });
+        }
+
+        if (!usuario2 && part.fraçãoTelefone && part.fraçãoTelefone.trim().length >= 10) {
+          const telFormatado2 = formatarTelefone(part.fraçãoTelefone);
+          usuario2 = await prisma.user.findFirst({ where: { telefone: telFormatado2 } });
+        }
 
         if (!usuario2) {
+          const dummyEmail2 = `participante_${Date.now()}_${Math.random().toString(36).substring(2, 8)}@clubedacota.local`;
           usuario2 = await prisma.user.create({
             data: {
               name: part.fraçãoNome,
-              email: emailFinal2,
+              email: emailFinal2 || dummyEmail2,
               telefone: part.fraçãoTelefone ? formatarTelefone(part.fraçãoTelefone) : null,
               role: "COMUM",
               isActivated: false,

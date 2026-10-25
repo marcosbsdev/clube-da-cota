@@ -1,8 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { createConsorcioAction } from "@/app/actions";
-import { Check, Plus, Trash2, Users, AlertCircle, ArrowRight, ArrowLeft, TrendingUp, User, Calendar, Flag, Clock, ChevronDown, ChevronUp, Crown, Copy, MessageCircle, CheckCircle2 } from "lucide-react";
+import {
+  createConsorcioAction,
+  getAgendaParticipantesAction,
+  ParticipanteAgendaItem,
+} from "@/app/actions";
+import { Check, Plus, Trash2, Users, AlertCircle, ArrowRight, ArrowLeft, TrendingUp, User, Calendar, Flag, Clock, ChevronDown, ChevronUp, Crown, Copy, MessageCircle, CheckCircle2, Search, Link2 } from "lucide-react";
 import { ModalUpgradePlanos } from "./ModalUpgradePlanos";
 import { DADOS_PAGAMENTO_UPGRADE, PLANOS_INFO, getVigenciaPlano } from "@/lib/plans";
 import {
@@ -76,11 +80,82 @@ export function CriarConsorcioWizard({
   const [novoNome, setNovoNome] = useState("");
   const [novoEmail, setNovoEmail] = useState("");
   const [novoTelefone, setNovoTelefone] = useState("");
+  const [novoUsuarioId, setNovoUsuarioId] = useState<string | null>(null);
   const [novasCotas, setNovasCotas] = useState(1);
   const [isCompartilhada, setIsCompartilhada] = useState(false);
   const [parceiroNome, setParceiroNome] = useState("");
   const [parceiroEmail, setParceiroEmail] = useState("");
   const [parceiroTelefone, setParceiroTelefone] = useState("");
+  const [parceiroUsuarioId, setParceiroUsuarioId] = useState<string | null>(null);
+
+  // Agenda de contatos frequentes e sugestões inteligentes de autocomplete
+  const [agenda, setAgenda] = useState<ParticipanteAgendaItem[]>([]);
+  const [sugestoesTitularAbertas, setSugestoesTitularAbertas] = useState(false);
+  const [sugestoesParceiroAbertas, setSugestoesParceiroAbertas] = useState(false);
+
+  React.useEffect(() => {
+    if (currentUser?.id) {
+      getAgendaParticipantesAction(currentUser.id).then((lista) => {
+        setAgenda(lista || []);
+      });
+    }
+  }, [currentUser?.id]);
+
+  const sugestoesTitular = React.useMemo(() => {
+    const q = novoNome.trim().toLowerCase();
+    if (!q || q.length < 2) return [];
+    const qDigits = q.replace(/\D/g, "");
+    return agenda
+      .filter((item) => {
+        const jaAdicionado = participantes.some((p) => p.usuarioId === item.id);
+        if (jaAdicionado) return false;
+        const matchNome = item.name.toLowerCase().includes(q);
+        const matchTelefone =
+          qDigits.length >= 2 && item.telefone
+            ? item.telefone.replace(/\D/g, "").includes(qDigits)
+            : false;
+        const matchEmail = item.email ? item.email.toLowerCase().includes(q) : false;
+        return matchNome || matchTelefone || matchEmail;
+      })
+      .slice(0, 5);
+  }, [novoNome, agenda, participantes]);
+
+  const sugestoesParceiro = React.useMemo(() => {
+    const q = parceiroNome.trim().toLowerCase();
+    if (!q || q.length < 2) return [];
+    const qDigits = q.replace(/\D/g, "");
+    return agenda
+      .filter((item) => {
+        const jaAdicionado =
+          participantes.some((p) => p.usuarioId === item.id || p.fraçãoUsuarioId === item.id) ||
+          novoUsuarioId === item.id;
+        if (jaAdicionado) return false;
+        const matchNome = item.name.toLowerCase().includes(q);
+        const matchTelefone =
+          qDigits.length >= 2 && item.telefone
+            ? item.telefone.replace(/\D/g, "").includes(qDigits)
+            : false;
+        const matchEmail = item.email ? item.email.toLowerCase().includes(q) : false;
+        return matchNome || matchTelefone || matchEmail;
+      })
+      .slice(0, 5);
+  }, [parceiroNome, agenda, participantes, novoUsuarioId]);
+
+  const handleSelecionarTitular = (item: ParticipanteAgendaItem) => {
+    setNovoNome(item.name);
+    setNovoEmail(item.email || "");
+    setNovoTelefone(item.telefone ? formatarTelefone(item.telefone) : "");
+    setNovoUsuarioId(item.id);
+    setSugestoesTitularAbertas(false);
+  };
+
+  const handleSelecionarParceiro = (item: ParticipanteAgendaItem) => {
+    setParceiroNome(item.name);
+    setParceiroEmail(item.email || "");
+    setParceiroTelefone(item.telefone ? formatarTelefone(item.telefone) : "");
+    setParceiroUsuarioId(item.id);
+    setSugestoesParceiroAbertas(false);
+  };
 
   // Etapa 3: Valores e Vencimento
   const [valorCota, setValorCota] = useState<number>(500);
@@ -196,14 +271,16 @@ export function CriarConsorcioWizard({
     setParticipantes([
       ...participantes,
       {
+        usuarioId: novoUsuarioId || undefined,
         nome: novoNome.trim(),
         email: novoEmail.trim() || undefined,
         telefone: novoTelefone.trim() || undefined,
         cotasCount: novasCotas,
         isCompartilhada,
+        fraçãoUsuarioId: isCompartilhada ? parceiroUsuarioId || undefined : undefined,
         fraçãoNome: isCompartilhada ? parceiroNome.trim() : undefined,
-        fraçãoEmail: isCompartilhada ? (parceiroEmail.trim() || undefined) : undefined,
-        fraçãoTelefone: isCompartilhada ? (parceiroTelefone.trim() || undefined) : undefined,
+        fraçãoEmail: isCompartilhada ? parceiroEmail.trim() || undefined : undefined,
+        fraçãoTelefone: isCompartilhada ? parceiroTelefone.trim() || undefined : undefined,
         valorFração1: isCompartilhada ? valorCota / 2 : undefined,
         valorFração2: isCompartilhada ? valorCota / 2 : undefined,
       },
@@ -213,12 +290,16 @@ export function CriarConsorcioWizard({
     setNovoNome("");
     setNovoEmail("");
     setNovoTelefone("");
+    setNovoUsuarioId(null);
     setNovasCotas(1);
     setIsCompartilhada(false);
     setParceiroNome("");
     setParceiroEmail("");
     setParceiroTelefone("");
+    setParceiroUsuarioId(null);
     setErroMsg("");
+    setSugestoesTitularAbertas(false);
+    setSugestoesParceiroAbertas(false);
   };
 
   const handleRemoverParticipante = (index: number) => {
@@ -746,14 +827,27 @@ export function CriarConsorcioWizard({
           )}
 
           {/* Atalho opcional para o criador se incluir */}
-          {!participantes.some((p) => p.email?.toLowerCase() === currentUser.email?.toLowerCase()) && (
+          {!participantes.some(
+            (p) =>
+              p.usuarioId === currentUser.id ||
+              (p.email && p.email.toLowerCase() === currentUser.email?.toLowerCase())
+          ) && (
             <button
               type="button"
               onClick={() => {
                 setNovoNome(currentUser.name);
-                setNovoEmail(currentUser.email);
+                setNovoEmail(
+                  currentUser.email?.endsWith("@clubedacota.local")
+                    ? ""
+                    : currentUser.email || ""
+                );
+                setNovoTelefone(
+                  currentUser.telefone ? formatarTelefone(currentUser.telefone) : ""
+                );
+                setNovoUsuarioId(currentUser.id);
+                setSugestoesTitularAbertas(false);
               }}
-              className="w-full py-2.5 px-3 bg-theme-light border border-theme-main/30 text-theme-text rounded-2xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-theme-main/10 transition"
+              className="w-full py-2.5 px-3 bg-theme-light border border-theme-main/30 text-theme-text rounded-2xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-theme-main/10 transition cursor-pointer"
             >
               <User className="w-4 h-4" />
               <span>Eu também vou participar (Preencher meus dados no formulário)</span>
@@ -782,13 +876,22 @@ export function CriarConsorcioWizard({
               {participantes.map((p, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
                   <div>
-                    <p className="font-bold text-slate-800 text-sm">
-                      {p.nome} {p.isCompartilhada ? `& ${p.fraçãoNome}` : ""}
-                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-bold text-slate-800 text-sm">
+                        {p.nome} {p.isCompartilhada ? `& ${p.fraçãoNome}` : ""}
+                      </p>
+                      {p.usuarioId && (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>Conta Vinculada</span>
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 flex-wrap mt-0.5">
                       <span className="text-[11px] text-slate-500">
                         {p.email ? p.email : "Sem e-mail cadastrado"}
                         {p.isCompartilhada && p.fraçãoEmail ? ` / ${p.fraçãoEmail}` : ""}
+                        {p.telefone ? ` • ${p.telefone}` : ""}
                       </span>
                       <span className="text-[10px] font-bold text-theme-text bg-theme-light border border-theme-main/20 px-2 py-0.5 rounded-md">
                         {p.isCompartilhada
@@ -812,18 +915,91 @@ export function CriarConsorcioWizard({
 
           {/* Formulário para Adicionar Mais Participantes */}
           <form onSubmit={handleAdicionarParticipante} className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-3xl space-y-3.5">
-            <h4 className="text-xs sm:text-sm font-bold text-slate-800">Adicionar Novo Participante</h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs sm:text-sm font-bold text-slate-800">Adicionar Novo Participante</h4>
+              {agenda.length > 0 && (
+                <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                  <Search className="w-3 h-3 text-theme-main" />
+                  <span>Digite para buscar em sua agenda</span>
+                </span>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
+              {/* Campo Nome com Autocomplete e Vínculo Inteligente */}
+              <div className="relative">
                 <input
                   type="text"
                   placeholder="Nome completo *"
                   value={novoNome}
-                  onChange={(e) => setNovoNome(e.target.value)}
+                  onChange={(e) => {
+                    setNovoNome(e.target.value);
+                    setSugestoesTitularAbertas(true);
+                    if (novoUsuarioId) setNovoUsuarioId(null);
+                  }}
+                  onFocus={() => {
+                    if (novoNome.trim().length >= 2) setSugestoesTitularAbertas(true);
+                  }}
                   className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white font-medium"
                 />
+
+                {/* Dropdown de sugestões da agenda do criador */}
+                {sugestoesTitularAbertas && sugestoesTitular.length > 0 && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-20"
+                      onClick={() => setSugestoesTitularAbertas(false)}
+                    />
+                    <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 overflow-hidden divide-y divide-slate-100 animate-in fade-in slide-in-from-top-1 duration-150">
+                      <div className="p-2 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                        <span>Sua Rede de Participantes</span>
+                        <span className="text-slate-400 font-normal">Toque para vincular</span>
+                      </div>
+                      {sugestoesTitular.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleSelecionarTitular(item)}
+                          className="w-full p-2.5 text-left hover:bg-theme-light/40 transition flex items-center justify-between gap-2 cursor-pointer"
+                        >
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-slate-900 truncate flex items-center gap-1">
+                              <span>{item.name}</span>
+                              <Link2 className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                            </div>
+                            <div className="text-[11px] text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
+                              {item.telefone && <span>{formatarTelefone(item.telefone)}</span>}
+                              {item.telefone && item.email && <span>•</span>}
+                              {item.email && <span>{item.email}</span>}
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-bold text-theme-text bg-theme-light px-2 py-0.5 rounded-full flex-shrink-0">
+                            {item.totalParticipacoes > 0
+                              ? `${item.totalParticipacoes} ${item.totalParticipacoes === 1 ? "consórcio" : "consórcios"}`
+                              : "Cadastrado"}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {novoUsuarioId && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-[11px] font-bold w-fit mt-1.5 animate-in fade-in duration-200">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                    <span>Conta vinculada</span>
+                    <button
+                      type="button"
+                      onClick={() => setNovoUsuarioId(null)}
+                      className="ml-1 text-slate-400 hover:text-rose-600 text-[10px] font-semibold underline cursor-pointer"
+                      title="Desvincular e cadastrar como novo participante"
+                    >
+                      (desvincular)
+                    </button>
+                  </div>
+                )}
               </div>
+
               <div>
                 <input
                   type="email"
@@ -845,7 +1021,7 @@ export function CriarConsorcioWizard({
             </div>
 
             <p className="text-[11px] text-slate-500 italic mt-0.5">
-              💡 O e-mail e o WhatsApp são opcionais para envio de lembretes e link de acesso à cota.
+              💡 Digite o nome para autocompletar membros frequentes da sua rede, ou informe novos dados.
             </p>
 
             <div className="flex items-center gap-2">
@@ -877,27 +1053,97 @@ export function CriarConsorcioWizard({
               {isCompartilhada && (
                 <div className="space-y-2 mt-3 pt-3 border-t border-slate-200">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <input
-                      type="text"
-                      placeholder="Nome do parceiro(a) *"
-                      value={parceiroNome}
-                      onChange={(e) => setParceiroNome(e.target.value)}
-                      className="p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white font-medium"
-                    />
-                    <input
-                      type="email"
-                      placeholder="E-mail (opcional)"
-                      value={parceiroEmail}
-                      onChange={(e) => setParceiroEmail(e.target.value)}
-                      className="p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white"
-                    />
-                    <input
-                      type="tel"
-                      placeholder="WhatsApp (opcional)"
-                      value={parceiroTelefone}
-                      onChange={(e) => setParceiroTelefone(formatarTelefone(e.target.value))}
-                      className="p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Nome do parceiro(a) *"
+                        value={parceiroNome}
+                        onChange={(e) => {
+                          setParceiroNome(e.target.value);
+                          setSugestoesParceiroAbertas(true);
+                          if (parceiroUsuarioId) setParceiroUsuarioId(null);
+                        }}
+                        onFocus={() => {
+                          if (parceiroNome.trim().length >= 2) setSugestoesParceiroAbertas(true);
+                        }}
+                        className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white font-medium"
+                      />
+
+                      {/* Dropdown de sugestões para o parceiro */}
+                      {sugestoesParceiroAbertas && sugestoesParceiro.length > 0 && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-20"
+                            onClick={() => setSugestoesParceiroAbertas(false)}
+                          />
+                          <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 overflow-hidden divide-y divide-slate-100 animate-in fade-in slide-in-from-top-1 duration-150">
+                            <div className="p-2 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                              <span>Sua Rede de Participantes</span>
+                              <span className="text-slate-400 font-normal">Toque para vincular</span>
+                            </div>
+                            {sugestoesParceiro.map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => handleSelecionarParceiro(item)}
+                                className="w-full p-2.5 text-left hover:bg-theme-light/40 transition flex items-center justify-between gap-2 cursor-pointer"
+                              >
+                                <div className="min-w-0">
+                                  <div className="text-xs font-bold text-slate-900 truncate flex items-center gap-1">
+                                    <span>{item.name}</span>
+                                    <Link2 className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                                  </div>
+                                  <div className="text-[11px] text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
+                                    {item.telefone && <span>{formatarTelefone(item.telefone)}</span>}
+                                    {item.telefone && item.email && <span>•</span>}
+                                    {item.email && <span>{item.email}</span>}
+                                  </div>
+                                </div>
+                                <span className="text-[10px] font-bold text-theme-text bg-theme-light px-2 py-0.5 rounded-full flex-shrink-0">
+                                  {item.totalParticipacoes > 0
+                                    ? `${item.totalParticipacoes} ${item.totalParticipacoes === 1 ? "consórcio" : "consórcios"}`
+                                    : "Cadastrado"}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      {parceiroUsuarioId && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-[11px] font-bold w-fit mt-1.5 animate-in fade-in duration-200">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                          <span>Conta vinculada</span>
+                          <button
+                            type="button"
+                            onClick={() => setParceiroUsuarioId(null)}
+                            className="ml-1 text-slate-400 hover:text-rose-600 text-[10px] font-semibold underline cursor-pointer"
+                            title="Desvincular e cadastrar como novo participante"
+                          >
+                            (desvincular)
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <input
+                        type="email"
+                        placeholder="E-mail (opcional)"
+                        value={parceiroEmail}
+                        onChange={(e) => setParceiroEmail(e.target.value)}
+                        className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="tel"
+                        placeholder="WhatsApp (opcional)"
+                        value={parceiroTelefone}
+                        onChange={(e) => setParceiroTelefone(formatarTelefone(e.target.value))}
+                        className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none bg-white"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
