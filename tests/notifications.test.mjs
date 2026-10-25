@@ -31,16 +31,45 @@ function formatarTextoNotificacao(tipoAcao, detalhes) {
 
   switch (tipoAcao) {
     case "CONFIRMACAO_PAGAMENTO":
+      if (parsed?.ciclosQuitados) {
+        const parcelas = parsed.totalParcelas ? `${parsed.totalParcelas} parcelas` : "";
+        const valorFormatado = parsed.valorArrecadado != null
+          ? ` • Total: R$ ${Number(parsed.valorArrecadado).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          : "";
+        return `Quitação em lote: Ciclos ${parsed.ciclosQuitados}${parcelas ? ` • ${parcelas}` : ""}${valorFormatado}.`;
+      }
+      if (parsed && typeof detalhes === "string" && detalhes.startsWith("{")) {
+        return "Pagamentos de mensalidade confirmados e quitados.";
+      }
       return detalhes || "Pagamento de mensalidade confirmado e quitado.";
+
+    case "CONTEMPLACAO_MARCADA":
+      if (parsed?.contemplados && Array.isArray(parsed.contemplados)) {
+        const total = parsed.contemplados.length;
+        const nomes = parsed.contemplados.slice(0, 3).map((item) => {
+          const p = item.split(":");
+          return p.length > 1 ? `${p[0]?.trim()} (${p[1]?.trim()})` : item;
+        }).join(", ");
+        const resto = total > 3 ? ` e mais ${total - 3} contemplados` : "";
+        return `Contemplação de ${total} cotas registrada: ${nomes}${resto}.`;
+      }
+      return "Contemplações do consórcio registradas com sucesso.";
+
     case "ESTORNO_PAGAMENTO":
-      return detalhes || "Confirmação de pagamento estornada com justificativa.";
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Confirmação de pagamento estornada com justificativa.";
+
     case "ENVIO_COMPROVANTE":
       if (parsed) {
+        if (parsed.participante && parsed.ciclo) {
+          return `Novo comprovante PIX anexado por ${parsed.participante} (Ciclo #${parsed.ciclo}).`;
+        }
         return `Novo comprovante PIX anexado para Cota #${parsed.cotaNumero || "?"} (Ciclo #${parsed.numeroCiclo || "?"}).`;
       }
-      return detalhes || "Novo comprovante PIX anexado pelo participante.";
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Novo comprovante PIX anexado pelo participante.";
+
     case "RECUSA_COMPROVANTE":
-      return detalhes || "Comprovante de pagamento recusado pelo administrador.";
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Comprovante de pagamento recusado pelo administrador.";
+
     case "TROCA_POSICAO_COTA":
       if (parsed?.cota1 && parsed?.cota2) {
         const p1 = parsed.cota1.participantes ? ` (${parsed.cota1.participantes})` : "";
@@ -48,25 +77,76 @@ function formatarTextoNotificacao(tipoAcao, detalhes) {
         return `Permuta de ordem: Cota #${parsed.cota1.numero}${p1} trocou com Cota #${parsed.cota2.numero}${p2}.`;
       }
       return "Troca de posições na ordem de sorteio realizada.";
+
+    case "TROCA_POSICOES":
+      if (parsed?.descricao) {
+        return parsed.descricao;
+      }
+      if (parsed?.totalTrocas) {
+        return `Consolidação de ${parsed.totalTrocas} trocas acordadas na ordem de sorteio.`;
+      }
+      return "Consolidação das trocas na ordem de sorteio realizada.";
+
     case "CONTEMPLACAO_COTA":
       if (parsed?.numero) {
         const p = parsed.participantes ? ` (${parsed.participantes})` : "";
         return `A Cota #${parsed.numero}${p} foi contemplada com a bolada!`;
       }
       return "Cota contemplada no sorteio do consórcio.";
+
     case "REVERSAO_CONTEMPLACAO_COTA":
       if (parsed?.numero) {
         return `Contemplação da Cota #${parsed.numero} foi revertida.`;
       }
       return "Reversão de cota contemplada registrada.";
+
     case "EDICAO_DADOS_CONSORCIO":
       if (parsed?.depois?.nome) {
         return `Dados do consórcio atualizados (Nome: "${parsed.depois.nome}").`;
       }
       return "Dados cadastrais ou regras de pagamento atualizados.";
+
+    case "EDICAO_DADOS_PARTICIPANTE":
+      if (parsed?.novoNome) {
+        return `Dados cadastrais de ${parsed.novoNome} foram atualizados.`;
+      }
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Dados cadastrais de participante atualizados.";
+
+    case "SUBSTITUICAO_PARTICIPANTE_COTA":
+      if (parsed?.cotaNumero && parsed?.novoParticipante?.name) {
+        return `Cota #${parsed.cotaNumero} repassada para ${parsed.novoParticipante.name} a partir do ciclo ${parsed.aPartirDoCiclo || 1}.`;
+      }
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Cota repassada para novo titular com justificativa.";
+
     case "CRIACAO_CONSORCIO":
-      return detalhes || "Grupo de consórcio criado com sucesso.";
+      if (parsed?.nome) {
+        const cotas = parsed.totalCotas ? ` com ${parsed.totalCotas} cotas` : "";
+        return `Consórcio "${parsed.nome}" criado com sucesso${cotas}.`;
+      }
+      if (parsed && typeof detalhes === "string" && detalhes.startsWith("{")) {
+        return "Grupo de consórcio criado com sucesso.";
+      }
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Grupo de consórcio criado com sucesso.";
+
+    case "ENCERRAMENTO_CONSORCIO":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Consórcio foi encerrado (modo somente leitura).";
+
+    case "REATIVACAO_CONSORCIO":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Consórcio foi reativado com sucesso.";
+
+    case "EXCLUSAO_CONSORCIO_TESTE":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Consórcio de teste excluído definitivamente.";
+
     default:
+      if (parsed) {
+        if (parsed.descricao) return parsed.descricao;
+        if (parsed.mensagem) return parsed.mensagem;
+        if (parsed.nome) return `Alteração registrada em "${parsed.nome}".`;
+        return "Alteração de dados registrada no consórcio.";
+      }
+      if (typeof detalhes === "string" && (detalhes.startsWith("{") || detalhes.startsWith("["))) {
+        return "Alteração registrada no consórcio.";
+      }
       return detalhes || "Alteração registrada no consórcio.";
   }
 }
@@ -168,7 +248,44 @@ async function runTests() {
 
     const tEdicao = formatarTextoNotificacao("EDICAO_DADOS_CONSORCIO", JSON.stringify({ depois: { nome: "Consórcio 2026 VIP" } }));
     assert.strictEqual(tEdicao, 'Dados do consórcio atualizados (Nome: "Consórcio 2026 VIP").');
-    console.log("✅ Teste 2: Humanização de todas as ações de notificação aprovada.");
+
+    // Testes de eliminação completa de JSON bruto
+    const tContemplacaoLote = formatarTextoNotificacao("CONTEMPLACAO_MARCADA", JSON.stringify({
+      contemplados: [
+        "Ciclo 1: Junior Brito",
+        "Ciclo 2: Patrick Guedes",
+        "Ciclo 3: Marcos Batista",
+        "Ciclo 4: Josivan Ferreira",
+      ]
+    }));
+    assert(tContemplacaoLote.includes("Contemplação de 4 cotas"), "Deveria totalizar cotas");
+    assert(!tContemplacaoLote.startsWith("{") && !tContemplacaoLote.includes('["Ciclo'), "NUNCA deve exibir JSON bruto");
+
+    const tQuitacaoLote = formatarTextoNotificacao("CONFIRMACAO_PAGAMENTO", JSON.stringify({
+      ciclosQuitados: "1 ao 9 (Fevereiro a Outubro de 2026)",
+      totalParcelas: 90,
+      valorArrecadado: 10800.0,
+    }));
+    assert(tQuitacaoLote.includes("Quitação em lote: Ciclos 1 ao 9"), "Deveria formatar quitação em lote");
+    assert(tQuitacaoLote.includes("90 parcelas"), "Deveria incluir total de parcelas");
+    assert(!tQuitacaoLote.startsWith("{"), "NUNCA deve exibir JSON bruto");
+
+    const tTrocasConsolidacao = formatarTextoNotificacao("TROCA_POSICOES", JSON.stringify({
+      descricao: "Consolidação das trocas entre Sorteio Original e Sorteio Final acordado entre os membros.",
+      totalTrocas: 8,
+    }));
+    assert.strictEqual(tTrocasConsolidacao, "Consolidação das trocas entre Sorteio Original e Sorteio Final acordado entre os membros.");
+
+    const tCriacaoConsorcio = formatarTextoNotificacao("CRIACAO_CONSORCIO", JSON.stringify({
+      nome: "Amigos do Pau Darco 2026",
+      totalCotas: 10,
+    }));
+    assert.strictEqual(tCriacaoConsorcio, 'Consórcio "Amigos do Pau Darco 2026" criado com sucesso com 10 cotas.');
+
+    const tFallbackDesconhecido = formatarTextoNotificacao("ACAO_NOVA_QUALQUER", JSON.stringify({ foo: "bar" }));
+    assert(!tFallbackDesconhecido.startsWith("{"), "Fallback nunca deve vazar JSON");
+
+    console.log("✅ Teste 2: Humanização de todas as ações de notificação (sem JSON bruto) aprovada.");
 
     // Teste 3: Confirmação de recebimento com justificativa gera log de auditoria e status PAGO
     console.log("Testando confirmação de recebimento e trilha de auditoria...");

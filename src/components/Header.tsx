@@ -23,6 +23,7 @@ import {
   ExternalLink,
   ShieldCheck,
   UserCheck,
+  Lock,
 } from "lucide-react";
 import { TabType } from "./BottomNav";
 import { AppLogo } from "./AppLogo";
@@ -89,14 +90,16 @@ function getNotificacaoMeta(tipoAcao: string) {
         icon: X,
       };
     case "TROCA_POSICAO_COTA":
+    case "TROCA_POSICOES":
       return {
-        label: "Permuta de Sorteio",
+        label: tipoAcao === "TROCA_POSICOES" ? "Consolidação de Sorteio" : "Permuta de Sorteio",
         bg: "bg-amber-100 text-amber-800 border-amber-200",
         icon: ArrowLeftRight,
       };
     case "CONTEMPLACAO_COTA":
+    case "CONTEMPLACAO_MARCADA":
       return {
-        label: "Cota Contemplada",
+        label: tipoAcao === "CONTEMPLACAO_MARCADA" ? "Contemplações em Lote" : "Cota Contemplada",
         bg: "bg-emerald-100 text-emerald-800 border-emerald-200",
         icon: Sparkles,
       };
@@ -130,6 +133,18 @@ function getNotificacaoMeta(tipoAcao: string) {
         bg: "bg-violet-100 text-violet-800 border-violet-200",
         icon: FolderKanban,
       };
+    case "ENCERRAMENTO_CONSORCIO":
+      return {
+        label: "Consórcio Encerrado",
+        bg: "bg-rose-100 text-rose-800 border-rose-200",
+        icon: Lock,
+      };
+    case "REATIVACAO_CONSORCIO":
+      return {
+        label: "Consórcio Reativado",
+        bg: "bg-emerald-100 text-emerald-800 border-emerald-200",
+        icon: CheckCircle2,
+      };
     default:
       return {
         label: "Alteração no Consórcio",
@@ -151,16 +166,45 @@ function formatarTextoNotificacao(tipoAcao: string, detalhes: string): string {
 
   switch (tipoAcao) {
     case "CONFIRMACAO_PAGAMENTO":
+      if (parsed?.ciclosQuitados) {
+        const parcelas = parsed.totalParcelas ? `${parsed.totalParcelas} parcelas` : "";
+        const valorFormatado = parsed.valorArrecadado != null
+          ? ` • Total: R$ ${Number(parsed.valorArrecadado).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          : "";
+        return `Quitação em lote: Ciclos ${parsed.ciclosQuitados}${parcelas ? ` • ${parcelas}` : ""}${valorFormatado}.`;
+      }
+      if (parsed && typeof detalhes === "string" && detalhes.startsWith("{")) {
+        return "Pagamentos de mensalidade confirmados e quitados.";
+      }
       return detalhes || "Pagamento de mensalidade confirmado e quitado.";
+
+    case "CONTEMPLACAO_MARCADA":
+      if (parsed?.contemplados && Array.isArray(parsed.contemplados)) {
+        const total = parsed.contemplados.length;
+        const nomes = parsed.contemplados.slice(0, 3).map((item: string) => {
+          const p = item.split(":");
+          return p.length > 1 ? `${p[0]?.trim()} (${p[1]?.trim()})` : item;
+        }).join(", ");
+        const resto = total > 3 ? ` e mais ${total - 3} contemplados` : "";
+        return `Contemplação de ${total} cotas registrada: ${nomes}${resto}.`;
+      }
+      return "Contemplações do consórcio registradas com sucesso.";
+
     case "ESTORNO_PAGAMENTO":
-      return detalhes || "Confirmação de pagamento estornada com justificativa.";
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Confirmação de pagamento estornada com justificativa.";
+
     case "ENVIO_COMPROVANTE":
       if (parsed) {
+        if (parsed.participante && parsed.ciclo) {
+          return `Novo comprovante PIX anexado por ${parsed.participante} (Ciclo #${parsed.ciclo}).`;
+        }
         return `Novo comprovante PIX anexado para Cota #${parsed.cotaNumero || "?"} (Ciclo #${parsed.numeroCiclo || "?"}).`;
       }
-      return detalhes || "Novo comprovante PIX anexado pelo participante.";
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Novo comprovante PIX anexado pelo participante.";
+
     case "RECUSA_COMPROVANTE":
-      return detalhes || "Comprovante de pagamento recusado pelo administrador.";
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Comprovante de pagamento recusado pelo administrador.";
+
     case "TROCA_POSICAO_COTA":
       if (parsed?.cota1 && parsed?.cota2) {
         const p1 = parsed.cota1.participantes ? ` (${parsed.cota1.participantes})` : "";
@@ -168,35 +212,76 @@ function formatarTextoNotificacao(tipoAcao: string, detalhes: string): string {
         return `Permuta de ordem: Cota #${parsed.cota1.numero}${p1} trocou com Cota #${parsed.cota2.numero}${p2}.`;
       }
       return "Troca de posições na ordem de sorteio realizada.";
+
+    case "TROCA_POSICOES":
+      if (parsed?.descricao) {
+        return parsed.descricao;
+      }
+      if (parsed?.totalTrocas) {
+        return `Consolidação de ${parsed.totalTrocas} trocas acordadas na ordem de sorteio.`;
+      }
+      return "Consolidação das trocas na ordem de sorteio realizada.";
+
     case "CONTEMPLACAO_COTA":
       if (parsed?.numero) {
         const p = parsed.participantes ? ` (${parsed.participantes})` : "";
         return `A Cota #${parsed.numero}${p} foi contemplada com a bolada!`;
       }
       return "Cota contemplada no sorteio do consórcio.";
+
     case "REVERSAO_CONTEMPLACAO_COTA":
       if (parsed?.numero) {
         return `Contemplação da Cota #${parsed.numero} foi revertida.`;
       }
       return "Reversão de cota contemplada registrada.";
+
     case "EDICAO_DADOS_CONSORCIO":
       if (parsed?.depois?.nome) {
         return `Dados do consórcio atualizados (Nome: "${parsed.depois.nome}").`;
       }
       return "Dados cadastrais ou regras de pagamento atualizados.";
+
     case "EDICAO_DADOS_PARTICIPANTE":
       if (parsed?.novoNome) {
         return `Dados cadastrais de ${parsed.novoNome} foram atualizados.`;
       }
-      return detalhes || "Dados cadastrais de participante atualizados.";
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Dados cadastrais de participante atualizados.";
+
     case "SUBSTITUICAO_PARTICIPANTE_COTA":
       if (parsed?.cotaNumero && parsed?.novoParticipante?.name) {
         return `Cota #${parsed.cotaNumero} repassada para ${parsed.novoParticipante.name} a partir do ciclo ${parsed.aPartirDoCiclo || 1}.`;
       }
-      return detalhes || "Cota repassada para novo titular com justificativa.";
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Cota repassada para novo titular com justificativa.";
+
     case "CRIACAO_CONSORCIO":
-      return detalhes || "Grupo de consórcio criado com sucesso.";
+      if (parsed?.nome) {
+        const cotas = parsed.totalCotas ? ` com ${parsed.totalCotas} cotas` : "";
+        return `Consórcio "${parsed.nome}" criado com sucesso${cotas}.`;
+      }
+      if (parsed && typeof detalhes === "string" && detalhes.startsWith("{")) {
+        return "Grupo de consórcio criado com sucesso.";
+      }
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Grupo de consórcio criado com sucesso.";
+
+    case "ENCERRAMENTO_CONSORCIO":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Consórcio foi encerrado (modo somente leitura).";
+
+    case "REATIVACAO_CONSORCIO":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Consórcio foi reativado com sucesso.";
+
+    case "EXCLUSAO_CONSORCIO_TESTE":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Consórcio de teste excluído definitivamente.";
+
     default:
+      if (parsed) {
+        if (parsed.descricao) return parsed.descricao;
+        if (parsed.mensagem) return parsed.mensagem;
+        if (parsed.nome) return `Alteração registrada em "${parsed.nome}".`;
+        return "Alteração de dados registrada no consórcio.";
+      }
+      if (typeof detalhes === "string" && (detalhes.startsWith("{") || detalhes.startsWith("["))) {
+        return "Alteração registrada no consórcio.";
+      }
       return detalhes || "Alteração registrada no consórcio.";
   }
 }

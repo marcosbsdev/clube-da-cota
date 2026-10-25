@@ -88,6 +88,18 @@ function getAcaoAuditoriaMeta(tipoAcao: string) {
         bg: "bg-amber-100 text-amber-900 border-amber-200/80",
         icon: ArrowLeftRight,
       };
+    case "TROCA_POSICOES":
+      return {
+        label: "Consolidação de Sorteio",
+        bg: "bg-amber-100 text-amber-900 border-amber-200/80",
+        icon: ArrowLeftRight,
+      };
+    case "CONTEMPLACAO_MARCADA":
+      return {
+        label: "Contemplações em Lote",
+        bg: "bg-emerald-100 text-emerald-900 border-emerald-200/80",
+        icon: Sparkles,
+      };
     case "CONTEMPLACAO_COTA":
       return {
         label: "Contemplação Registrada",
@@ -118,6 +130,12 @@ function getAcaoAuditoriaMeta(tipoAcao: string) {
         bg: "bg-rose-100 text-rose-900 border-rose-200/80",
         icon: RotateCcw,
       };
+    case "ENVIO_COMPROVANTE":
+      return {
+        label: "Comprovante Enviado",
+        bg: "bg-blue-100 text-blue-900 border-blue-200/80",
+        icon: FileText,
+      };
     case "RECUSA_COMPROVANTE":
       return {
         label: "Comprovante Recusado",
@@ -141,6 +159,24 @@ function getAcaoAuditoriaMeta(tipoAcao: string) {
         label: "Consórcio Criado",
         bg: "bg-violet-100 text-violet-900 border-violet-200/80",
         icon: FolderKanban,
+      };
+    case "ENCERRAMENTO_CONSORCIO":
+      return {
+        label: "Consórcio Encerrado",
+        bg: "bg-rose-100 text-rose-900 border-rose-200/80",
+        icon: Lock,
+      };
+    case "REATIVACAO_CONSORCIO":
+      return {
+        label: "Consórcio Reativado",
+        bg: "bg-emerald-100 text-emerald-900 border-emerald-200/80",
+        icon: CheckCircle2,
+      };
+    case "EXCLUSAO_CONSORCIO_TESTE":
+      return {
+        label: "Consórcio Excluído",
+        bg: "bg-rose-100 text-rose-900 border-rose-200/80",
+        icon: Trash2,
       };
     default:
       return {
@@ -182,7 +218,59 @@ function renderAuditoriaDetalhes(a: any, consorcio: any) {
     }
   }
 
-  // 1. Caso TROCA_POSICAO_COTA (seja JSON estruturado ou texto plano do teste)
+  // 1. Caso CONTEMPLACAO_MARCADA ou lista de contemplados em lote
+  if (a.tipoAcao === "CONTEMPLACAO_MARCADA" || (parsedJson && parsedJson.contemplados)) {
+    const listaContemplados: string[] = Array.isArray(parsedJson?.contemplados)
+      ? parsedJson.contemplados
+      : [];
+
+    return (
+      <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 space-y-2.5 shadow-2xs">
+        <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+          <div className="flex items-center gap-1.5 text-xs font-black text-slate-900">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Contemplações Registradas em Lote</span>
+          </div>
+          <span className="text-[10px] bg-emerald-100 text-emerald-900 font-extrabold px-2 py-0.5 rounded-md border border-emerald-200">
+            {listaContemplados.length} cotas contempladas
+          </span>
+        </div>
+
+        {listaContemplados.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
+            {listaContemplados.map((item, idx) => {
+              const parts = item.split(":");
+              const ciclo = parts[0]?.trim();
+              const nome = parts.slice(1).join(":").trim() || item;
+
+              return (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between p-2 rounded-xl bg-emerald-50/50 border border-emerald-100/80 text-xs"
+                >
+                  <div className="min-w-0 pr-2">
+                    <span className="text-[10px] font-bold text-emerald-700 block uppercase">
+                      {ciclo}
+                    </span>
+                    <span className="font-bold text-slate-900 truncate block">
+                      {nome}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-black text-emerald-800 bg-white px-2 py-0.5 rounded-md border border-emerald-200 shadow-2xs flex-shrink-0">
+                    🏆 Paga
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500">Contemplações em lote registradas com sucesso.</p>
+        )}
+      </div>
+    );
+  }
+
+  // 2. Caso TROCA_POSICAO_COTA (Permuta individual entre 2 cotas)
   if (
     a.tipoAcao === "TROCA_POSICAO_COTA" ||
     (parsedJson && parsedJson.cota1 && parsedJson.cota2)
@@ -256,7 +344,32 @@ function renderAuditoriaDetalhes(a: any, consorcio: any) {
     }
   }
 
-  // Caso SUBSTITUICAO_PARTICIPANTE_COTA
+  // 3. Caso TROCA_POSICOES (Consolidação em lote do sorteio)
+  if (a.tipoAcao === "TROCA_POSICOES" || (parsedJson && parsedJson.totalTrocas)) {
+    const descricao = parsedJson?.descricao || (typeof a.detalhes === "string" && !a.detalhes.startsWith("{") ? a.detalhes : "Consolidação das trocas na ordem de sorteio.");
+    const totalTrocas = parsedJson?.totalTrocas;
+
+    return (
+      <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 space-y-2 shadow-2xs">
+        <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+          <div className="flex items-center gap-1.5 text-xs font-black text-slate-900">
+            <ArrowLeftRight className="w-3.5 h-3.5 text-amber-600" />
+            <span>Consolidação de Sorteio</span>
+          </div>
+          {totalTrocas && (
+            <span className="text-[10px] bg-amber-100 text-amber-950 font-extrabold px-2 py-0.5 rounded-md border border-amber-200">
+              {totalTrocas} trocas realizadas
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-slate-700 leading-relaxed font-medium">
+          {descricao}
+        </p>
+      </div>
+    );
+  }
+
+  // 4. Caso SUBSTITUICAO_PARTICIPANTE_COTA
   if (a.tipoAcao === "SUBSTITUICAO_PARTICIPANTE_COTA" && parsedJson) {
     const antigo = parsedJson.participanteAntigo?.name || "Titular anterior";
     const novo = parsedJson.novoParticipante?.name || "Novo titular";
@@ -290,7 +403,7 @@ function renderAuditoriaDetalhes(a: any, consorcio: any) {
     );
   }
 
-  // Caso EDICAO_DADOS_PARTICIPANTE
+  // 5. Caso EDICAO_DADOS_PARTICIPANTE
   if (a.tipoAcao === "EDICAO_DADOS_PARTICIPANTE" && parsedJson) {
     const nome = parsedJson.novoNome || parsedJson.nomeAnterior || "Participante";
     return (
@@ -308,8 +421,44 @@ function renderAuditoriaDetalhes(a: any, consorcio: any) {
     );
   }
 
-  // 2. Caso CONFIRMACAO_PAGAMENTO
+  // 6. Caso CONFIRMACAO_PAGAMENTO (Lote ou Individual)
   if (a.tipoAcao === "CONFIRMACAO_PAGAMENTO") {
+    // Quitação em lote (via JSON estruturado)
+    if (parsedJson?.ciclosQuitados) {
+      const ciclos = parsedJson.ciclosQuitados;
+      const parcelas = parsedJson.totalParcelas;
+      const valor = parsedJson.valorArrecadado;
+      return (
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 space-y-2.5 shadow-2xs">
+          <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+            <div className="flex items-center gap-1.5 text-xs font-black text-slate-900">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Baixa & Quitação em Lote</span>
+            </div>
+            {parcelas && (
+              <span className="text-[10px] bg-emerald-100 text-emerald-900 font-extrabold px-2 py-0.5 rounded-md border border-emerald-200">
+                {parcelas} parcelas quitadas
+              </span>
+            )}
+          </div>
+          <div className="flex items-center justify-between p-2.5 bg-emerald-50/60 rounded-xl border border-emerald-100 text-xs">
+            <div>
+              <span className="text-[10px] text-emerald-800 font-bold uppercase block">Ciclos Cobertos</span>
+              <span className="font-bold text-slate-900">{ciclos}</span>
+            </div>
+            {valor != null && (
+              <div className="text-right">
+                <span className="text-[10px] text-emerald-800 font-bold uppercase block">Total Arrecadado</span>
+                <span className="text-sm font-black text-emerald-950">
+                  R$ {Number(valor).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     const matchPag = typeof a.detalhes === "string" ? a.detalhes.match(/R\$\s*([\d.,]+).*?participante\s+(.*?)\s+marcada como\s*(PAGO)/i) : null;
     if (matchPag) {
       const valor = matchPag[1];
@@ -330,7 +479,7 @@ function renderAuditoriaDetalhes(a: any, consorcio: any) {
     }
   }
 
-  // 3. Caso ESTORNO_PAGAMENTO
+  // 7. Caso ESTORNO_PAGAMENTO
   if (a.tipoAcao === "ESTORNO_PAGAMENTO") {
     const matchEstorno = typeof a.detalhes === "string" ? a.detalhes.match(/R\$\s*([\d.,]+).*?revertido para\s*(\w+)/i) : null;
     const nomePart = a.usuarioAfetadoId ? getNomeUsuarioAfetado(a.usuarioAfetadoId, consorcio) : "";
@@ -353,7 +502,7 @@ function renderAuditoriaDetalhes(a: any, consorcio: any) {
     }
   }
 
-  // 4. Caso CONTEMPLACAO_COTA ou REVERSAO_CONTEMPLACAO_COTA
+  // 8. Caso CONTEMPLACAO_COTA ou REVERSAO_CONTEMPLACAO_COTA
   if (a.tipoAcao === "CONTEMPLACAO_COTA" || a.tipoAcao === "REVERSAO_CONTEMPLACAO_COTA") {
     const num = parsedJson?.numero;
     const nomePart = parsedJson?.participantes || (num ? getParticipantesCota(num, consorcio) : "");
@@ -385,7 +534,39 @@ function renderAuditoriaDetalhes(a: any, consorcio: any) {
     );
   }
 
-  // 5. Caso EDICAO_DADOS_CONSORCIO com JSON
+  // 9. Caso CRIACAO_CONSORCIO
+  if (a.tipoAcao === "CRIACAO_CONSORCIO") {
+    const nome = parsedJson?.nome || (typeof a.detalhes === "string" && !a.detalhes.startsWith("{") ? a.detalhes : consorcio?.nome || "Consórcio");
+    const cotas = parsedJson?.totalCotas || consorcio?.totalCotas;
+    const modelo = parsedJson?.modeloContribuicao;
+    const bolada = parsedJson?.valorTotalBolada;
+
+    return (
+      <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 space-y-2 shadow-2xs">
+        <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+          <div className="flex items-center gap-1.5 text-xs font-black text-slate-900">
+            <FolderKanban className="w-3.5 h-3.5 text-violet-600" />
+            <span>Lançamento do Consórcio</span>
+          </div>
+          <span className="text-[10px] bg-violet-100 text-violet-950 font-extrabold px-2 py-0.5 rounded-md border border-violet-200">
+            {cotas ? `${cotas} cotas` : "Criado"}
+          </span>
+        </div>
+        <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs space-y-1">
+          <p className="font-bold text-slate-900 text-sm">{nome}</p>
+          <div className="flex items-center gap-3 text-[11px] text-slate-500 pt-0.5 flex-wrap">
+            {modelo && <span>Modelo: <strong>{modelo}</strong></span>}
+            {bolada != null && (
+              <span>Bolada: <strong>R$ {Number(bolada).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></span>
+            )}
+            {parsedJson?.retroativo && <span className="text-amber-700 font-bold">• Retroativo</span>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 10. Caso EDICAO_DADOS_CONSORCIO com JSON
   if (parsedJson && (parsedJson.antes || parsedJson.depois)) {
     const antes = parsedJson.antes || {};
     const depois = parsedJson.depois || {};
@@ -441,10 +622,96 @@ function renderAuditoriaDetalhes(a: any, consorcio: any) {
     );
   }
 
-  // 6. Caso padrão / texto plano: enriquece menções a "Cota #X" com o nome do participante se possível
+  // 11. Caso ENVIO_COMPROVANTE
+  if (a.tipoAcao === "ENVIO_COMPROVANTE" && parsedJson) {
+    const nomeArquivo = parsedJson.arquivoNome || "comprovante";
+    const part = parsedJson.participante || getNomeUsuarioAfetado(a.usuarioAfetadoId, consorcio);
+    const ciclo = parsedJson.ciclo || parsedJson.numeroCiclo;
+    const valor = parsedJson.valor;
+
+    return (
+      <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 space-y-2 shadow-2xs">
+        <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+          <div className="flex items-center gap-1.5 text-xs font-black text-slate-900">
+            <FileText className="w-3.5 h-3.5 text-blue-600" />
+            <span>Comprovante de Pagamento</span>
+          </div>
+          {ciclo && (
+            <span className="text-[10px] bg-blue-100 text-blue-950 font-extrabold px-2 py-0.5 rounded-md border border-blue-200">
+              Ciclo #{ciclo}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+          <div>
+            {part && <p className="font-black text-slate-900">{part}</p>}
+            <p className="text-[11px] text-slate-500 truncate max-w-[200px]">📎 {nomeArquivo}</p>
+          </div>
+          {valor != null && (
+            <div className="text-right">
+              <span className="text-xs font-black text-slate-900">
+                R$ {Number(valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 12. Caso ENCERRAMENTO_CONSORCIO ou REATIVACAO_CONSORCIO
+  if (a.tipoAcao === "ENCERRAMENTO_CONSORCIO" || a.tipoAcao === "REATIVACAO_CONSORCIO") {
+    const isEncerramento = a.tipoAcao === "ENCERRAMENTO_CONSORCIO";
+    return (
+      <div className="bg-white p-3 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-2 shadow-2xs">
+        <div className="min-w-0">
+          <p className="text-xs font-black text-slate-900 leading-tight">
+            {typeof a.detalhes === "string" && !a.detalhes.startsWith("{")
+              ? a.detalhes
+              : isEncerramento
+              ? "Consórcio encerrado e arquivado como somente leitura."
+              : "Consórcio reativado com sucesso."}
+          </p>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <span
+            className={`inline-block text-xs font-black px-2.5 py-1 rounded-lg border shadow-2xs ${
+              isEncerramento
+                ? "bg-rose-50 text-rose-800 border-rose-200"
+                : "bg-emerald-50 text-emerald-800 border-emerald-200"
+            }`}
+          >
+            {isEncerramento ? "Encerrado" : "Reativado"}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // 13. Caso padrão / fallback seguro: NUNCA exibe JSON bruto!
   let textoFinal = a.detalhes;
+  if (parsedJson) {
+    if (parsedJson.descricao) {
+      textoFinal = parsedJson.descricao;
+    } else if (parsedJson.mensagem) {
+      textoFinal = parsedJson.mensagem;
+    } else if (parsedJson.nome) {
+      textoFinal = `Consórcio "${parsedJson.nome}".`;
+    } else if (Array.isArray(parsedJson)) {
+      textoFinal = parsedJson.join(", ");
+    } else {
+      textoFinal = Object.entries(parsedJson)
+        .filter(([k]) => !k.toLowerCase().includes("id"))
+        .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`)
+        .join(" • ");
+    }
+  }
+
   if (typeof textoFinal === "string") {
-    textoFinal = textoFinal.replace(/Cota #(\d+)/gi, (match, numStr) => {
+    if (textoFinal.startsWith("{") || textoFinal.startsWith("[")) {
+      textoFinal = "Alteração registrada no consórcio.";
+    }
+    textoFinal = textoFinal.replace(/Cota #(\d+)/gi, (match: string, numStr: string) => {
       const numCota = Number(numStr);
       const nome = getParticipantesCota(numCota, consorcio);
       return nome && !textoFinal.includes(nome) ? `${match} (${nome})` : match;
@@ -453,7 +720,7 @@ function renderAuditoriaDetalhes(a: any, consorcio: any) {
 
   return (
     <div className="bg-white p-3 rounded-2xl border border-slate-200/80 text-xs text-slate-800 font-medium leading-relaxed break-words shadow-2xs">
-      {textoFinal}
+      {textoFinal || "Registro de auditoria do sistema."}
     </div>
   );
 }
