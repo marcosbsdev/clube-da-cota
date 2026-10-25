@@ -41,3 +41,9 @@ Toda ação relevante gera uma entrada na tabela `AuditoriaLog`:
 * **Filtros por Tipo de Evento:** `Todos`, `Pagamentos`, `Contemplações`, `Trocas` e `Edições` com contadores dinâmicos.
 * **Busca em Tempo Real:** Campo de busca que pesquisa instantaneamente por responsável, cotas participantes ou termos contidos na justificativa.
 * **Grid Otimizado:** Exibição em grid responsivo de 2 colunas com altura máxima e rolagem suave (`max-h-[600px]`), mantendo a página sempre compacta.
+
+---
+
+## 4. Apresentação Humanizada & Trava Anti-JSON
+* **Eliminação de JSON Bruto:** Eventos com cargas úteis complexas (ex: quitação em lote de 9 ciclos ou contemplações de múltiplos cotistas) são transformados dinamicamente em cards visuais temáticos ([ADR 012](../decisoes/012-humanizacao-notificacoes-e-auditoria-sem-json-bruto.md)).
+* **Sininho de Notificações (`Header.tsx`):** O dropdown de notificações conta com badges semânticos coloridos e texto corrido amigável, protegido por uma trava universal que impede que qualquer caractere `{` ou `[` vaze para a interface.
