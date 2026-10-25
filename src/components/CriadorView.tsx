@@ -154,6 +154,12 @@ function getAcaoAuditoriaMeta(tipoAcao: string) {
         bg: "bg-purple-100 text-purple-900 border-purple-200/80",
         icon: UserCheck,
       };
+    case "ATIVACAO_CONTA_PARTICIPANTE":
+      return {
+        label: "Cadastro Ativado",
+        bg: "bg-emerald-100 text-emerald-900 border-emerald-200/80",
+        icon: UserCheck,
+      };
     case "CRIACAO_CONSORCIO":
       return {
         label: "Consórcio Criado",

@@ -1757,7 +1757,18 @@ export async function getParticipanteByToken(token: string) {
       where: { tokenAcesso: token },
       include: {
         usuario: {
-          select: { id: true, name: true, email: true, role: true, isActivated: true, passwordHash: true },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            telefone: true,
+            chavePix: true,
+            tipoChavePix: true,
+            receberPixDireto: true,
+            role: true,
+            isActivated: true,
+            passwordHash: true,
+          },
         },
         cota: {
           include: {
@@ -1791,7 +1802,18 @@ export async function getParticipanteByToken(token: string) {
           participantes: {
             include: {
               usuario: {
-                select: { id: true, name: true, email: true, role: true, isActivated: true, passwordHash: true },
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  telefone: true,
+                  chavePix: true,
+                  tipoChavePix: true,
+                  receberPixDireto: true,
+                  role: true,
+                  isActivated: true,
+                  passwordHash: true,
+                },
               },
             },
           },
@@ -1867,8 +1889,13 @@ export async function getParticipanteByToken(token: string) {
           id: usuario.id,
           nome: usuario.name,
           email: usuario.email,
+          telefone: usuario.telefone || "",
+          tipoChavePix: usuario.tipoChavePix || "CELULAR",
+          chavePix: usuario.chavePix || "",
+          receberPixDireto: Boolean(usuario.receberPixDireto),
           temSenha: Boolean(usuario.passwordHash),
-          isActivated: usuario.isActivated,
+          isActivated: Boolean(usuario.isActivated),
+          isEmailTemporario: Boolean(usuario.email?.endsWith("@clubedacota.local")),
           percentual: cotaParticipante.percentual,
           valorParcela: cotaParticipante.valorParcela,
           tokenAcesso: cotaParticipante.tokenAcesso,
@@ -2065,6 +2092,225 @@ export async function ativarContaComSenhaAction(
   } catch (error: any) {
     console.error("Erro ao cadastrar senha para o participante:", error);
     return { success: false, error: error.message || "Erro ao definir senha." };
+  }
+}
+
+export async function completarCadastroParticipanteAction(input: {
+  token: string;
+  nome?: string;
+  email: string;
+  telefone?: string;
+  senha: string;
+  tipoChavePix?: string;
+  chavePix?: string;
+  receberPixDireto?: boolean;
+}) {
+  try {
+    const { token, nome, email, telefone, senha, tipoChavePix, chavePix, receberPixDireto } = input;
+
+    if (!token) {
+      return { success: false, error: "Link de acesso inválido ou ausente." };
+    }
+
+    const participanteRes = await getParticipanteByToken(token);
+    if (!participanteRes.success || !participanteRes.data) {
+      return { success: false, error: "Link de acesso inválido ou expirado." };
+    }
+
+    const usuarioId = participanteRes.data.participante.id;
+    const consorcioId = participanteRes.data.consorcio.id;
+
+    const usuarioAtual = await prisma.user.findUnique({
+      where: { id: usuarioId },
+    });
+
+    if (!usuarioAtual) {
+      return { success: false, error: "Usuário participante não encontrado." };
+    }
+
+    const nomeLimpo = nome?.trim() || usuarioAtual.name;
+    const emailLimpo = email?.trim().toLowerCase();
+    const telefoneLimpo = telefone ? formatarTelefone(telefone) : usuarioAtual.telefone;
+
+    if (!nomeLimpo || nomeLimpo.length < 2) {
+      return { success: false, error: "Informe seu nome completo." };
+    }
+
+    if (!emailLimpo || !emailLimpo.includes("@") || !emailLimpo.includes(".")) {
+      return { success: false, error: "Informe um e-mail válido para acessar sua conta." };
+    }
+
+    if (!senha || senha.length < 6) {
+      return { success: false, error: "A senha deve ter no mínimo 6 caracteres." };
+    }
+
+    const tipoPixEfetivo = tipoChavePix || "CELULAR";
+    const chavePixEfetiva = chavePix?.trim() || null;
+    const receberPixDiretoEfetivo = Boolean(receberPixDireto && chavePixEfetiva);
+
+    // 1. Verifica se já existe outra conta no sistema com esse e-mail
+    const usuarioExistente = await prisma.user.findUnique({
+      where: { email: emailLimpo },
+    });
+
+    let usuarioFinalId = usuarioAtual.id;
+
+    if (usuarioExistente && usuarioExistente.id !== usuarioAtual.id) {
+      // Caso 1: O e-mail já existe no sistema com senha cadastrada
+      if (usuarioExistente.passwordHash) {
+        const senhaCorreta = await bcrypt.compare(senha, usuarioExistente.passwordHash);
+        if (!senhaCorreta) {
+          return {
+            success: false,
+            error: "Já existe uma conta com este e-mail no Clube da Cota. Informe a senha correta da sua conta para vincular este consórcio ao seu perfil existente.",
+          };
+        }
+      }
+
+      // Senha confere ou usuário existente não tinha senha ainda: mescla os registros
+      const novoPasswordHash = usuarioExistente.passwordHash || (await bcrypt.hash(senha, 10));
+
+      await prisma.$transaction([
+        // Atualiza titularidade da cota
+        prisma.cotaParticipante.updateMany({
+          where: { usuarioId: usuarioAtual.id },
+          data: { usuarioId: usuarioExistente.id },
+        }),
+        // Atualiza parcelas financeiras
+        prisma.contribuicao.updateMany({
+          where: { usuarioId: usuarioAtual.id },
+          data: { usuarioId: usuarioExistente.id },
+        }),
+        // Atualiza comprovantes
+        prisma.comprovante.updateMany({
+          where: { usuarioId: usuarioAtual.id },
+          data: { usuarioId: usuarioExistente.id },
+        }),
+        // Atualiza trilha de auditoria
+        prisma.auditoriaLog.updateMany({
+          where: { usuarioAfetadoId: usuarioAtual.id },
+          data: { usuarioAfetadoId: usuarioExistente.id },
+        }),
+        // Atualiza perfil do usuário existente
+        prisma.user.update({
+          where: { id: usuarioExistente.id },
+          data: {
+            name: usuarioExistente.name || nomeLimpo,
+            telefone: usuarioExistente.telefone || telefoneLimpo,
+            passwordHash: novoPasswordHash,
+            isActivated: true,
+            tipoChavePix: chavePixEfetiva ? tipoPixEfetivo : usuarioExistente.tipoChavePix,
+            chavePix: chavePixEfetiva || usuarioExistente.chavePix,
+            receberPixDireto: chavePixEfetiva ? receberPixDiretoEfetivo : usuarioExistente.receberPixDireto,
+          },
+        }),
+        // Remove usuário temporário órfão
+        prisma.user.delete({
+          where: { id: usuarioAtual.id },
+        }),
+      ]);
+
+      usuarioFinalId = usuarioExistente.id;
+    } else {
+      // Caso 2: E-mail novo ou o mesmo usuário
+      const passwordHash = await bcrypt.hash(senha, 10);
+      await prisma.user.update({
+        where: { id: usuarioAtual.id },
+        data: {
+          name: nomeLimpo,
+          email: emailLimpo,
+          telefone: telefoneLimpo,
+          passwordHash,
+          isActivated: true,
+          tipoChavePix: tipoPixEfetivo,
+          chavePix: chavePixEfetiva,
+          receberPixDireto: receberPixDiretoEfetivo,
+        },
+      });
+
+      usuarioFinalId = usuarioAtual.id;
+    }
+
+    // Registra na trilha de auditoria
+    await prisma.auditoriaLog.create({
+      data: {
+        consorcioId,
+        usuarioResponsavelId: usuarioFinalId,
+        usuarioAfetadoId: usuarioFinalId,
+        tipoAcao: "ATIVACAO_CONTA_PARTICIPANTE",
+        detalhes: `Participante "${nomeLimpo}" completou seu cadastro oficial (${emailLimpo}) e ativou acesso com senha.`,
+        justificativa: "Ativação voluntária de cadastro completo pelo link do participante.",
+      },
+    });
+
+    // Inicia sessão no navegador via cookie seguro
+    cookies().set("clube_cota_session", usuarioFinalId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 30, // 30 dias
+      path: "/",
+    });
+
+    revalidatePath(`/participante/${token}`);
+    revalidatePath("/");
+
+    return {
+      success: true,
+      message: "Cadastro concluído com sucesso! Sua conta foi vinculada e você já está conectado.",
+    };
+  } catch (error: any) {
+    console.error("Erro ao completar cadastro do participante:", error);
+    return { success: false, error: error.message || "Erro ao processar cadastro." };
+  }
+}
+
+export async function updateParticipantPixByTokenAction(input: {
+  token: string;
+  tipoChavePix: string;
+  chavePix: string;
+  receberPixDireto: boolean;
+}) {
+  try {
+    const { token, tipoChavePix, chavePix, receberPixDireto } = input;
+    if (!token) return { success: false, error: "Link de acesso inválido." };
+
+    const participanteRes = await getParticipanteByToken(token);
+    if (!participanteRes.success || !participanteRes.data) {
+      return { success: false, error: "Acesso inválido ou link expirado." };
+    }
+
+    const usuarioId = participanteRes.data.participante.id;
+    const consorcioId = participanteRes.data.consorcio.id;
+    const chaveLimpa = chavePix?.trim() || null;
+
+    await prisma.user.update({
+      where: { id: usuarioId },
+      data: {
+        tipoChavePix: tipoChavePix || "CELULAR",
+        chavePix: chaveLimpa,
+        receberPixDireto: Boolean(receberPixDireto && chaveLimpa),
+      },
+    });
+
+    await prisma.auditoriaLog.create({
+      data: {
+        consorcioId,
+        usuarioResponsavelId: usuarioId,
+        usuarioAfetadoId: usuarioId,
+        tipoAcao: "EDICAO_DADOS_PARTICIPANTE",
+        detalhes: `Participante "${participanteRes.data.participante.nome}" atualizou seus dados Pix para recebimento de contemplações.`,
+        justificativa: "Atualização cadastral de Chave Pix via portal do participante.",
+      },
+    });
+
+    revalidatePath(`/participante/${token}`);
+    revalidatePath("/");
+
+    return { success: true, message: "Dados Pix atualizados com sucesso!" };
+  } catch (error: any) {
+    console.error("Erro ao atualizar Pix do participante:", error);
+    return { success: false, error: error.message || "Erro ao salvar dados Pix." };
   }
 }
 

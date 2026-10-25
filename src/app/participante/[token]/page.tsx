@@ -6,6 +6,8 @@ import {
   getParticipanteByToken,
   submitReceiptByTokenAction,
   ativarContaComSenhaAction,
+  completarCadastroParticipanteAction,
+  updateParticipantPixByTokenAction,
 } from "@/app/actions";
 import {
   CheckCircle2,
@@ -23,9 +25,25 @@ import {
   ChevronUp,
   MessageCircle,
   TrendingUp,
+  User,
+  Mail,
+  Phone,
+  KeyRound,
+  ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
-import { formatarMoedaBRL, formatarDataSegura, calcularValorCiclo, formatarMesEAnoSeguro, formatarMesAnoCiclo, calcularBoladaCiclo, getTipoChavePixLabel } from "@/lib/finance";
+import {
+  formatarMoedaBRL,
+  formatarDataSegura,
+  calcularValorCiclo,
+  formatarMesEAnoSeguro,
+  formatarMesAnoCiclo,
+  calcularBoladaCiclo,
+  getTipoChavePixLabel,
+  TIPOS_CHAVE_PIX,
+  TipoChavePix,
+  formatarTelefone,
+} from "@/lib/finance";
 import { ToastModal, ToastData } from "@/components/ToastModal";
 
 export default function ParticipanteTokenPage() {
@@ -44,13 +62,25 @@ export default function ParticipanteTokenPage() {
   const [enviandoComprovante, setEnviandoComprovante] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
 
-  // Estado de ativação de senha
-  const [mostrarCriarSenha, setMostrarCriarSenha] = useState(false);
-  const [novaSenha, setNovaSenha] = useState("");
-  const [confirmaSenha, setConfirmaSenha] = useState("");
-  const [salvandoSenha, setSalvandoSenha] = useState(false);
-  const [erroSenha, setErroSenha] = useState("");
-  const [senhaCriada, setSenhaCriada] = useState(false);
+  // Estados de Cadastro Completo & Vinculação
+  const [mostrarCadastro, setMostrarCadastro] = useState(false);
+  const [cadastroNome, setCadastroNome] = useState("");
+  const [cadastroEmail, setCadastroEmail] = useState("");
+  const [cadastroTelefone, setCadastroTelefone] = useState("");
+  const [cadastroSenha, setCadastroSenha] = useState("");
+  const [cadastroConfirmaSenha, setCadastroConfirmaSenha] = useState("");
+  const [cadastroTipoPix, setCadastroTipoPix] = useState<TipoChavePix>("CELULAR");
+  const [cadastroChavePix, setCadastroChavePix] = useState("");
+  const [cadastroReceberDireto, setCadastroReceberDireto] = useState(false);
+  const [salvandoCadastro, setSalvandoCadastro] = useState(false);
+  const [erroCadastro, setErroCadastro] = useState("");
+
+  // Estados de Edição de Chave Pix para participante já ativo
+  const [mostrarEditarPix, setMostrarEditarPix] = useState(false);
+  const [editarTipoPix, setEditarTipoPix] = useState<TipoChavePix>("CELULAR");
+  const [editarChavePix, setEditarChavePix] = useState("");
+  const [editarReceberDireto, setEditarReceberDireto] = useState(false);
+  const [salvandoPix, setSalvandoPix] = useState(false);
 
   // Acordeão de transparência
   const [verCiclosGrupo, setVerCiclosGrupo] = useState(false);
@@ -61,6 +91,20 @@ export default function ParticipanteTokenPage() {
     const res = await getParticipanteByToken(token);
     if (res.success && res.data) {
       setData(res.data);
+      const part = res.data.participante;
+      if (part) {
+        setCadastroNome(part.nome || "");
+        setCadastroEmail(part.isEmailTemporario ? "" : (part.email || ""));
+        setCadastroTelefone(part.telefone || "");
+        setCadastroTipoPix((part.tipoChavePix as TipoChavePix) || "CELULAR");
+        setCadastroChavePix(part.chavePix || "");
+        setCadastroReceberDireto(Boolean(part.receberPixDireto));
+
+        setEditarTipoPix((part.tipoChavePix as TipoChavePix) || "CELULAR");
+        setEditarChavePix(part.chavePix || "");
+        setEditarReceberDireto(Boolean(part.receberPixDireto));
+      }
+
       // Salva no localStorage para conveniência do usuário
       if (typeof window !== "undefined") {
         try {
@@ -108,34 +152,79 @@ export default function ParticipanteTokenPage() {
     }
   };
 
-  const handleCriarSenha = async (e: React.FormEvent) => {
+  const handleCompletarCadastro = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErroSenha("");
+    setErroCadastro("");
 
-    if (novaSenha.length < 6) {
-      setErroSenha("A senha deve ter no mínimo 6 caracteres.");
+    if (!cadastroNome.trim() || cadastroNome.trim().length < 2) {
+      setErroCadastro("Por favor, informe seu nome completo.");
       return;
     }
 
-    if (novaSenha !== confirmaSenha) {
-      setErroSenha("As senhas informadas não coincidem.");
+    if (!cadastroEmail.trim() || !cadastroEmail.includes("@") || !cadastroEmail.includes(".")) {
+      setErroCadastro("Por favor, informe um endereço de e-mail válido.");
       return;
     }
 
-    setSalvandoSenha(true);
-    const res = await ativarContaComSenhaAction(token, novaSenha);
-    setSalvandoSenha(false);
+    if (!cadastroSenha || cadastroSenha.length < 6) {
+      setErroCadastro("A senha deve ter no mínimo 6 dígitos.");
+      return;
+    }
+
+    if (cadastroSenha !== cadastroConfirmaSenha) {
+      setErroCadastro("As senhas digitadas não coincidem. Verifique e tente novamente.");
+      return;
+    }
+
+    setSalvandoCadastro(true);
+    const res = await completarCadastroParticipanteAction({
+      token,
+      nome: cadastroNome,
+      email: cadastroEmail,
+      telefone: cadastroTelefone,
+      senha: cadastroSenha,
+      tipoChavePix: cadastroTipoPix,
+      chavePix: cadastroChavePix,
+      receberPixDireto: cadastroReceberDireto,
+    });
+    setSalvandoCadastro(false);
 
     if (res.success) {
-      setSenhaCriada(true);
       setToast({
-        titulo: "Senha Cadastrada!",
-        mensagem: res.message || "Senha cadastrada com sucesso!",
+        titulo: "Cadastro Concluído!",
+        mensagem: res.message || "Conta oficial criada e vinculada com sucesso!",
         tipo: "success",
       });
+      setMostrarCadastro(false);
+      setCadastroSenha("");
+      setCadastroConfirmaSenha("");
       carregarDados();
     } else {
-      setErroSenha(res.error || "Erro ao cadastrar senha.");
+      setErroCadastro(res.error || "Erro ao concluir cadastro.");
+    }
+  };
+
+  const handleSalvarEdicaoPix = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSalvandoPix(true);
+    const res = await updateParticipantPixByTokenAction({
+      token,
+      tipoChavePix: editarTipoPix,
+      chavePix: editarChavePix,
+      receberPixDireto: editarReceberDireto,
+    });
+    setSalvandoPix(false);
+
+    if (res.success) {
+      setToast({
+        titulo: "Chave Pix Atualizada!",
+        mensagem: res.message || "Dados de recebimento salvos com sucesso!",
+        tipo: "success",
+      });
+      setMostrarEditarPix(false);
+      carregarDados();
+    } else {
+      alert(res.error || "Erro ao atualizar dados Pix.");
     }
   };
 
@@ -291,6 +380,303 @@ export default function ParticipanteTokenPage() {
             </p>
           )}
         </div>
+
+        {/* Card de Ativação / Cadastro Completo */}
+        {(!participante.isActivated || !participante.temSenha || participante.isEmailTemporario) ? (
+          <div className="bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 rounded-3xl p-5 sm:p-6 text-white shadow-md space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/40 border border-emerald-400/50 text-[10px] font-black uppercase tracking-wider">
+                    Acesso Oficial
+                  </span>
+                  <span className="text-xs text-emerald-100 font-medium">Recomendado</span>
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-white leading-tight">
+                  Complete seu cadastro oficial no Clube da Cota
+                </h3>
+                <p className="text-xs text-emerald-100 leading-relaxed max-w-xl">
+                  Cadastre seu e-mail, senha e Chave Pix para acessar de qualquer dispositivo, acompanhar seus consórcios e receber sua bolada na conta certa quando for contemplado(a).
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setMostrarCadastro(!mostrarCadastro)}
+                className="px-4 py-2.5 bg-white hover:bg-emerald-50 text-emerald-900 font-black text-xs rounded-xl shadow-xs transition active:scale-95 cursor-pointer self-start sm:self-auto flex items-center gap-1.5 flex-shrink-0"
+              >
+                <span>{mostrarCadastro ? "Recolher Formulário" : "Completar Cadastro"}</span>
+                {mostrarCadastro ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            </div>
+
+            {mostrarCadastro && (
+              <form onSubmit={handleCompletarCadastro} className="bg-white text-slate-800 rounded-2xl p-4 sm:p-5 border border-emerald-200/50 space-y-4 shadow-sm animate-in fade-in duration-150">
+                {erroCadastro && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                    ⚠️ {erroCadastro}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                      Seu Nome Completo:
+                    </label>
+                    <input
+                      type="text"
+                      value={cadastroNome}
+                      onChange={(e) => setCadastroNome(e.target.value)}
+                      placeholder="Nome e Sobrenome"
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:border-emerald-600 focus:bg-white focus:outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                      Seu E-mail Principal:
+                    </label>
+                    <input
+                      type="email"
+                      value={cadastroEmail}
+                      onChange={(e) => setCadastroEmail(e.target.value)}
+                      placeholder="exemplo@gmail.com"
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:border-emerald-600 focus:bg-white focus:outline-none"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                      WhatsApp / Celular:
+                    </label>
+                    <input
+                      type="tel"
+                      value={cadastroTelefone}
+                      onChange={(e) => setCadastroTelefone(formatarTelefone(e.target.value))}
+                      placeholder="(11) 98765-4321"
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:border-emerald-600 focus:bg-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                      Tipo de Chave Pix:
+                    </label>
+                    <select
+                      value={cadastroTipoPix}
+                      onChange={(e) => setCadastroTipoPix(e.target.value as TipoChavePix)}
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:border-emerald-600 focus:bg-white focus:outline-none"
+                    >
+                      {TIPOS_CHAVE_PIX.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                      Sua Chave Pix (para a bolada):
+                    </label>
+                    <input
+                      type="text"
+                      value={cadastroChavePix}
+                      onChange={(e) => setCadastroChavePix(e.target.value)}
+                      placeholder={
+                        TIPOS_CHAVE_PIX.find((t) => t.value === cadastroTipoPix)?.placeholder ||
+                        "Chave Pix"
+                      }
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:border-emerald-600 focus:bg-white focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {cadastroChavePix.trim() && (
+                  <label className="flex items-center gap-2 p-2.5 bg-emerald-50/70 rounded-xl border border-emerald-200 text-xs text-emerald-900 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={cadastroReceberDireto}
+                      onChange={(e) => setCadastroReceberDireto(e.target.checked)}
+                      className="w-4 h-4 text-emerald-600 rounded-sm"
+                    />
+                    <span className="font-semibold">
+                      Desejo que os membros paguem minha bolada diretamente nesta chave Pix quando eu for contemplado(a).
+                    </span>
+                  </label>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-100">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                      Criar Senha de Acesso:
+                    </label>
+                    <input
+                      type="password"
+                      value={cadastroSenha}
+                      onChange={(e) => setCadastroSenha(e.target.value)}
+                      placeholder="Mínimo 6 dígitos"
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:border-emerald-600 focus:bg-white focus:outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                      Confirmar Senha:
+                    </label>
+                    <input
+                      type="password"
+                      value={cadastroConfirmaSenha}
+                      onChange={(e) => setCadastroConfirmaSenha(e.target.value)}
+                      placeholder="Repita a senha"
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:border-emerald-600 focus:bg-white focus:outline-none"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
+                  💡 <strong>Já possui conta no Clube da Cota?</strong> Basta informar o mesmo e-mail e a senha da sua conta para vincular este consórcio automaticamente ao seu perfil existente!
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setMostrarCadastro(false)}
+                    className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-800 rounded-xl transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={salvandoCadastro}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>{salvandoCadastro ? "Salvando..." : "Finalizar Cadastro & Conectar"}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        ) : (
+          /* Card: Conta Oficial Ativa & Conectada */
+          <div className="bg-white rounded-3xl p-4 sm:p-5 border border-emerald-200/80 shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-lg flex-shrink-0">
+                  ✓
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs sm:text-sm font-black text-slate-900">
+                      Conta Oficial Conectada: {participante.nome}
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Ativo
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Login: <strong>{participante.email}</strong> • Chave Pix:{" "}
+                    {participante.chavePix
+                      ? `${getTipoChavePixLabel(participante.tipoChavePix)}: ${participante.chavePix}`
+                      : "Não cadastrada"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setMostrarEditarPix(!mostrarEditarPix)}
+                  className="px-3 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+                >
+                  {mostrarEditarPix ? "Fechar" : "Editar Chave Pix"}
+                </button>
+                <Link
+                  href="/"
+                  className="px-3.5 py-2 text-xs font-black text-white bg-slate-900 hover:bg-black rounded-xl transition shadow-2xs flex items-center gap-1"
+                >
+                  <span>Acessar Início</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
+
+            {mostrarEditarPix && (
+              <form onSubmit={handleSalvarEdicaoPix} className="pt-3 border-t border-slate-100 space-y-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                      Tipo de Chave Pix:
+                    </label>
+                    <select
+                      value={editarTipoPix}
+                      onChange={(e) => setEditarTipoPix(e.target.value as TipoChavePix)}
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:border-emerald-600 focus:bg-white focus:outline-none"
+                    >
+                      {TIPOS_CHAVE_PIX.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                      Chave Pix:
+                    </label>
+                    <input
+                      type="text"
+                      value={editarChavePix}
+                      onChange={(e) => setEditarChavePix(e.target.value)}
+                      placeholder={
+                        TIPOS_CHAVE_PIX.find((t) => t.value === editarTipoPix)?.placeholder ||
+                        "Chave Pix"
+                      }
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:border-emerald-600 focus:bg-white focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editarReceberDireto}
+                    onChange={(e) => setEditarReceberDireto(e.target.checked)}
+                    className="w-4 h-4 text-emerald-600 rounded-sm"
+                  />
+                  <span>
+                    Receber parcelas diretamente nesta chave Pix quando contemplado(a).
+                  </span>
+                </label>
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMostrarEditarPix(false)}
+                    className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={salvandoPix}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition disabled:opacity-50"
+                  >
+                    {salvandoPix ? "Salvando..." : "Salvar Chave Pix"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
 
         {/* 2. Card da Bolada / Contemplação */}
         <div
@@ -761,75 +1147,7 @@ export default function ParticipanteTokenPage() {
           </a>
         </div>
 
-        {/* 8. Criar Senha de Acesso (Opcional) */}
-        {!participante.temSenha && !senhaCriada && (
-          <div className="bg-slate-50 rounded-3xl p-5 border border-slate-200 text-slate-800 space-y-3">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-slate-500" />
-                  Deseja cadastrar uma senha? (Opcional)
-                </span>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Você não precisa de senha para usar este link. Mas se quiser, pode cadastrar para
-                  acessar de qualquer dispositivo ou criar seus próprios consórcios.
-                </p>
-              </div>
 
-              <button
-                type="button"
-                onClick={() => setMostrarCriarSenha(!mostrarCriarSenha)}
-                className="text-xs font-bold text-blue-600 hover:underline flex-shrink-0 cursor-pointer"
-              >
-                {mostrarCriarSenha ? "Fechar" : "Criar Senha"}
-              </button>
-            </div>
-
-            {mostrarCriarSenha && (
-              <form onSubmit={handleCriarSenha} className="pt-3 border-t border-slate-200/80 space-y-3">
-                {erroSenha && (
-                  <p className="text-xs text-rose-600 font-semibold">{erroSenha}</p>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                      Nova Senha:
-                    </label>
-                    <input
-                      type="password"
-                      value={novaSenha}
-                      onChange={(e) => setNovaSenha(e.target.value)}
-                      placeholder="Mínimo 6 dígitos"
-                      className="w-full p-2.5 text-xs bg-white border border-slate-300 rounded-xl focus:border-blue-600 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                      Confirmar Senha:
-                    </label>
-                    <input
-                      type="password"
-                      value={confirmaSenha}
-                      onChange={(e) => setConfirmaSenha(e.target.value)}
-                      placeholder="Repita a senha"
-                      className="w-full p-2.5 text-xs bg-white border border-slate-300 rounded-xl focus:border-blue-600 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={salvandoSenha}
-                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition cursor-pointer disabled:opacity-50"
-                >
-                  {salvandoSenha ? "Salvando..." : "Salvar Senha"}
-                </button>
-              </form>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Modal Informativo: Funcionalidade em Desenvolvimento */}

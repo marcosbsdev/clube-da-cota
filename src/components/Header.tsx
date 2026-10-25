@@ -127,6 +127,12 @@ function getNotificacaoMeta(tipoAcao: string) {
         bg: "bg-purple-100 text-purple-800 border-purple-200",
         icon: UserCheck,
       };
+    case "ATIVACAO_CONTA_PARTICIPANTE":
+      return {
+        label: "Cadastro Ativado",
+        bg: "bg-emerald-100 text-emerald-800 border-emerald-200",
+        icon: UserCheck,
+      };
     case "CRIACAO_CONSORCIO":
       return {
         label: "Consórcio Criado",
@@ -252,6 +258,9 @@ function formatarTextoNotificacao(tipoAcao: string, detalhes: string): string {
         return `Cota #${parsed.cotaNumero} repassada para ${parsed.novoParticipante.name} a partir do ciclo ${parsed.aPartirDoCiclo || 1}.`;
       }
       return detalhes && !detalhes.startsWith("{") ? detalhes : "Cota repassada para novo titular com justificativa.";
+
+    case "ATIVACAO_CONTA_PARTICIPANTE":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Participante concluiu cadastro oficial com senha.";
 
     case "CRIACAO_CONSORCIO":
       if (parsed?.nome) {
