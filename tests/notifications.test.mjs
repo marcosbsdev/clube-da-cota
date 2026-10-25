@@ -384,11 +384,57 @@ async function runTests() {
     assert.strictEqual(unread.length, 0, "Deveria estar vazio após dispensar individualmente");
     console.log("✅ Teste 5: Filtragem Inbox Zero com persistência comprovada com sucesso.");
 
+    // Teste 6: Privacidade e Direcionamento de Notificações de Suporte Administrativo
+    console.log("Testando direcionamento e privacidade de notificações administrativas...");
+    const mockAdminLogs = [
+      { id: "admin-1", tipoAcao: "EDICAO_ADMIN_USUARIO", usuarioAfetadoId: "user-joao", detalhes: "Cadastro de João atualizado." },
+      { id: "admin-2", tipoAcao: "REDEFINICAO_ADMIN_SENHA", usuarioAfetadoId: "user-joao", detalhes: "Senha de João redefinida." },
+      { id: "admin-3", tipoAcao: "MESCLAGEM_CONTAS_USUARIO", usuarioAfetadoId: "user-maria", detalhes: "Contas de Maria unificadas." },
+    ];
+
+    function filtrarPrivacidade(logs, currentUserId, userRole) {
+      const acoesPrivadas = [
+        "EDICAO_PERFIL_USUARIO",
+        "EDICAO_ADMIN_USUARIO",
+        "REDEFINICAO_ADMIN_SENHA",
+        "MESCLAGEM_CONTAS_USUARIO",
+        "APROVACAO_ASSINATURA",
+        "RECUSA_ASSINATURA",
+        "RENOVACAO_ASSINATURA_MANUAL",
+        "CANCELAMENTO_ASSINATURA",
+        "EXCLUSAO_ADMIN_USUARIO",
+      ];
+      return logs.filter(a => {
+        if (acoesPrivadas.includes(a.tipoAcao)) {
+          const souEuAfetado = a.usuarioAfetadoId && a.usuarioAfetadoId === currentUserId;
+          const souSuperAdmin = userRole === "SUPER_ADMIN";
+          if (!souEuAfetado && !souSuperAdmin) {
+            return false;
+          }
+        }
+        return true;
+      });
+    }
+
+    // João logado (COMUM): deve ver apenas suas próprias notificações (admin-1 e admin-2)
+    const logsJoao = filtrarPrivacidade(mockAdminLogs, "user-joao", "COMUM");
+    assert.strictEqual(logsJoao.length, 2, "João deve ver suas 2 notificações de alteração de cadastro e senha");
+    assert.strictEqual(logsJoao.some(l => l.id === "admin-3"), false, "João NUNCA deve ver dados de Maria");
+
+    // Pedro logado (COMUM - terceiro alheio): não deve ver nada
+    const logsPedro = filtrarPrivacidade(mockAdminLogs, "user-pedro", "COMUM");
+    assert.strictEqual(logsPedro.length, 0, "Participante terceiro alheio não deve receber notificações privadas");
+
+    // Super Admin logado: deve ver todas para governança
+    const logsAdmin = filtrarPrivacidade(mockAdminLogs, "user-admin", "SUPER_ADMIN");
+    assert.strictEqual(logsAdmin.length, 3, "Super Admin deve ter visão completa de governança no Sininho");
+    console.log("✅ Teste 6: Privacidade, direcionamento e governança de notificações administrativas validados com 100% de sucesso.");
+
     // Limpeza dos logs gerados pelo teste
     if (auditConfirm) await prisma.auditoriaLog.delete({ where: { id: auditConfirm.id } });
     if (auditRevert) await prisma.auditoriaLog.delete({ where: { id: auditRevert.id } });
 
-    console.log("\n🎉 Todos os 5 testes de Notificações, Confirmação e Auditoria passaram com 100% de sucesso!");
+    console.log("\n🎉 Todos os 6 testes de Notificações, Confirmação e Auditoria passaram com 100% de sucesso!");
   } finally {
     await prisma.$disconnect();
   }

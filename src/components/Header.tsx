@@ -24,10 +24,14 @@ import {
   ShieldCheck,
   UserCheck,
   Lock,
+  GitMerge,
+  Key,
+  Trash2,
 } from "lucide-react";
 import { TabType } from "./BottomNav";
 import { AppLogo } from "./AppLogo";
 import { marcarNotificacoesLidasAction, dispensarNotificacaoAction } from "@/app/actions";
+import { formatarTelefone } from "@/lib/finance";
 
 interface HeaderProps {
   userName: string;
@@ -156,6 +160,60 @@ function getNotificacaoMeta(tipoAcao: string) {
         label: "Consórcio Reativado",
         bg: "bg-emerald-100 text-emerald-800 border-emerald-200",
         icon: CheckCircle2,
+      };
+    case "EDICAO_ADMIN_USUARIO":
+      return {
+        label: "Cadastro Atualizado",
+        bg: "bg-blue-100 text-blue-800 border-blue-200",
+        icon: UserCheck,
+      };
+    case "REDEFINICAO_ADMIN_SENHA":
+      return {
+        label: "Senha Redefinida",
+        bg: "bg-amber-100 text-amber-800 border-amber-200",
+        icon: Key,
+      };
+    case "MESCLAGEM_CONTAS_USUARIO":
+      return {
+        label: "Conta Unificada",
+        bg: "bg-emerald-100 text-emerald-800 border-emerald-200",
+        icon: GitMerge,
+      };
+    case "TRANSFERENCIA_ADMIN_COTA":
+      return {
+        label: "Cota Transferida",
+        bg: "bg-purple-100 text-purple-800 border-purple-200",
+        icon: ArrowLeftRight,
+      };
+    case "APROVACAO_ASSINATURA":
+      return {
+        label: "Assinatura Aprovada",
+        bg: "bg-emerald-100 text-emerald-800 border-emerald-200",
+        icon: ShieldCheck,
+      };
+    case "RECUSA_ASSINATURA":
+      return {
+        label: "Assinatura Recusada",
+        bg: "bg-rose-100 text-rose-800 border-rose-200",
+        icon: X,
+      };
+    case "RENOVACAO_ASSINATURA_MANUAL":
+      return {
+        label: "Assinatura Renovada",
+        bg: "bg-emerald-100 text-emerald-800 border-emerald-200",
+        icon: Sparkles,
+      };
+    case "CANCELAMENTO_ASSINATURA":
+      return {
+        label: "Assinatura Cancelada",
+        bg: "bg-slate-100 text-slate-800 border-slate-200",
+        icon: Lock,
+      };
+    case "EXCLUSAO_ADMIN_USUARIO":
+      return {
+        label: "Conta Excluída",
+        bg: "bg-rose-100 text-rose-800 border-rose-200",
+        icon: Trash2,
       };
     default:
       return {
@@ -293,6 +351,33 @@ function formatarTextoNotificacao(tipoAcao: string, detalhes: string): string {
     case "EXCLUSAO_CONSORCIO_TESTE":
       return detalhes && !detalhes.startsWith("{") ? detalhes : "Consórcio de teste excluído definitivamente.";
 
+    case "EDICAO_ADMIN_USUARIO":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Dados cadastrais atualizados pelo suporte administrativo.";
+
+    case "REDEFINICAO_ADMIN_SENHA":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Senha de acesso redefinida pelo suporte administrativo.";
+
+    case "MESCLAGEM_CONTAS_USUARIO":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Conta unificada pelo suporte: cotas e parcelas integradas.";
+
+    case "TRANSFERENCIA_ADMIN_COTA":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Titularidade de cota transferida pelo suporte administrativo.";
+
+    case "APROVACAO_ASSINATURA":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Assinatura SaaS aprovada com sucesso!";
+
+    case "RECUSA_ASSINATURA":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Comprovante de assinatura recusado pelo administrador.";
+
+    case "RENOVACAO_ASSINATURA_MANUAL":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Assinatura renovada manualmente pelo administrador.";
+
+    case "CANCELAMENTO_ASSINATURA":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Assinatura cancelada pelo administrador.";
+
+    case "EXCLUSAO_ADMIN_USUARIO":
+      return detalhes && !detalhes.startsWith("{") ? detalhes : "Conta de usuário excluída pelo Super Admin.";
+
     default:
       if (parsed) {
         if (parsed.descricao) return parsed.descricao;
@@ -305,6 +390,160 @@ function formatarTextoNotificacao(tipoAcao: string, detalhes: string): string {
       }
       return detalhes || "Alteração registrada no consórcio.";
   }
+}
+
+function parseEdicaoAdminDetalhes(detalhes: string) {
+  let nomeAlvo = "";
+  const alteracoes: { campo: string; de: string; para: string }[] = [];
+
+  if (!detalhes) return { nomeAlvo, alteracoes };
+
+  // 1. Tenta JSON estruturado
+  if (detalhes.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(detalhes);
+      if (parsed.usuarioNome) nomeAlvo = parsed.usuarioNome;
+      if (Array.isArray(parsed.alteracoes)) {
+        return { nomeAlvo, alteracoes: parsed.alteracoes };
+      }
+    } catch {}
+  }
+
+  // 2. Parser para formato de texto com '➔'
+  // Ex: "Atualização cadastral de Novo Participante Teste...: Nome: "..." ➔ "Alberto...", E-mail: ..."
+  const matchNome = detalhes.match(/Atualização cadastral de ([^:]+):/i);
+  if (matchNome) {
+    nomeAlvo = matchNome[1].trim();
+  }
+
+  const regex = /([^:,]+):\s*"([^"]*)"\s*➔\s*"([^"]*)"/g;
+  let match;
+  while ((match = regex.exec(detalhes)) !== null) {
+    const campo = match[1].trim();
+    const de = match[2].trim();
+    const para = match[3].trim();
+    alteracoes.push({ campo, de, para });
+    if (campo.toLowerCase() === "nome" && para) {
+      nomeAlvo = para;
+    }
+  }
+
+  return { nomeAlvo, alteracoes };
+}
+
+function NotificacaoCardCorpo({ a, currentUserId }: { a: any; currentUserId?: string }) {
+  const isUsuarioAfetado = a.usuarioAfetadoId && a.usuarioAfetadoId === currentUserId;
+  const [mostrarAnteriores, setMostrarAnteriores] = useState(false);
+
+  // 1. Edição Administrativa de Usuário
+  if (a.tipoAcao === "EDICAO_ADMIN_USUARIO") {
+    const { nomeAlvo, alteracoes } = parseEdicaoAdminDetalhes(a.detalhes || "");
+
+    if (alteracoes.length > 0) {
+      return (
+        <div className="mt-1.5 space-y-1.5">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="font-bold text-slate-900 text-xs truncate">
+              {isUsuarioAfetado ? "Seus dados foram atualizados:" : `Cadastro de ${nomeAlvo || "Participante"}:`}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMostrarAnteriores(!mostrarAnteriores);
+              }}
+              className="text-[9px] font-bold text-theme-text hover:underline flex-shrink-0 cursor-pointer"
+              title="Alternar entre visualização limpa e comparativo com valores anteriores"
+            >
+              {mostrarAnteriores ? "Ocultar anteriores" : "Ver antes/depois"}
+            </button>
+          </div>
+
+          <div className="bg-slate-50/90 rounded-xl p-2 border border-slate-200/70 space-y-1.5">
+            {alteracoes.map((item: { campo: string; de?: string; para: string }, idx: number) => {
+              const valorExibicao =
+                item.campo.toLowerCase() === "telefone"
+                  ? formatarTelefone(item.para)
+                  : item.para;
+              const valorAnteriorExibicao =
+                item.campo.toLowerCase() === "telefone" && item.de
+                  ? formatarTelefone(item.de)
+                  : item.de || "(em branco)";
+
+              return (
+                <div key={idx} className="space-y-0.5 text-[10px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-slate-500 flex-shrink-0">
+                      {item.campo}:
+                    </span>
+                    <span
+                      className="font-bold text-slate-800 font-mono truncate text-right max-w-[190px]"
+                      title={valorExibicao}
+                    >
+                      {valorExibicao}
+                    </span>
+                  </div>
+
+                  {mostrarAnteriores && (
+                    <div className="text-[9px] text-slate-400 pl-2 border-l border-slate-200 flex items-center gap-1 font-mono">
+                      <span>Antes:</span>
+                      <span className="line-through text-slate-400 truncate max-w-[150px]" title={valorAnteriorExibicao}>
+                        {valorAnteriorExibicao}
+                      </span>
+                      <span>➔</span>
+                      <span className="text-emerald-700 font-bold truncate max-w-[150px]">
+                        {valorExibicao}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+  }
+
+  // 2. Redefinição Administrativa de Senha
+  if (a.tipoAcao === "REDEFINICAO_ADMIN_SENHA") {
+    return (
+      <div className="mt-1.5 space-y-1">
+        <p className="font-bold text-slate-900 text-xs">
+          {isUsuarioAfetado ? "Sua senha foi redefinida:" : "Senha administrativa redefinida:"}
+        </p>
+        <p className="text-[11px] text-slate-600 leading-snug">
+          {isUsuarioAfetado
+            ? "O suporte gerou uma nova senha provisória para o seu login. Utilize a credencial informada pelo administrador."
+            : a.detalhes || "Senha provisória aplicada com ativação imediata da conta."}
+        </p>
+      </div>
+    );
+  }
+
+  // 3. Mesclagem de Contas Duplicadas
+  if (a.tipoAcao === "MESCLAGEM_CONTAS_USUARIO") {
+    return (
+      <div className="mt-1.5 space-y-1">
+        <p className="font-bold text-slate-900 text-xs">
+          {isUsuarioAfetado ? "Sua conta foi unificada:" : "Unificação de contas duplicadas:"}
+        </p>
+        <p className="text-[11px] text-slate-600 leading-snug">
+          {isUsuarioAfetado
+            ? "Seus cadastros foram mesclados em uma conta única oficial. Todas as suas cotas e parcelas foram integradas."
+            : a.detalhes || "Conta duplicada absorvida pela conta principal com sucesso."}
+        </p>
+      </div>
+    );
+  }
+
+  // Fallback padrão humanizado
+  const textoFormatado = formatarTextoNotificacao(a.tipoAcao, a.detalhes);
+  return (
+    <p className="font-semibold text-slate-800 text-[11px] mt-1.5 leading-snug">
+      {textoFormatado}
+    </p>
+  );
 }
 
 export function Header({
@@ -384,9 +623,25 @@ export function Header({
 
   // Filtra APENAS novas notificações (não lidas, não dispensadas e isolamento de perfil)
   const unreadAuditorias = auditorias.filter((a: any) => {
-    // Regra Estrita: Notificações de perfil são exclusivas e privadas do usuário afetado
-    if (a.tipoAcao === "EDICAO_PERFIL_USUARIO" && a.usuarioAfetadoId && a.usuarioAfetadoId !== currentUserId) {
-      return false;
+    // Regra Estrita de Privacidade: Notificações de perfil e suporte de contas são exclusivas do usuário afetado ou do Super Admin
+    const acoesPrivadas = [
+      "EDICAO_PERFIL_USUARIO",
+      "EDICAO_ADMIN_USUARIO",
+      "REDEFINICAO_ADMIN_SENHA",
+      "MESCLAGEM_CONTAS_USUARIO",
+      "APROVACAO_ASSINATURA",
+      "RECUSA_ASSINATURA",
+      "RENOVACAO_ASSINATURA_MANUAL",
+      "CANCELAMENTO_ASSINATURA",
+      "EXCLUSAO_ADMIN_USUARIO",
+    ];
+
+    if (acoesPrivadas.includes(a.tipoAcao)) {
+      const souEuAfetado = a.usuarioAfetadoId && a.usuarioAfetadoId === currentUserId;
+      const souSuperAdmin = userRole === "SUPER_ADMIN";
+      if (!souEuAfetado && !souSuperAdmin) {
+        return false;
+      }
     }
     if (dispensadasIds.includes(a.id)) return false;
     if (lidasAte) {
@@ -536,6 +791,20 @@ export function Header({
                 </button>
               )}
 
+              {userRole === "SUPER_ADMIN" && (
+                <button
+                  onClick={() => onChangeTab("admin")}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === "admin"
+                      ? "bg-white text-purple-900 shadow-sm"
+                      : "text-white/90 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4 text-purple-300" />
+                  <span>Painel Admin 🛡️</span>
+                </button>
+              )}
+
               <button
                 onClick={() => onChangeTab("perfil")}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
@@ -627,6 +896,21 @@ export function Header({
                     );
                   })}
                 </div>
+
+                {userRole === "SUPER_ADMIN" && onChangeTab && (
+                  <div className="pt-2 mt-2 border-t border-slate-100">
+                    <button
+                      onClick={() => {
+                        setDropdownAberto(false);
+                        onChangeTab("admin");
+                      }}
+                      className="w-full p-2.5 rounded-2xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 flex items-center justify-center gap-2 transition cursor-pointer"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-purple-600" />
+                      <span>Acessar Painel Super Admin</span>
+                    </button>
+                  </div>
+                )}
 
                 {onLogout && (
                   <div className="pt-2 mt-2 border-t border-slate-100">
@@ -737,9 +1021,7 @@ export function Header({
                             </div>
                           </div>
 
-                          <p className="font-semibold text-slate-800 text-[11px] mt-1.5 leading-snug">
-                            {textoFormatado}
-                          </p>
+                          <NotificacaoCardCorpo a={a} currentUserId={currentUserId} />
 
                           {a.justificativa && (
                             <p className="text-[10px] text-slate-500 italic mt-1 line-clamp-2">

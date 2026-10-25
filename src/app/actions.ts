@@ -206,16 +206,33 @@ export async function getConsorcioData(usuarioId?: string, consorcioId?: string)
     (consorcio as any).notificacoesDispensadasIds = dispensadasIds;
   }
 
-  // Notificações pessoais do usuário autenticado (Regra: auditoria de perfil exclusiva do usuário)
+  // Notificações pessoais do usuário autenticado e governança do Super Admin
   if (user && consorcio) {
+    const acoesPessoais = [
+      "EDICAO_PERFIL_USUARIO",
+      "ATIVACAO_CONTA_PARTICIPANTE",
+      "EDICAO_ADMIN_USUARIO",
+      "REDEFINICAO_ADMIN_SENHA",
+      "MESCLAGEM_CONTAS_USUARIO",
+      "TRANSFERENCIA_ADMIN_COTA",
+      "APROVACAO_ASSINATURA",
+      "RECUSA_ASSINATURA",
+      "RENOVACAO_ASSINATURA_MANUAL",
+      "CANCELAMENTO_ASSINATURA",
+    ];
+
     const notificacoesPessoaisUsuario = await prisma.auditoriaLog.findMany({
       where: {
-        usuarioAfetadoId: user.id,
-        tipoAcao: { in: ["EDICAO_PERFIL_USUARIO", "ATIVACAO_CONTA_PARTICIPANTE"] },
+        OR: [
+          { usuarioAfetadoId: user.id, tipoAcao: { in: acoesPessoais } },
+          ...(user.role === "SUPER_ADMIN"
+            ? [{ tipoAcao: { in: [...acoesPessoais, "EXCLUSAO_ADMIN_USUARIO"] } }]
+            : []),
+        ],
       },
       include: { usuarioResponsavel: true },
       orderBy: { createdAt: "desc" },
-      take: 10,
+      take: 20,
     });
 
     const mapa = new Map();
@@ -3351,6 +3368,694 @@ export async function excluirConsorcioAction(input: {
     return { success: false, error: err.message || "Erro ao excluir consórcio." };
   }
 }
+
+// ==============================================================================
+// MÓDULO DE GESTÃO AVANÇADA DE CONTAS & USUÁRIOS (SUPER ADMIN)
+// ==============================================================================
+
+export async function getPainelAdminUsuariosAction(
+  adminId: string,
+  options?: { termoBusca?: string; filtroRole?: string }
+) {
+  try {
+    const admin = await prisma.user.findUnique({ where: { id: adminId } });
+    if (!admin || admin.role !== "SUPER_ADMIN") {
+      return { success: false, error: "Acesso restrito exclusivamente ao Super Admin." };
+    }
+
+    const { termoBusca = "", filtroRole = "TODOS" } = options || {};
+    const termo = termoBusca.trim().toLowerCase();
+
+    // Busca de todos os usuários com relações detalhadas
+    const todosUsuariosDb = await prisma.user.findMany({
+      include: {
+        consorciosCriados: {
+          select: {
+            id: true,
+            nome: true,
+            status: true,
+            valorCota: true,
+            totalCotas: true,
+            createdAt: true,
+          },
+        },
+        participacoes: {
+          include: {
+            cota: {
+              include: {
+                consorcio: {
+                  select: {
+                    id: true,
+                    nome: true,
+                    status: true,
+                    valorCota: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        contribuicoes: {
+          select: {
+            id: true,
+            status: true,
+            valorPrevisto: true,
+            numeroCiclo: true,
+            consorcioId: true,
+          },
+        },
+        assinaturas: {
+          select: {
+            id: true,
+            plano: true,
+            status: true,
+            dataFim: true,
+            solicitadoEm: true,
+          },
+          orderBy: { solicitadoEm: "desc" },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    // Sanitiza e calcula métricas
+    const totalUsuarios = todosUsuariosDb.length;
+    let totalSuperAdmin = 0;
+    let totalPro = 0;
+    let totalComum = 0;
+    let totalAtivos = 0;
+    let totalSemSenha = 0;
+
+    todosUsuariosDb.forEach((u) => {
+      if (u.role === "SUPER_ADMIN") totalSuperAdmin++;
+      else if (u.role === "PRO" || u.role === "PRO_MASTER") totalPro++;
+      else totalComum++;
+
+      if (u.isActivated) totalAtivos++;
+      if (!u.isActivated || !u.passwordHash) totalSemSenha++;
+    });
+
+    // Total de consórcios no sistema
+    const totalConsorcios = await prisma.consorcio.count();
+
+    // Logs recentes de auditoria (últimos 30)
+    const ultimosLogs = await prisma.auditoriaLog.findMany({
+      take: 30,
+      orderBy: { createdAt: "desc" },
+      include: {
+        usuarioResponsavel: {
+          select: { id: true, name: true, email: true },
+        },
+        consorcio: {
+          select: { id: true, nome: true },
+        },
+      },
+    });
+
+    // Filtros em memória para busca rápida e flexível
+    const usuariosFiltrados = todosUsuariosDb.filter((u) => {
+      if (filtroRole !== "TODOS" && u.role !== filtroRole) {
+        return false;
+      }
+      if (!termo) return true;
+
+      const matchNome = u.name.toLowerCase().includes(termo);
+      const matchEmail = u.email.toLowerCase().includes(termo);
+      const matchTelefone = (u.telefone || "").toLowerCase().includes(termo);
+      const matchPix = (u.chavePix || "").toLowerCase().includes(termo);
+
+      return matchNome || matchEmail || matchTelefone || matchPix;
+    });
+
+    const usuariosFormatados = usuariosFiltrados.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      telefone: u.telefone,
+      role: u.role,
+      isActivated: u.isActivated,
+      hasPassword: Boolean(u.passwordHash),
+      tipoChavePix: u.tipoChavePix,
+      chavePix: u.chavePix,
+      planoExpiraEm: u.planoExpiraEm,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
+      consorciosCriados: u.consorciosCriados,
+      participacoes: u.participacoes.map((p) => ({
+        id: p.id,
+        cotaId: p.cotaId,
+        numeroCota: p.cota.numero,
+        ordemSorteio: p.cota.ordemSorteio,
+        percentual: p.percentual,
+        valorParcela: p.valorParcela,
+        consorcioId: p.cota.consorcio.id,
+        consorcioNome: p.cota.consorcio.nome,
+        consorcioStatus: p.cota.consorcio.status,
+      })),
+      totalContribuicoes: u.contribuicoes.length,
+      contribuicoesPagas: u.contribuicoes.filter((c) => c.status === "PAGO").length,
+      assinaturas: u.assinaturas,
+    }));
+
+    return {
+      success: true,
+      stats: {
+        totalUsuarios,
+        totalSuperAdmin,
+        totalPro,
+        totalComum,
+        totalAtivos,
+        totalSemSenha,
+        totalConsorcios,
+      },
+      usuarios: usuariosFormatados,
+      ultimosLogs: ultimosLogs.map((l) => ({
+        id: l.id,
+        tipoAcao: l.tipoAcao,
+        detalhes: l.detalhes,
+        justificativa: l.justificativa,
+        createdAt: l.createdAt,
+        responsavelNome: l.usuarioResponsavel?.name || "Sistema",
+        responsavelEmail: l.usuarioResponsavel?.email || "",
+        consorcioNome: l.consorcio?.nome || null,
+      })),
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao carregar painel de usuários." };
+  }
+}
+
+export async function atualizarDadosUsuarioAdminAction(input: {
+  adminId: string;
+  targetUserId: string;
+  name: string;
+  email: string;
+  telefone?: string;
+  chavePix?: string;
+  tipoChavePix?: string;
+  role?: string;
+  planoExpiraEm?: string | null;
+}) {
+  try {
+    const admin = await prisma.user.findUnique({ where: { id: input.adminId } });
+    if (!admin || admin.role !== "SUPER_ADMIN") {
+      return { success: false, error: "Apenas o Super Admin tem permissão para editar cadastros de outros usuários." };
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id: input.targetUserId } });
+    if (!targetUser) {
+      return { success: false, error: "Usuário alvo não encontrado." };
+    }
+
+    const emailLimpo = input.email.trim().toLowerCase();
+    if (!emailLimpo) {
+      return { success: false, error: "E-mail não pode ficar em branco." };
+    }
+
+    // Validação de unicidade do e-mail
+    if (emailLimpo !== targetUser.email.toLowerCase()) {
+      const emailEmUso = await prisma.user.findUnique({
+        where: { email: emailLimpo },
+      });
+      if (emailEmUso) {
+        return {
+          success: false,
+          error: `O e-mail "${emailLimpo}" já pertence a outro usuário (${emailEmUso.name}). Se este for o mesmo usuário com duas contas, utilize a opção "Mesclar Contas Duplicadas".`,
+        };
+      }
+    }
+
+    const nomeLimpo = input.name.trim();
+    if (!nomeLimpo) {
+      return { success: false, error: "O nome não pode ficar em branco." };
+    }
+
+    // Role permitidas
+    const validRoles = ["COMUM", "PRO", "PRO_MASTER", "SUPER_ADMIN"];
+    const novaRole = input.role && validRoles.includes(input.role) ? input.role : targetUser.role;
+
+    // Data de expiração do plano
+    let novaDataExpira: Date | null = targetUser.planoExpiraEm;
+    if (input.planoExpiraEm !== undefined) {
+      novaDataExpira = input.planoExpiraEm ? new Date(input.planoExpiraEm) : null;
+    }
+
+    // Se mudou de COMUM para PRO e não especificou data, adiciona 30 dias por padrão
+    if ((novaRole === "PRO" || novaRole === "PRO_MASTER") && !novaDataExpira) {
+      novaDataExpira = calcularNovaDataExpiracao(targetUser.planoExpiraEm, 30);
+    } else if (novaRole === "COMUM") {
+      novaDataExpira = null;
+    }
+
+    const alteracoes: string[] = [];
+    if (nomeLimpo !== targetUser.name) alteracoes.push(`Nome: "${targetUser.name}" ➔ "${nomeLimpo}"`);
+    if (emailLimpo !== targetUser.email) alteracoes.push(`E-mail: "${targetUser.email}" ➔ "${emailLimpo}"`);
+    if ((input.telefone || "") !== (targetUser.telefone || "")) alteracoes.push(`Telefone: "${targetUser.telefone || ""}" ➔ "${input.telefone || ""}"`);
+    if ((input.chavePix || "") !== (targetUser.chavePix || "")) alteracoes.push(`Pix: "${targetUser.chavePix || ""}" ➔ "${input.chavePix || ""}"`);
+    if (novaRole !== targetUser.role) alteracoes.push(`Role: "${targetUser.role}" ➔ "${novaRole}"`);
+
+    const detalhesAudit = alteracoes.length > 0
+      ? `Atualização cadastral de ${targetUser.name}: ${alteracoes.join(", ")}`
+      : `Dados cadastrais de ${targetUser.name} revisados sem alterações de valores.`;
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: targetUser.id },
+        data: {
+          name: nomeLimpo,
+          email: emailLimpo,
+          telefone: input.telefone?.trim() || null,
+          chavePix: input.chavePix?.trim() || null,
+          tipoChavePix: input.tipoChavePix || targetUser.tipoChavePix || "CHAVE_ALEATORIA",
+          role: novaRole,
+          planoExpiraEm: novaDataExpira,
+        },
+      }),
+      prisma.auditoriaLog.create({
+        data: {
+          usuarioResponsavelId: admin.id,
+          usuarioAfetadoId: targetUser.id,
+          tipoAcao: "EDICAO_ADMIN_USUARIO",
+          detalhes: detalhesAudit,
+        },
+      }),
+    ]);
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message: `Cadastro de ${nomeLimpo} atualizado com sucesso!`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao atualizar dados do usuário." };
+  }
+}
+
+export async function redefinirSenhaAdminAction(input: {
+  adminId: string;
+  targetUserId: string;
+  modo: "MANUAL" | "ALEATORIA";
+  novaSenha?: string;
+}) {
+  try {
+    const admin = await prisma.user.findUnique({ where: { id: input.adminId } });
+    if (!admin || admin.role !== "SUPER_ADMIN") {
+      return { success: false, error: "Apenas o Super Admin tem permissão para redefinir senhas." };
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id: input.targetUserId } });
+    if (!targetUser) {
+      return { success: false, error: "Usuário alvo não encontrado." };
+    }
+
+    let senhaFinal = "";
+    if (input.modo === "ALEATORIA") {
+      // Gera senha amigável, fácil de digitar no celular: ex: Cota#4829
+      const numeroAleatorio = Math.floor(1000 + Math.random() * 9000);
+      senhaFinal = `Cota#${numeroAleatorio}`;
+    } else {
+      if (!input.novaSenha || input.novaSenha.trim().length < 6) {
+        return { success: false, error: "A nova senha deve ter no mínimo 6 caracteres." };
+      }
+      senhaFinal = input.novaSenha.trim();
+    }
+
+    const novoHash = await bcrypt.hash(senhaFinal, 10);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: targetUser.id },
+        data: {
+          passwordHash: novoHash,
+          isActivated: true, // Ativa automaticamente a conta caso estivesse pendente
+          resetToken: null,
+          resetExpiresAt: null,
+        },
+      }),
+      prisma.auditoriaLog.create({
+        data: {
+          usuarioResponsavelId: admin.id,
+          usuarioAfetadoId: targetUser.id,
+          tipoAcao: "REDEFINICAO_ADMIN_SENHA",
+          detalhes: `Senha de ${targetUser.name} (${targetUser.email}) redefinida pelo Super Admin (Modo: ${input.modo}).`,
+        },
+      }),
+    ]);
+
+    revalidatePath("/");
+    return {
+      success: true,
+      senhaGerada: senhaFinal,
+      message: `Senha de ${targetUser.name} redefinida com sucesso!`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao redefinir senha." };
+  }
+}
+
+export async function gerarLinkResetWhatsAppAdminAction(input: {
+  adminId: string;
+  targetUserId: string;
+  senhaProvisoria?: string;
+}) {
+  try {
+    const admin = await prisma.user.findUnique({ where: { id: input.adminId } });
+    if (!admin || admin.role !== "SUPER_ADMIN") {
+      return { success: false, error: "Apenas o Super Admin tem permissão para esta ação." };
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id: input.targetUserId } });
+    if (!targetUser) {
+      return { success: false, error: "Usuário alvo não encontrado." };
+    }
+
+    if (!targetUser.telefone) {
+      return {
+        success: false,
+        error: `O usuário ${targetUser.name} não possui número de WhatsApp cadastrado. Edite o cadastro para inserir o telefone primeiro.`,
+      };
+    }
+
+    const primeiroNome = targetUser.name.split(" ")[0];
+    const mensagemTexto = input.senhaProvisoria
+      ? `Olá, ${primeiroNome}! O suporte administrativo do Clube da Cota gerou uma nova senha provisória para o seu acesso:\n\n*E-mail:* ${targetUser.email}\n*Senha Provisória:* ${input.senhaProvisoria}\n\nAcesse o aplicativo para gerenciar suas cotas: ${process.env.NEXT_PUBLIC_APP_URL || "https://clubedacota.com.br"}`
+      : `Olá, ${primeiroNome}! O suporte do Clube da Cota está à disposição para auxiliar com seu acesso. Seu e-mail de login é: ${targetUser.email}. Qualquer dúvida, responda a esta mensagem.`;
+
+    const linkWhatsApp = gerarLinkWhatsApp({
+      telefone: targetUser.telefone,
+      mensagem: mensagemTexto,
+    });
+
+    return {
+      success: true,
+      linkWhatsApp,
+      mensagemTexto,
+      telefoneFormatado: formatarTelefone(targetUser.telefone),
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao gerar link de WhatsApp." };
+  }
+}
+
+export async function mesclarUsuariosAdminAction(input: {
+  adminId: string;
+  contaPrincipalId: string;
+  contaDuplicadaId: string;
+  motivo?: string;
+}) {
+  try {
+    const admin = await prisma.user.findUnique({ where: { id: input.adminId } });
+    if (!admin || admin.role !== "SUPER_ADMIN") {
+      return { success: false, error: "Apenas o Super Admin tem permissão para mesclar contas de usuários." };
+    }
+
+    if (input.contaPrincipalId === input.contaDuplicadaId) {
+      return { success: false, error: "A conta principal e a conta duplicada devem ser contas distintas." };
+    }
+
+    if (input.contaDuplicadaId === admin.id) {
+      return { success: false, error: "Você não pode selecionar a sua própria conta de Super Admin logada para ser apagada na mesclagem!" };
+    }
+
+    const [contaPrincipal, contaDuplicada] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: input.contaPrincipalId },
+        include: {
+          participacoes: true,
+        },
+      }),
+      prisma.user.findUnique({
+        where: { id: input.contaDuplicadaId },
+        include: {
+          participacoes: true,
+          consorciosCriados: true,
+          contribuicoes: true,
+          comprovantes: true,
+          assinaturas: true,
+        },
+      }),
+    ]);
+
+    if (!contaPrincipal) return { success: false, error: "Conta principal não encontrada." };
+    if (!contaDuplicada) return { success: false, error: "Conta duplicada não encontrada." };
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Processar cotas participantes evitando violação da unique constraint @@unique([cotaId, usuarioId])
+      for (const partDuplicada of contaDuplicada.participacoes) {
+        const participacaoExistenteNaPrincipal = await tx.cotaParticipante.findUnique({
+          where: {
+            cotaId_usuarioId: {
+              cotaId: partDuplicada.cotaId,
+              usuarioId: contaPrincipal.id,
+            },
+          },
+        });
+
+        if (participacaoExistenteNaPrincipal) {
+          // Já existe participação na mesma cota: soma as frações e deleta a duplicada
+          await tx.cotaParticipante.update({
+            where: { id: participacaoExistenteNaPrincipal.id },
+            data: {
+              percentual: participacaoExistenteNaPrincipal.percentual + partDuplicada.percentual,
+              valorParcela: participacaoExistenteNaPrincipal.valorParcela + partDuplicada.valorParcela,
+            },
+          });
+          await tx.cotaParticipante.delete({
+            where: { id: partDuplicada.id },
+          });
+        } else {
+          // Não existe participação na mesma cota: transfere diretamente o vínculo
+          await tx.cotaParticipante.update({
+            where: { id: partDuplicada.id },
+            data: { usuarioId: contaPrincipal.id },
+          });
+        }
+      }
+
+      // 2. Transferir todas as contribuições / parcelas
+      await tx.contribuicao.updateMany({
+        where: { usuarioId: contaDuplicada.id },
+        data: { usuarioId: contaPrincipal.id },
+      });
+
+      // 3. Transferir comprovantes
+      await tx.comprovante.updateMany({
+        where: { usuarioId: contaDuplicada.id },
+        data: { usuarioId: contaPrincipal.id },
+      });
+
+      // 4. Transferir consórcios criados pela conta duplicada (se houver)
+      await tx.consorcio.updateMany({
+        where: { criadorId: contaDuplicada.id },
+        data: { criadorId: contaPrincipal.id },
+      });
+
+      // 5. Transferir assinaturas
+      await tx.assinaturaPlano.updateMany({
+        where: { usuarioId: contaDuplicada.id },
+        data: { usuarioId: contaPrincipal.id },
+      });
+
+      // 6. Preencher dados faltantes na conta principal (ex: telefone ou chave Pix que só existiam na duplicada)
+      const dadosAtualizacao: any = {};
+      if (!contaPrincipal.telefone && contaDuplicada.telefone) {
+        dadosAtualizacao.telefone = contaDuplicada.telefone;
+      }
+      if (!contaPrincipal.chavePix && contaDuplicada.chavePix) {
+        dadosAtualizacao.chavePix = contaDuplicada.chavePix;
+        dadosAtualizacao.tipoChavePix = contaDuplicada.tipoChavePix;
+      }
+      if (Object.keys(dadosAtualizacao).length > 0) {
+        await tx.user.update({
+          where: { id: contaPrincipal.id },
+          data: dadosAtualizacao,
+        });
+      }
+
+      // 7. Excluir a conta duplicada definitivamente
+      await tx.user.delete({
+        where: { id: contaDuplicada.id },
+      });
+
+      // 8. Gravar auditoria detalhada
+      const cotasCount = contaDuplicada.participacoes.length;
+      const contribCount = contaDuplicada.contribuicoes.length;
+      await tx.auditoriaLog.create({
+        data: {
+          usuarioResponsavelId: admin.id,
+          usuarioAfetadoId: contaPrincipal.id,
+          tipoAcao: "MESCLAGEM_CONTAS_USUARIO",
+          detalhes: `Mesclagem de contas: "${contaDuplicada.name}" (${contaDuplicada.email}) foi unificada na conta principal "${contaPrincipal.name}" (${contaPrincipal.email}). Migradas ${cotasCount} cota(s) e ${contribCount} parcela(s).`,
+          justificativa: input.motivo || "Unificação de contas duplicadas via Painel Super Admin.",
+        },
+      });
+    });
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message: `A conta "${contaDuplicada.name}" (${contaDuplicada.email}) foi unificada com sucesso na conta "${contaPrincipal.name}" (${contaPrincipal.email})! Todos os consórcios e parcelas foram integrados.`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao mesclar contas." };
+  }
+}
+
+export async function transferirCotaAdminAction(input: {
+  adminId: string;
+  cotaParticipanteId: string;
+  novoUsuarioId: string;
+  motivo?: string;
+}) {
+  try {
+    const admin = await prisma.user.findUnique({ where: { id: input.adminId } });
+    if (!admin || admin.role !== "SUPER_ADMIN") {
+      return { success: false, error: "Apenas o Super Admin tem permissão para transferir cotas entre usuários." };
+    }
+
+    const cotaPart = await prisma.cotaParticipante.findUnique({
+      where: { id: input.cotaParticipanteId },
+      include: {
+        usuario: true,
+        cota: {
+          include: { consorcio: true },
+        },
+      },
+    });
+
+    if (!cotaPart) {
+      return { success: false, error: "Participação de cota não encontrada." };
+    }
+
+    const novoUsuario = await prisma.user.findUnique({
+      where: { id: input.novoUsuarioId },
+    });
+
+    if (!novoUsuario) {
+      return { success: false, error: "Novo participante destinatário não encontrado." };
+    }
+
+    if (novoUsuario.id === cotaPart.usuarioId) {
+      return { success: false, error: "A cota já pertence a este participante." };
+    }
+
+    const antigoUsuarioNome = cotaPart.usuario.name;
+    const consorcioNome = cotaPart.cota.consorcio.nome;
+    const numeroCota = cotaPart.cota.numero;
+
+    // Executa a transferência da cota e de suas contribuições
+    await prisma.$transaction([
+      prisma.cotaParticipante.update({
+        where: { id: cotaPart.id },
+        data: { usuarioId: novoUsuario.id },
+      }),
+      prisma.contribuicao.updateMany({
+        where: {
+          cotaId: cotaPart.cotaId,
+          usuarioId: cotaPart.usuarioId,
+        },
+        data: { usuarioId: novoUsuario.id },
+      }),
+      prisma.auditoriaLog.create({
+        data: {
+          consorcioId: cotaPart.cota.consorcioId,
+          usuarioResponsavelId: admin.id,
+          usuarioAfetadoId: novoUsuario.id,
+          tipoAcao: "TRANSFERENCIA_ADMIN_COTA",
+          detalhes: `Cota #${numeroCota} do consórcio "${consorcioNome}" transferida de ${antigoUsuarioNome} para ${novoUsuario.name}.`,
+          justificativa: input.motivo || "Ajuste manual de titularidade de cota realizado pelo Super Admin.",
+        },
+      }),
+    ]);
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message: `Cota #${numeroCota} transferida com sucesso de ${antigoUsuarioNome} para ${novoUsuario.name}!`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao transferir cota." };
+  }
+}
+
+export async function excluirUsuarioAdminAction(input: {
+  adminId: string;
+  targetUserId: string;
+  motivo?: string;
+}) {
+  try {
+    const admin = await prisma.user.findUnique({ where: { id: input.adminId } });
+    if (!admin || admin.role !== "SUPER_ADMIN") {
+      return { success: false, error: "Apenas o Super Admin tem permissão para excluir usuários." };
+    }
+
+    if (input.targetUserId === admin.id) {
+      return { success: false, error: "Proteção de segurança: você não pode excluir sua própria conta de Super Admin logada." };
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: input.targetUserId },
+      include: {
+        consorciosCriados: {
+          select: { id: true, nome: true, status: true },
+        },
+        participacoes: {
+          select: { id: true },
+        },
+        contribuicoes: {
+          where: { status: "PAGO" },
+          select: { id: true },
+        },
+      },
+    });
+
+    if (!targetUser) {
+      return { success: false, error: "Usuário alvo não encontrado." };
+    }
+
+    // Regra de segurança: se o usuário possui pagamentos efetuados ou consórcios ativos, bloquear exclusão direta
+    if (targetUser.contribuicoes.length > 0) {
+      return {
+        success: false,
+        error: `O usuário ${targetUser.name} possui ${targetUser.contribuicoes.length} pagamento(s) confirmado(s) no histórico financeiro. Para preservar a integridade fiscal dos grupos, utilize a opção "Mesclar Contas Duplicadas" para transferir os registros antes de apagar.`,
+      };
+    }
+
+    const consorciosAtivos = targetUser.consorciosCriados.filter((c) => c.status === "ATIVO");
+    if (consorciosAtivos.length > 0) {
+      return {
+        success: false,
+        error: `O usuário ${targetUser.name} é criador de ${consorciosAtivos.length} consórcio(s) ativo(s). Encerre os consórcios ou altere o criador antes de excluir a conta.`,
+      };
+    }
+
+    const nomeExcluido = targetUser.name;
+    const emailExcluido = targetUser.email;
+
+    await prisma.$transaction([
+      prisma.auditoriaLog.create({
+        data: {
+          usuarioResponsavelId: admin.id,
+          tipoAcao: "EXCLUSAO_ADMIN_USUARIO",
+          detalhes: `Conta de usuário "${nomeExcluido}" (${emailExcluido}) excluída pelo Super Admin.`,
+          justificativa: input.motivo || "Exclusão de conta inativa/duplicada.",
+        },
+      }),
+      prisma.user.delete({
+        where: { id: targetUser.id },
+      }),
+    ]);
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message: `Usuário "${nomeExcluido}" (${emailExcluido}) foi excluído com sucesso.`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Erro ao excluir usuário." };
+  }
+}
+
 
 
 

@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import { Home, BarChart3, Plus, User } from "lucide-react";
+import { Home, BarChart3, Plus, User, ShieldCheck } from "lucide-react";
 
-export type TabType = "participante" | "criador" | "assistente" | "perfil";
+export type TabType = "participante" | "criador" | "assistente" | "perfil" | "admin";
 
 interface BottomNavProps {
   activeTab: TabType;
@@ -11,6 +11,7 @@ interface BottomNavProps {
   canCreateOrManage?: boolean;
   canManage?: boolean;
   canCreate?: boolean;
+  isSuperAdmin?: boolean;
 }
 
 export function BottomNav({
@@ -19,12 +20,13 @@ export function BottomNav({
   canCreateOrManage = true,
   canManage,
   canCreate,
+  isSuperAdmin = false,
 }: BottomNavProps) {
   const canManageResolved = canManage !== undefined ? canManage : canCreateOrManage;
   const canCreateResolved = canCreate !== undefined ? canCreate : canCreateOrManage;
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-200 px-6 py-2 flex justify-between items-center z-40 shadow-lg">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-2 flex justify-between items-center z-40 shadow-lg">
       <button
         onClick={() => onChangeTab("participante")}
         className={`flex flex-col items-center gap-1 transition touch-target ${
@@ -56,6 +58,18 @@ export function BottomNav({
             <Plus className="w-5 h-5" />
           </div>
           <span className="text-[11px] font-medium">Novo</span>
+        </button>
+      )}
+
+      {isSuperAdmin && (
+        <button
+          onClick={() => onChangeTab("admin")}
+          className={`flex flex-col items-center gap-1 transition touch-target ${
+            activeTab === "admin" ? "text-purple-600 font-bold" : "text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          <ShieldCheck className="w-5 h-5" />
+          <span className="text-[11px]">Admin</span>
         </button>
       )}
 

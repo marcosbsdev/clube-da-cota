@@ -13,6 +13,7 @@ import { AppLoadingScreen } from "@/components/AppLogo";
 import { useTheme, ThemeName } from "@/components/ThemeProvider";
 import { ConsorcioComboSelector } from "@/components/ConsorcioComboSelector";
 import { ToastModal, ToastData } from "@/components/ToastModal";
+import { AdminView } from "@/components/AdminView";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabType>("participante");
@@ -174,6 +175,13 @@ export default function Home() {
             onCriarNovoConsorcio={canCreate ? () => setActiveTab("assistente") : undefined}
           />
         )}
+
+        {activeTab === "admin" && currentUser.role === "SUPER_ADMIN" && (
+          <AdminView
+            currentUser={currentUser}
+            onUsuarioAtualizado={() => carregarDados(selectedUserId, selectedConsorcioId, true)}
+          />
+        )}
       </div>
 
       {/* Barra de Navegação Inferior (Mobile PWA apenas) */}
@@ -182,6 +190,7 @@ export default function Home() {
         onChangeTab={setActiveTab}
         canManage={canManage}
         canCreate={canCreate}
+        isSuperAdmin={currentUser.role === "SUPER_ADMIN"}
       />
     </main>
   );

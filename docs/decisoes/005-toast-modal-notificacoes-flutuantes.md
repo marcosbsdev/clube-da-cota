@@ -39,3 +39,5 @@ Foi criado o componente padronizado `ToastModal` (`src/components/ToastModal.tsx
    Toda e qualquer alteração de dados no sistema (cadastrais, preferências Pix, parcelas, comprovantes, trocas ou configurações) **DEVE, SEM EXCEÇÃO, emitir notificação visual de sucesso** confirmando a conclusão da operação ao usuário.
 2. **Prevenção de Desmontagem de Componentes (`silent = true`):**
    Ao recarregar dados do servidor após uma mutação (`carregarDados`), a chamada DEVE sempre passar a flag de atualização silenciosa (`silent = true`). Isso evita a ativação de spinners ou telas de loading globais que destruam a árvore de componentes DOM e apaguem o `ToastModal` antes do tempo estipulado de leitura.
+3. **Proibição Absoluta de Banners Estáticos Inline:**
+   É terminantemente vedada a renderização de banners ou caixas de mensagem estáticas inline no fluxo do layout da página (ex: `{mensagemSucesso && <div className="bg-emerald-50 ...">...</div>}`). Todo e qualquer feedback ao usuário em qualquer página ou modal do sistema deve ser emitido **EXCLUSIVAMENTE pelo componente `ToastModal` flutuante** (`fixed top-4 ... z-50`).
