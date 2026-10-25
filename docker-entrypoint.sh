@@ -27,10 +27,10 @@ if [ -n "$DATABASE_URL" ]; then
     check();
   "
 
-  # Sincroniza tabelas do Prisma no PostgreSQL
-  echo "📦 Sincronizando schema de dados no PostgreSQL..."
+  # Aplica migrações versionadas do Prisma Migrate no PostgreSQL
+  echo "📦 Aplicando migrações do Prisma Migrate no PostgreSQL..."
   if [ -f "node_modules/prisma/build/index.js" ]; then
-    node node_modules/prisma/build/index.js db push --skip-generate --accept-data-loss
+    node node_modules/prisma/build/index.js migrate deploy
   fi
 
   # Verifica se o banco está vazio e roda o seed inicial com o usuário Marcos Batista
