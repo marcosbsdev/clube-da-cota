@@ -8,12 +8,12 @@
 
 ## 1. Contexto e Motivação
 
-Com o crescimento de consórcios e a entrada de múltiplos participantes no Clube da Cota (muitos dos quais são leigos ou cadastrados diretamente pelos organizadores em listas informais), surgiram quatro necessidades críticas de suporte e governança operacional:
+Com o crescimento de consórcios e a entrada de múltiplos participantes no Clube da Cota (muitos dos quais cadastrados diretamente pelos organizadores em listas informais), surgiram quatro necessidades críticas de suporte e governança operacional:
 
 1. **Correção de Erros de Digitação nos Cadastros:**
    Erros em nomes, chaves Pix incorretas ou números de telefone mal digitados que impediam a comunicação direta via WhatsApp e o envio correto de notificações.
 
-2. **Atendimento a Usuários Leigos & Gestão de Senhas:**
+2. **Atendimento a Participantes & Gestão de Senhas:**
    Participantes que esquecem suas credenciais, têm dificuldade com fluxos tradicionais de e-mail de recuperação ou foram cadastrados previamente com senhas provisórias. O Super Admin precisava de uma ferramenta prática para gerar senhas provisórias amigáveis (ex: `Cota#XXXX`) e disparar imediatamente no WhatsApp do participante com 1 clique.
 
 3. **Unificação/Mesclagem de Cadastros Duplicados (Smart Merge):**

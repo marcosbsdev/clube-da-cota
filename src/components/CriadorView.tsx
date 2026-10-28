@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   TipoChavePix,
   TIPOS_CHAVE_PIX,
@@ -17,6 +17,7 @@ import {
   gerarLinkWhatsApp,
 } from "@/lib/finance";
 import { ToastModal, ToastData } from "@/components/ToastModal";
+import { PaginationControl } from "@/components/PaginationControl";
 import {
   confirmPaymentAction,
   revertPaymentAction,
@@ -29,6 +30,7 @@ import {
   encerrarConsorcioAction,
   reativarConsorcioAction,
   excluirConsorcioAction,
+  updateUserRoleAction,
 } from "@/app/actions";
 import {
   CheckCircle2,
@@ -788,6 +790,23 @@ export function CriadorView({
     };
   }, [isPrivilegiadoAuditoria]);
   const [filtroStatus, setFiltroStatus] = useState<string>("TODOS");
+  const [buscaContribuicao, setBuscaContribuicao] = useState("");
+  const [buscaGestaoRole, setBuscaGestaoRole] = useState("");
+  const [loadingRole, setLoadingRole] = useState<string | null>(null);
+
+  // Paginação - Controle de Contribuições & Gestão de Roles
+  const [paginaContribuicoes, setPaginaContribuicoes] = useState(1);
+  const [itensPorPaginaContribuicoes, setItensPorPaginaContribuicoes] = useState(10);
+  const [paginaRoleGestao, setPaginaRoleGestao] = useState(1);
+  const [itensPorPaginaRoleGestao, setItensPorPaginaRoleGestao] = useState(8);
+
+  useEffect(() => {
+    setPaginaContribuicoes(1);
+  }, [buscaContribuicao, filtroStatus]);
+
+  useEffect(() => {
+    setPaginaRoleGestao(1);
+  }, [buscaGestaoRole]);
   const [modalEstornoAberto, setModalEstornoAberto] = useState(false);
   const [modalRecusaAberto, setModalRecusaAberto] = useState(false);
   const [itemSelecionado, setItemSelecionado] = useState<any>(null);
@@ -1209,11 +1228,79 @@ export function CriadorView({
     (c: any) => c.status === "EM_ATRASO"
   );
 
-  // Lista filtrada para a tabela/relatório
-  const listaFiltrada = consorcio.contribuicoes.filter((c: any) => {
-    if (filtroStatus === "TODOS") return true;
-    return c.status === filtroStatus;
-  });
+  // Lista filtrada para o Controle de Contribuições (Status + Busca por Nome / Telefone / Cota)
+  const listaFiltrada = useMemo(() => {
+    if (!consorcio?.contribuicoes) return [];
+    return consorcio.contribuicoes.filter((c: any) => {
+      if (filtroStatus !== "TODOS" && c.status !== filtroStatus) return false;
+      if (!buscaContribuicao.trim()) return true;
+      const t = buscaContribuicao.toLowerCase().trim();
+      const tDigits = t.replace(/\D/g, "");
+      const nome = (c.usuario?.name || "").toLowerCase();
+      const email = (c.usuario?.email || "").toLowerCase();
+      const tel = (c.usuario?.telefone || "").toLowerCase();
+      const telDigits = tel.replace(/\D/g, "");
+
+      const nomeMatch = nome.includes(t);
+      const emailMatch = email.includes(t);
+      const telMatch = tel.includes(t) || (tDigits.length >= 3 && telDigits.includes(tDigits));
+      const cotaMatch = `cota ${c.cota?.numero}`.includes(t) || `#${c.cota?.numero}`.includes(t);
+
+      return nomeMatch || emailMatch || telMatch || cotaMatch;
+    });
+  }, [consorcio?.contribuicoes, filtroStatus, buscaContribuicao]);
+
+  // Lista filtrada para a Gestão Rápida de Níveis de Acesso (Super Admin)
+  const usuariosFiltradosRole = useMemo(() => {
+    if (!todosUsuarios) return [];
+    if (!buscaGestaoRole.trim()) return todosUsuarios;
+    const t = buscaGestaoRole.toLowerCase().trim();
+    const tDigits = t.replace(/\D/g, "");
+    return todosUsuarios.filter((u: any) => {
+      const nomeMatch = (u.name || "").toLowerCase().includes(t);
+      const emailMatch = (u.email || "").toLowerCase().includes(t);
+      const tel = (u.telefone || "").toLowerCase();
+      const telDigits = tel.replace(/\D/g, "");
+      const telMatch = tel.includes(t) || (tDigits.length >= 3 && telDigits.includes(tDigits));
+      const roleMatch = (u.role || "").toLowerCase().includes(t);
+      return nomeMatch || emailMatch || telMatch || roleMatch;
+    });
+  }, [todosUsuarios, buscaGestaoRole]);
+
+  // Fatias paginadas para renderização escalável e otimizada
+  const contribuicoesPaginadas = useMemo(() => {
+    const inicio = (paginaContribuicoes - 1) * itensPorPaginaContribuicoes;
+    return listaFiltrada.slice(inicio, inicio + itensPorPaginaContribuicoes);
+  }, [listaFiltrada, paginaContribuicoes, itensPorPaginaContribuicoes]);
+
+  const usuariosRoleGestaoPaginados = useMemo(() => {
+    const inicio = (paginaRoleGestao - 1) * itensPorPaginaRoleGestao;
+    return usuariosFiltradosRole.slice(inicio, inicio + itensPorPaginaRoleGestao);
+  }, [usuariosFiltradosRole, paginaRoleGestao, itensPorPaginaRoleGestao]);
+
+  const handleAlterarRole = async (targetUserId: string, newRole: any) => {
+    setLoadingRole(targetUserId);
+    const res = await updateUserRoleAction({
+      adminUserId: currentUser.id,
+      targetUserId,
+      newRole,
+    });
+    setLoadingRole(null);
+    if (res.success) {
+      setToast({
+        titulo: "Permissão Atualizada!",
+        mensagem: res.message || "Nível de acesso do usuário atualizado com sucesso.",
+        tipo: "success",
+      });
+      if (onAtualizarConsorcio) onAtualizarConsorcio();
+    } else {
+      setToast({
+        titulo: "Erro de Permissão",
+        mensagem: res.error || "Erro ao atualizar nível de acesso.",
+        tipo: "error",
+      });
+    }
+  };
 
   const abrirModalConfirmarPagamento = (contribuicao: any) => {
     setContribuicaoParaConfirmar(contribuicao);
@@ -2299,18 +2386,44 @@ export function CriadorView({
 
           {/* Gestão Completa de Parcelas com Filtros & Exportação */}
           <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 mb-4">
               <div>
                 <h4 className="font-bold text-slate-900 text-sm sm:text-base">Controle de Contribuições</h4>
-                <p className="text-xs text-slate-500">Acompanhe e gerencie cada cota e ciclo do consórcio</p>
+                <p className="text-xs text-slate-500">
+                  Acompanhe e gerencie cada cota e ciclo do consórcio ({listaFiltrada.length} de {consorcio?.contribuicoes?.length || 0} parcelas)
+                </p>
               </div>
-              <button
-                onClick={exportarCSV}
-                className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition shadow-sm"
-              >
-                <Download className="w-4 h-4 text-slate-500" />
-                <span>Exportar CSV</span>
-              </button>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto">
+                {/* Busca por Nome ou Telefone */}
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nome ou telefone..."
+                    value={buscaContribuicao}
+                    onChange={(e) => setBuscaContribuicao(e.target.value)}
+                    className="w-full pl-8 pr-7 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-theme-main shadow-2xs"
+                  />
+                  {buscaContribuicao && (
+                    <button
+                      type="button"
+                      onClick={() => setBuscaContribuicao("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  onClick={exportarCSV}
+                  className="flex items-center justify-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition shadow-2xs cursor-pointer whitespace-nowrap"
+                >
+                  <Download className="w-4 h-4 text-slate-500" />
+                  <span>Exportar CSV</span>
+                </button>
+              </div>
             </div>
 
             {/* Filtros por Status Harmonizados com a Paleta */}
@@ -2349,10 +2462,23 @@ export function CriadorView({
               {listaFiltrada.length === 0 ? (
                 <div className="col-span-full py-10 px-4 text-center rounded-2xl bg-slate-50 border border-slate-100 text-slate-400 space-y-1">
                   <p className="text-xs font-bold text-slate-700">Nenhuma contribuição encontrada neste filtro.</p>
-                  <p className="text-[11px] text-slate-500">Selecione &ldquo;Todos os Ciclos&rdquo; para ver todas as parcelas.</p>
+                  <p className="text-[11px] text-slate-500">
+                    {buscaContribuicao
+                      ? `Nenhum resultado para "${buscaContribuicao}". Tente outro nome ou telefone.`
+                      : 'Selecione "Todos os Ciclos" para ver todas as parcelas.'}
+                  </p>
+                  {buscaContribuicao && (
+                    <button
+                      type="button"
+                      onClick={() => setBuscaContribuicao("")}
+                      className="text-xs font-bold text-theme-text hover:underline cursor-pointer pt-1"
+                    >
+                      Limpar busca
+                    </button>
+                  )}
                 </div>
               ) : (
-                listaFiltrada.map((c: any) => (
+                contribuicoesPaginadas.map((c: any) => (
                   <div
                     key={c.id}
                     className={`p-3.5 rounded-2xl border flex items-center justify-between transition shadow-2xs ${
@@ -2372,6 +2498,12 @@ export function CriadorView({
                           Cota #{c.cota?.numero} • Ciclo {c.numeroCiclo}
                         </span>
                       </div>
+                      {c.usuario?.telefone && (
+                        <div className="flex items-center gap-1 text-[11px] text-slate-500 font-mono mt-0.5">
+                          <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>{c.usuario.telefone}</span>
+                        </div>
+                      )}
                       <p className={`text-base font-black mt-1 ${c.status === "PAGO" ? "text-theme-text" : c.status === "EM_ATRASO" ? "text-rose-700" : "text-slate-900"}`}>
                         {formatarMoedaBRL(c.valorPrevisto)}
                       </p>
@@ -2414,7 +2546,166 @@ export function CriadorView({
                 ))
               )}
             </div>
+
+            {listaFiltrada.length > 0 && (
+              <div className="pt-3 mt-3 border-t border-slate-100">
+                <PaginationControl
+                  totalItens={listaFiltrada.length}
+                  paginaAtual={paginaContribuicoes}
+                  itensPorPagina={itensPorPaginaContribuicoes}
+                  onMudarPagina={setPaginaContribuicoes}
+                  onMudarItensPorPagina={(novosItens) => {
+                    setItensPorPaginaContribuicoes(novosItens);
+                    setPaginaContribuicoes(1);
+                  }}
+                  opcoesItensPorPagina={[10, 20, 50, 100]}
+                />
+              </div>
+            )}
           </div>
+
+          {/* GESTÃO RÁPIDA DE NÍVEIS DE ACESSO (SUPER ADMIN) */}
+          {currentUser?.role === "SUPER_ADMIN" && todosUsuarios && todosUsuarios.length > 0 && (
+            <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-theme-light text-theme-text flex items-center justify-center font-bold">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm sm:text-base">
+                      Gestão Rápida de Níveis de Acesso
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      Ajuste instantaneamente as permissões e planos de acesso dos usuários do Clube da Cota:
+                    </p>
+                  </div>
+                </div>
+
+                {/* Busca por Nome ou Telefone */}
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nome ou telefone..."
+                    value={buscaGestaoRole}
+                    onChange={(e) => setBuscaGestaoRole(e.target.value)}
+                    className="w-full pl-8 pr-7 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-theme-main shadow-2xs"
+                  />
+                  {buscaGestaoRole && (
+                    <button
+                      type="button"
+                      onClick={() => setBuscaGestaoRole("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="text-xs text-slate-400 flex items-center justify-between pt-1">
+                <span>
+                  Exibindo <span className="font-bold text-slate-700">{usuariosFiltradosRole.length}</span> de {todosUsuarios.length} usuários
+                </span>
+                {buscaGestaoRole && (
+                  <span className="text-theme-text font-semibold">
+                    Filtro: "{buscaGestaoRole}"
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-2.5 pt-1 max-h-[380px] overflow-y-auto pr-1">
+                {usuariosFiltradosRole.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 space-y-2 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                    <Users className="w-7 h-7 mx-auto text-slate-300" />
+                    <p className="text-xs font-semibold text-slate-500">
+                      Nenhum usuário encontrado para "{buscaGestaoRole}".
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setBuscaGestaoRole("")}
+                      className="text-xs text-theme-text font-bold hover:underline cursor-pointer"
+                    >
+                      Limpar busca
+                    </button>
+                  </div>
+                ) : (
+                  usuariosRoleGestaoPaginados.map((u: any) => {
+                    const isSelf = u.id === currentUser.id;
+                    return (
+                      <div
+                        key={u.id}
+                        className="p-3.5 bg-slate-50/70 hover:bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900 text-sm">{u.name}</span>
+                            {isSelf && (
+                              <span className="text-[10px] font-bold bg-theme-light text-theme-text px-1.5 py-0.2 rounded-md">
+                                Você
+                              </span>
+                            )}
+                            <span className={`text-[10px] font-bold border px-2 py-0.5 rounded-full ${
+                              u.role === "SUPER_ADMIN"
+                                ? "bg-purple-100 text-purple-800 border-purple-200"
+                                : u.role === "PRO_MASTER"
+                                ? "bg-amber-100 text-amber-800 border-amber-200"
+                                : u.role === "PRO"
+                                ? "bg-blue-100 text-blue-800 border-blue-200"
+                                : "bg-slate-100 text-slate-700 border-slate-200"
+                            }`}>
+                              {u.role}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-slate-400 mt-0.5 flex-wrap">
+                            <span className="truncate">{u.email}</span>
+                            {u.telefone && (
+                              <span className="flex items-center gap-1 text-slate-500 font-mono text-[11px]">
+                                <Phone className="w-3 h-3 text-slate-400" />
+                                {u.telefone}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <label className="text-[11px] font-semibold text-slate-500 hidden sm:inline">Alterar Papel:</label>
+                          <select
+                            value={u.role}
+                            disabled={loadingRole === u.id}
+                            onChange={(e) => handleAlterarRole(u.id, e.target.value)}
+                            className="text-xs font-bold p-2.5 rounded-xl border border-slate-200 bg-white hover:border-theme-main focus:outline-none focus:border-theme-main cursor-pointer shadow-xs"
+                          >
+                            <option value="COMUM">Comum (1 consórcio, até 10 membros)</option>
+                            <option value="PRO">Pro (até 3 consórcios, até 20 membros)</option>
+                            <option value="PRO_MASTER">Pro-Master (Multiconsórcios avançados)</option>
+                            <option value="SUPER_ADMIN">Super Admin (Acesso total)</option>
+                          </select>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {usuariosFiltradosRole.length > 0 && (
+                <div className="pt-3 border-t border-slate-100">
+                  <PaginationControl
+                    totalItens={usuariosFiltradosRole.length}
+                    paginaAtual={paginaRoleGestao}
+                    itensPorPagina={itensPorPaginaRoleGestao}
+                    onMudarPagina={setPaginaRoleGestao}
+                    onMudarItensPorPagina={(novosItens) => {
+                      setItensPorPaginaRoleGestao(novosItens);
+                      setPaginaRoleGestao(1);
+                    }}
+                    opcoesItensPorPagina={[8, 16, 32, 50]}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -43,6 +43,7 @@ import {
 import { GestaoAssinaturasAdmin } from "./GestaoAssinaturasAdmin";
 import { formatarTelefone } from "@/lib/finance";
 import { ToastModal, ToastData } from "@/components/ToastModal";
+import { PaginationControl } from "@/components/PaginationControl";
 
 interface AdminViewProps {
   currentUser: {
@@ -81,6 +82,21 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
   const [termoBusca, setTermoBusca] = useState("");
   const [filtroRole, setFiltroRole] = useState("TODOS");
   const [termoBuscaRole, setTermoBuscaRole] = useState("");
+
+  // Paginação
+  const [paginaParticipantes, setPaginaParticipantes] = useState(1);
+  const [itensPorPaginaParticipantes, setItensPorPaginaParticipantes] = useState(10);
+
+  const [paginaRole, setPaginaRole] = useState(1);
+  const [itensPorPaginaRole, setItensPorPaginaRole] = useState(8);
+
+  useEffect(() => {
+    setPaginaParticipantes(1);
+  }, [termoBusca, filtroRole]);
+
+  useEffect(() => {
+    setPaginaRole(1);
+  }, [termoBuscaRole]);
 
   // Estado dos Modais
   const [modalEdicaoUsuario, setModalEdicaoUsuario] = useState<any | null>(null);
@@ -498,6 +514,17 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
     });
   }, [usuarios, termoBuscaRole]);
 
+  // Fatias paginadas para renderização eficiente no DOM
+  const usuariosPaginados = useMemo(() => {
+    const inicio = (paginaParticipantes - 1) * itensPorPaginaParticipantes;
+    return usuariosFiltrados.slice(inicio, inicio + itensPorPaginaParticipantes);
+  }, [usuariosFiltrados, paginaParticipantes, itensPorPaginaParticipantes]);
+
+  const usuariosRolePaginados = useMemo(() => {
+    const inicio = (paginaRole - 1) * itensPorPaginaRole;
+    return usuariosFiltradosRole.slice(inicio, inicio + itensPorPaginaRole);
+  }, [usuariosFiltradosRole, paginaRole, itensPorPaginaRole]);
+
   // Outros usuários para dropdowns (excluindo o usuário do modal)
   const outrosUsuariosParaMerge = useMemo(() => {
     return usuarios.filter((u) => u.id !== formMesclar.contaDuplicadaId);
@@ -525,7 +552,7 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
               <span className="text-theme-text font-bold">Gestão de Contas</span>
             </h1>
             <p className="text-slate-500 text-xs sm:text-sm max-w-2xl leading-relaxed">
-              Central administrativa para correção de erros de cadastro, suporte a senhas para usuários leigos,
+              Central administrativa para correção de erros de cadastro, suporte e gestão de senhas,
               unificação de contas duplicadas e auditoria de cotas.
             </p>
           </div>
@@ -749,7 +776,7 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {usuariosFiltrados.map((u) => {
+                    {usuariosPaginados.map((u) => {
                       const isMe = u.id === currentUser.id;
                       return (
                         <tr key={u.id} className="hover:bg-slate-50/70 transition">
@@ -920,6 +947,22 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
                 </table>
               </div>
             )}
+
+            {usuariosFiltrados.length > 0 && (
+              <div className="p-4 border-t border-slate-100 bg-slate-50/40 rounded-b-3xl">
+                <PaginationControl
+                  totalItens={usuariosFiltrados.length}
+                  paginaAtual={paginaParticipantes}
+                  itensPorPagina={itensPorPaginaParticipantes}
+                  onMudarPagina={setPaginaParticipantes}
+                  onMudarItensPorPagina={(novosItens) => {
+                    setItensPorPaginaParticipantes(novosItens);
+                    setPaginaParticipantes(1);
+                  }}
+                  opcoesItensPorPagina={[10, 25, 50, 100]}
+                />
+              </div>
+            )}
           </div>
 
           {/* GESTÃO DE NÍVEIS DE ACESSO (SUPER ADMIN) */}
@@ -986,7 +1029,7 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
                   </button>
                 </div>
               ) : (
-                usuariosFiltradosRole.map((u) => {
+                usuariosRolePaginados.map((u) => {
                   const isSelf = u.id === currentUser.id;
                   return (
                     <div
@@ -1043,6 +1086,22 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
                 })
               )}
             </div>
+
+            {usuariosFiltradosRole.length > 0 && (
+              <div className="pt-3 border-t border-slate-100">
+                <PaginationControl
+                  totalItens={usuariosFiltradosRole.length}
+                  paginaAtual={paginaRole}
+                  itensPorPagina={itensPorPaginaRole}
+                  onMudarPagina={setPaginaRole}
+                  onMudarItensPorPagina={(novosItens) => {
+                    setItensPorPaginaRole(novosItens);
+                    setPaginaRole(1);
+                  }}
+                  opcoesItensPorPagina={[8, 16, 32, 50]}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}

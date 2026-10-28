@@ -54,6 +54,27 @@ Implementação de utilitários no módulo financeiro central:
   - Campo de busca dedicado por Nome, E-mail ou Telefone com contador de resultados e estado vazio amigável.
   - Exibição do telefone do usuário nos cards individuais ao lado do e-mail.
 
+### 2.5. Busca por Nome e Telefone na Página de Gestão (`CriadorView.tsx`)
+- **Controle de Contribuições:**
+  - Campo de busca dedicado no cabeçalho por **Nome**, **Telefone/WhatsApp** ou **Cota**, funcionando em conjunto com os filtros de status (*Todos os Ciclos, Pendentes, Confirmados/Pagos, Em Atraso*).
+  - Exibição destacada do telefone do participante com ícone em cada card de parcela.
+- **Gestão Rápida de Níveis de Acesso na Gestão:**
+  - Bloco incorporado na página de Gestão para usuários `SUPER_ADMIN`, com busca instantânea por Nome ou Telefone, scroll vertical de 380px e alteração em tempo real com `updateUserRoleAction`.
+
+### 2.6. Mecanismo Universal de Paginação e Escalabilidade SaaS (`PaginationControl.tsx`)
+Para evitar sobrecarga de renderização no DOM com o crescimento exponencial de registros no sistema (preparação para escala com milhares de participantes e parcelas):
+- **Componente Reutilizável `PaginationControl.tsx`:**
+  - Janela deslizante de números de página com elipses (`1`, `...`, `5`, `...`, `20`).
+  - Navegação rápida: Primeira Página (`<<`), Anterior (`<`), Próxima (`>`), Última Página (`>>`).
+  - Seletor configurável de itens por página (ex: `10, 25, 50, 100` ou `8, 16, 32, 50`).
+  - Indicador textual dinâmico: *"Exibindo X–Y de Z itens"*.
+  - Totalmente responsivo e estilizado com as variáveis CSS de tema ativo (`--theme-main`, `--theme-light`, etc.).
+- **Aplicações nos Blocos Críticos:**
+  1. **Admin - Participantes Cadastrados:** Paginação nativa com reset reativo ao alterar filtros de texto ou perfil.
+  2. **Admin - Gestão Rápida de Níveis de Acesso:** Paginação sob demanda com reset na busca.
+  3. **Gestão - Controle de Contribuições:** Paginação sobre parcelas com reset automático ao filtrar por status ou busca.
+  4. **Gestão - Gestão Rápida de Níveis de Acesso:** Paginação sob demanda integrada.
+
 ---
 
 ## 3. Cobertura de Testes Automatizados
