@@ -33,6 +33,21 @@ services:
       timeout: 5s
       retries: 5
 
+  studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clube-da-cota-studio
+    restart: unless-stopped
+    ports:
+      - "5555:5555"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/clube_da_cota?schema=public
+    command: ["node", "node_modules/prisma/build/index.js", "studio", "--port", "5555", "--hostname", "0.0.0.0", "--browser", "none"]
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   postgres_data:
     driver: local

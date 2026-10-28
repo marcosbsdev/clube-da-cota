@@ -750,70 +750,70 @@ export function Header({
 
           {/* Navegação Desktop (Visível apenas em md: e superiores) */}
           {onChangeTab && (
-            <nav className="hidden md:flex items-center gap-1.5 ml-6 border-l border-white/20 pl-6">
+            <nav className="hidden md:flex items-center gap-1 xl:gap-1.5 ml-3 lg:ml-5 border-l border-white/20 pl-3 lg:pl-5">
               <button
                 onClick={() => onChangeTab("participante")}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                className={`flex items-center gap-1.5 xl:gap-2 px-2.5 py-1.5 xl:px-3.5 xl:py-2 rounded-xl text-[11px] xl:text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0 ${
                   activeTab === "participante"
                     ? "bg-white text-theme-main shadow-sm"
                     : "text-white/90 hover:bg-white/10 hover:text-white"
                 }`}
               >
-                <Home className="w-4 h-4" />
+                <Home className="w-4 h-4 shrink-0" />
                 <span>Meu Consórcio</span>
               </button>
 
               {canManageResolved && (
                 <button
                   onClick={() => onChangeTab("criador")}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  className={`flex items-center gap-1.5 xl:gap-2 px-2.5 py-1.5 xl:px-3.5 xl:py-2 rounded-xl text-[11px] xl:text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0 ${
                     activeTab === "criador"
                       ? "bg-white text-theme-main shadow-sm"
                       : "text-white/90 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  <BarChart3 className="w-4 h-4" />
-                  <span>Gestão de Consórcios</span>
+                  <BarChart3 className="w-4 h-4 shrink-0" />
+                  <span>Gestão<span className="hidden xl:inline"> de Consórcios</span></span>
                 </button>
               )}
 
               {canCreateResolved && (
                 <button
                   onClick={() => onChangeTab("assistente")}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  className={`flex items-center gap-1.5 xl:gap-2 px-2.5 py-1.5 xl:px-3.5 xl:py-2 rounded-xl text-[11px] xl:text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0 ${
                     activeTab === "assistente"
                       ? "bg-white text-theme-main shadow-sm"
                       : "text-white/90 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  <PlusCircle className="w-4 h-4" />
-                  <span>Novo Consórcio</span>
+                  <PlusCircle className="w-4 h-4 shrink-0" />
+                  <span>Novo<span className="hidden xl:inline"> Consórcio</span></span>
                 </button>
               )}
 
               {userRole === "SUPER_ADMIN" && (
                 <button
                   onClick={() => onChangeTab("admin")}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  className={`flex items-center gap-1.5 xl:gap-2 px-2.5 py-1.5 xl:px-3.5 xl:py-2 rounded-xl text-[11px] xl:text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0 ${
                     activeTab === "admin"
                       ? "bg-white text-purple-900 shadow-sm"
                       : "text-white/90 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  <ShieldCheck className="w-4 h-4 text-purple-300" />
-                  <span>Painel Admin 🛡️</span>
+                  <ShieldCheck className="w-4 h-4 text-purple-300 shrink-0" />
+                  <span><span className="hidden xl:inline">Painel </span>Admin<span className="hidden xl:inline"> 🛡️</span></span>
                 </button>
               )}
 
               <button
                 onClick={() => onChangeTab("perfil")}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                className={`flex items-center gap-1.5 xl:gap-2 px-2.5 py-1.5 xl:px-3.5 xl:py-2 rounded-xl text-[11px] xl:text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0 ${
                   activeTab === "perfil"
                     ? "bg-white text-theme-main shadow-sm"
                     : "text-white/90 hover:bg-white/10 hover:text-white"
                 }`}
               >
-                <UserCircle className="w-4 h-4" />
+                <UserCircle className="w-4 h-4 shrink-0" />
                 <span>Perfil</span>
               </button>
             </nav>
@@ -834,12 +834,12 @@ export function Header({
               </div>
               <div className="text-left hidden sm:block">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-white/80 font-medium leading-none">Perfil:</span>
+                  <span className="text-[10px] text-white/80 font-medium leading-none hidden xl:inline">Perfil:</span>
                   <span className="bg-white/20 text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold">
                     {formatRole(userRole)}
                   </span>
                 </div>
-                <h2 className="text-xs font-bold leading-tight mt-0.5 text-white max-w-[130px] truncate">
+                <h2 className="text-xs font-bold leading-tight mt-0.5 text-white max-w-[110px] xl:max-w-[130px] truncate">
                   {userName}
                 </h2>
               </div>

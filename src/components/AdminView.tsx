@@ -452,20 +452,20 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
       {/* ====================================================================== */}
       {/* CABEÇALHO DO PAINEL SUPER ADMIN                                        */}
       {/* ====================================================================== */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-700/60 relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mt-6 -mr-6 w-56 h-56 bg-theme-main/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="bg-white rounded-3xl p-5 sm:p-7 shadow-sm border border-slate-200/90 relative overflow-hidden space-y-6">
+        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-theme-light/60 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-theme-main/30 border border-theme-main/50 text-white text-xs font-bold tracking-wide">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-theme-light border border-theme-main/20 text-theme-text text-xs font-bold tracking-wide">
+              <ShieldCheck className="w-4 h-4 text-theme-text" />
               <span>Painel de Governança Master</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-2.5">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2.5 flex-wrap">
               <span>Super Admin</span>
-              <span className="text-slate-400 font-light">|</span>
-              <span className="text-theme-light font-bold">Gestão de Contas</span>
+              <span className="text-slate-300 font-light">|</span>
+              <span className="text-theme-text font-bold">Gestão de Contas</span>
             </h1>
-            <p className="text-slate-300 text-sm max-w-2xl leading-relaxed">
+            <p className="text-slate-500 text-xs sm:text-sm max-w-2xl leading-relaxed">
               Central administrativa para correção de erros de cadastro, suporte a senhas para usuários leigos,
               unificação de contas duplicadas e auditoria de cotas.
             </p>
@@ -475,7 +475,7 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
             <button
               onClick={carregarDados}
               disabled={carregando}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition border border-white/20 shadow-sm cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200/90 text-slate-700 font-bold text-xs transition border border-slate-200/80 shadow-xs cursor-pointer disabled:opacity-50"
               title="Recarregar dados do painel"
             >
               <RefreshCw className={`w-4 h-4 ${carregando ? "animate-spin" : ""}`} />
@@ -486,7 +486,7 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
               onClick={() => {
                 setModalMesclarAberto(true);
               }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-md cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-theme-main hover:opacity-90 text-white font-bold text-xs transition shadow-sm cursor-pointer"
             >
               <GitMerge className="w-4 h-4" />
               <span>Mesclar Contas Duplicadas</span>
@@ -494,19 +494,21 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
           </div>
         </div>
 
-        {/* NAVEGAÇÃO DE ABAS DO SUPER ADMIN */}
-        <div className="flex items-center gap-2 mt-6 pt-5 border-t border-slate-700/60 overflow-x-auto pb-1 scrollbar-none">
+        {/* NAVEGAÇÃO DE ABAS DO SUPER ADMIN (ESTILO PILLS EM HARMONIA COM O SISTEMA) */}
+        <div className="bg-slate-100/90 p-1.5 rounded-2xl flex items-center gap-1.5 overflow-x-auto border border-slate-200/70 scrollbar-none">
           <button
             onClick={() => setActiveTab("usuarios")}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
               activeTab === "usuarios"
-                ? "bg-white text-slate-900 shadow-md"
-                : "text-slate-300 hover:bg-white/10 hover:text-white"
+                ? "bg-white text-theme-text shadow-xs border border-slate-200/60 font-black"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
             }`}
           >
             <Users className="w-4 h-4" />
             <span>Usuários & Contas</span>
-            <span className="ml-1 px-2 py-0.2 rounded-full text-[10px] bg-slate-100 text-slate-800">
+            <span className={`ml-1 px-2 py-0.2 rounded-full text-[10px] font-bold ${
+              activeTab === "usuarios" ? "bg-theme-light text-theme-text" : "bg-slate-200 text-slate-600"
+            }`}>
               {stats.totalUsuarios}
             </span>
           </button>
@@ -515,8 +517,8 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
             onClick={() => setActiveTab("assinaturas")}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
               activeTab === "assinaturas"
-                ? "bg-white text-slate-900 shadow-md"
-                : "text-slate-300 hover:bg-white/10 hover:text-white"
+                ? "bg-white text-theme-text shadow-xs border border-slate-200/60 font-black"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
             }`}
           >
             <CreditCard className="w-4 h-4" />
@@ -530,13 +532,15 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
             onClick={() => setActiveTab("auditoria")}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
               activeTab === "auditoria"
-                ? "bg-white text-slate-900 shadow-md"
-                : "text-slate-300 hover:bg-white/10 hover:text-white"
+                ? "bg-white text-theme-text shadow-xs border border-slate-200/60 font-black"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
             }`}
           >
             <History className="w-4 h-4" />
             <span>Trilha de Auditoria</span>
-            <span className="ml-1 px-2 py-0.2 rounded-full text-[10px] bg-slate-700 text-slate-200">
+            <span className={`ml-1 px-2 py-0.2 rounded-full text-[10px] font-bold ${
+              activeTab === "auditoria" ? "bg-theme-light text-theme-text" : "bg-slate-200 text-slate-600"
+            }`}>
               {ultimosLogs.length}
             </span>
           </button>

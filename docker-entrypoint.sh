@@ -52,5 +52,10 @@ if [ -n "$DATABASE_URL" ]; then
   fi
 fi
 
+if [ $# -gt 0 ]; then
+  echo "⚡ Executando comando customizado: $@"
+  exec "$@"
+fi
+
 echo "✨ Servidor Clube da Cota pronto na porta $PORT!"
 exec node server.js
