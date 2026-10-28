@@ -20,6 +20,12 @@ import {
   formatarTelefone,
   sanitizarTelefone,
   gerarLinkWhatsApp,
+  validarCpf,
+  validarCnpj,
+  formatarCpfCnpj,
+  formatarChaveAleatoriaPix,
+  aplicarMascaraChavePix,
+  validarChavePix,
 } from "../src/lib/finance.ts";
 
 console.log("🧪 Executando testes das regras financeiras do Clube da Cota...\n");
@@ -347,4 +353,45 @@ console.log("🧪 Executando testes das regras financeiras do Clube da Cota...\n
   console.log("✅ Teste 13: Formatação e sanitização de Telefone/WhatsApp e link direto aprovados.");
 }
 
-console.log("\n🎉 Todos os 13 testes de regras financeiras passaram com 100% de sucesso!");
+// Teste 14: Máscaras e validações de Chave Pix (Celular, CPF/CNPJ, E-mail, Chave Aleatória)
+{
+  // Celular
+  assert.strictEqual(aplicarMascaraChavePix("11963030266", "CELULAR"), "(11) 96303-0266");
+  assert.strictEqual(validarChavePix("(11) 96303-0266", "CELULAR").valido, true);
+  assert.strictEqual(validarChavePix("11963030266", "CELULAR").valido, true);
+  assert.strictEqual(validarChavePix("1187654321", "CELULAR").valido, true); // 10 dígitos (fixo/comercial)
+  assert.strictEqual(validarChavePix("11863030266", "CELULAR").valido, false); // 11 dígitos sem iniciar com 9
+  assert.strictEqual(validarChavePix("05963030266", "CELULAR").valido, false); // DDD inválido
+
+  // CPF / CNPJ
+  assert.strictEqual(aplicarMascaraChavePix("52998224725", "CPF_CNPJ"), "529.982.247-25");
+  assert.strictEqual(validarCpf("52998224725"), true);
+  assert.strictEqual(validarCpf("529.982.247-25"), true);
+  assert.strictEqual(validarCpf("11111111111"), false); // Sequência idêntica
+  assert.strictEqual(validarCpf("12345678900"), false); // Dígito inválido
+  assert.strictEqual(validarChavePix("529.982.247-25", "CPF_CNPJ").valido, true);
+
+  // CNPJ
+  assert.strictEqual(aplicarMascaraChavePix("11222333000181", "CPF_CNPJ"), "11.222.333/0001-81");
+  assert.strictEqual(validarCnpj("11222333000181"), true);
+  assert.strictEqual(validarCnpj("11.222.333/0001-81"), true);
+  assert.strictEqual(validarCnpj("00000000000000"), false);
+  assert.strictEqual(validarChavePix("11.222.333/0001-81", "CPF_CNPJ").valido, true);
+
+  // E-mail
+  assert.strictEqual(aplicarMascaraChavePix("  USER@DOMINIO.COM ", "EMAIL"), "user@dominio.com");
+  assert.strictEqual(validarChavePix("usuario@email.com", "EMAIL").valido, true);
+  assert.strictEqual(validarChavePix("usuario_sem_arroba.com", "EMAIL").valido, false);
+  assert.strictEqual(validarChavePix("usuario@", "EMAIL").valido, false);
+
+  // Chave Aleatória (UUID)
+  const uuidValido = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+  assert.strictEqual(aplicarMascaraChavePix("a1b2c3d4e5f67890abcdef1234567890", "CHAVE_ALEATORIA"), uuidValido);
+  assert.strictEqual(validarChavePix(uuidValido, "CHAVE_ALEATORIA").valido, true);
+  assert.strictEqual(validarChavePix("a1b2c3d4e5f67890abcdef1234567890", "CHAVE_ALEATORIA").valido, true);
+  assert.strictEqual(validarChavePix("uuid-muito-curto", "CHAVE_ALEATORIA").valido, false);
+
+  console.log("✅ Teste 14: Máscaras e validações de Chave Pix (Celular, CPF/CNPJ, E-mail, UUID) aprovados.");
+}
+
+console.log("\n🎉 Todos os 14 testes de regras financeiras passaram com 100% de sucesso!");

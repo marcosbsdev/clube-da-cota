@@ -34,20 +34,29 @@ body.theme-purple {
   --theme-accent: #7c3aed;
 }
 
-body.theme-ocean {
-  --theme-main: #0369a1;       /* Azul Oceano */
-  --theme-dark: #0c4a6e;
-  --theme-light: #f0f9ff;
-  --theme-text: #075985;
-  --theme-accent: #0284c7;
+body.theme-red {
+  --theme-main: #dc2626;       /* Vermelho */
+  --theme-dark: #991b1b;
+  --theme-light: #fef2f2;
+  --theme-text: #b91c1c;
+  --theme-accent: #ef4444;
 }
 
+body.theme-orange,
 body.theme-coral {
-  --theme-main: #c2410c;       /* Coral / Laranja */
-  --theme-dark: #7c2d12;
+  --theme-main: #ea580c;       /* Laranja */
+  --theme-dark: #9a3412;
   --theme-light: #fff7ed;
-  --theme-text: #9a3412;
-  --theme-accent: #ea580c;
+  --theme-text: #c2410c;
+  --theme-accent: #f97316;
+}
+
+body.theme-green {
+  --theme-main: #16a34a;       /* Verde */
+  --theme-dark: #166534;
+  --theme-light: #f0fdf4;
+  --theme-text: #15803d;
+  --theme-accent: #22c55e;
 }
 
 /* Acessibilidade para idosos e leigos */

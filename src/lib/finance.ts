@@ -489,14 +489,231 @@ export function sanitizarTelefone(valor?: string | null): string {
  * Ex: (11) 98765-4321 ou (11) 8765-4321
  */
 export function formatarTelefone(valor?: string | null): string {
-  const digits = sanitizarTelefone(valor);
+  let digits = sanitizarTelefone(valor);
   if (!digits) return "";
+  // Se veio com DDI 55 e tem mais de 11 dígitos, remove o DDI para formatar nacional
+  if (digits.length >= 12 && digits.startsWith("55")) {
+    digits = digits.slice(2);
+  }
+  digits = digits.slice(0, 11);
   if (digits.length <= 2) return `(${digits}`;
   if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
   if (digits.length <= 10) {
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
   }
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+}
+
+/**
+ * Validação do dígito verificador de CPF brasileiro (Módulo 11).
+ */
+export function validarCpf(cpf: string): boolean {
+  const digits = (cpf || "").replace(/\D/g, "");
+  if (digits.length !== 11) return false;
+  // Rejeita sequências de dígitos idênticos (ex: 111.111.111-11)
+  if (/^(\d)\1{10}$/.test(digits)) return false;
+
+  let soma = 0;
+  for (let i = 0; i < 9; i++) {
+    soma += parseInt(digits.charAt(i), 10) * (10 - i);
+  }
+  let resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  if (resto !== parseInt(digits.charAt(9), 10)) return false;
+
+  soma = 0;
+  for (let i = 0; i < 10; i++) {
+    soma += parseInt(digits.charAt(i), 10) * (11 - i);
+  }
+  resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  if (resto !== parseInt(digits.charAt(10), 10)) return false;
+
+  return true;
+}
+
+/**
+ * Validação do dígito verificador de CNPJ brasileiro (Módulo 11).
+ */
+export function validarCnpj(cnpj: string): boolean {
+  const digits = (cnpj || "").replace(/\D/g, "");
+  if (digits.length !== 14) return false;
+  // Rejeita sequências de dígitos idênticos
+  if (/^(\d)\1{13}$/.test(digits)) return false;
+
+  const pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  let soma = 0;
+  for (let i = 0; i < 12; i++) {
+    soma += parseInt(digits.charAt(i), 10) * pesos1[i];
+  }
+  let resto = soma % 11;
+  let digito1 = resto < 2 ? 0 : 11 - resto;
+  if (digito1 !== parseInt(digits.charAt(12), 10)) return false;
+
+  const pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  soma = 0;
+  for (let i = 0; i < 13; i++) {
+    soma += parseInt(digits.charAt(i), 10) * pesos2[i];
+  }
+  resto = soma % 11;
+  let digito2 = resto < 2 ? 0 : 11 - resto;
+  if (digito2 !== parseInt(digits.charAt(13), 10)) return false;
+
+  return true;
+}
+
+/**
+ * Aplica máscara dinâmica de CPF (11 dígitos) ou CNPJ (14 dígitos).
+ */
+export function formatarCpfCnpj(valor?: string | null): string {
+  if (!valor) return "";
+  const digits = valor.replace(/\D/g, "").slice(0, 14);
+  if (!digits) return "";
+
+  if (digits.length <= 11) {
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+    if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+  } else {
+    if (digits.length <= 12) {
+      const p1 = digits.slice(0, 2);
+      const p2 = digits.slice(2, 5);
+      const p3 = digits.slice(5, 8);
+      const p4 = digits.slice(8);
+      let res = p1;
+      if (p2) res += `.${p2}`;
+      if (p3) res += `.${p3}`;
+      if (p4) res += `/${p4}`;
+      return res;
+    }
+    return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`;
+  }
+}
+
+/**
+ * Formata chave Pix aleatória no formato canônico UUID (8-4-4-4-12 hex).
+ */
+export function formatarChaveAleatoriaPix(valor?: string | null): string {
+  if (!valor) return "";
+  const hex = valor.replace(/[^a-fA-F0-9]/g, "").slice(0, 32).toLowerCase();
+  if (!hex) return "";
+  if (hex.length <= 8) return hex;
+  if (hex.length <= 12) return `${hex.slice(0, 8)}-${hex.slice(8)}`;
+  if (hex.length <= 16) return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12)}`;
+  if (hex.length <= 20) return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16)}`;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+/**
+ * Aplica máscara correspondente ao tipo de chave Pix selecionado.
+ */
+export function aplicarMascaraChavePix(valor: string, tipo: TipoChavePix): string {
+  if (!valor) return "";
+  switch (tipo) {
+    case "CELULAR":
+      return formatarTelefone(valor);
+    case "CPF_CNPJ":
+      return formatarCpfCnpj(valor);
+    case "EMAIL":
+      return valor.trim().toLowerCase();
+    case "CHAVE_ALEATORIA":
+      return formatarChaveAleatoriaPix(valor);
+    default:
+      return valor.trim();
+  }
+}
+
+export interface ValidacaoChavePixResult {
+  valido: boolean;
+  mensagemErro?: string;
+}
+
+/**
+ * Validação da Chave Pix de acordo com as regras de cada tipo.
+ */
+export function validarChavePix(valor: string, tipo: TipoChavePix): ValidacaoChavePixResult {
+  const chaveLimpa = (valor || "").trim();
+  if (!chaveLimpa) {
+    return { valido: false, mensagemErro: "Por favor, informe a sua chave Pix." };
+  }
+
+  switch (tipo) {
+    case "CELULAR": {
+      const digits = chaveLimpa.replace(/\D/g, "");
+      if (digits.length < 10 || digits.length > 11) {
+        return {
+          valido: false,
+          mensagemErro: "Celular inválido. Deve conter DDD + número com 10 ou 11 dígitos.",
+        };
+      }
+      const ddd = parseInt(digits.slice(0, 2), 10);
+      if (ddd < 11 || ddd > 99) {
+        return {
+          valido: false,
+          mensagemErro: "DDD inválido. Informe um DDD brasileiro válido (11 a 99).",
+        };
+      }
+      if (digits.length === 11 && digits.charAt(2) !== "9") {
+        return {
+          valido: false,
+          mensagemErro: "Celular com 11 dígitos deve iniciar com 9 após o DDD.",
+        };
+      }
+      return { valido: true };
+    }
+
+    case "CPF_CNPJ": {
+      const digits = chaveLimpa.replace(/\D/g, "");
+      if (digits.length === 11) {
+        if (!validarCpf(digits)) {
+          return {
+            valido: false,
+            mensagemErro: "CPF inválido. Verifique os dígitos verificadores informados.",
+          };
+        }
+        return { valido: true };
+      } else if (digits.length === 14) {
+        if (!validarCnpj(digits)) {
+          return {
+            valido: false,
+            mensagemErro: "CNPJ inválido. Verifique os dígitos verificadores informados.",
+          };
+        }
+        return { valido: true };
+      } else {
+        return {
+          valido: false,
+          mensagemErro: "CPF/CNPJ incompleto. Digite 11 dígitos para CPF ou 14 dígitos para CNPJ.",
+        };
+      }
+    }
+
+    case "EMAIL": {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+      if (!emailRegex.test(chaveLimpa)) {
+        return {
+          valido: false,
+          mensagemErro: "E-mail inválido. Utilize o formato seuemail@dominio.com.",
+        };
+      }
+      return { valido: true };
+    }
+
+    case "CHAVE_ALEATORIA": {
+      const uuidHex = chaveLimpa.replace(/[^a-fA-F0-9]/g, "");
+      if (uuidHex.length !== 32) {
+        return {
+          valido: false,
+          mensagemErro: "Chave aleatória inválida. Deve conter 32 caracteres hexadecimais (padrão UUID).",
+        };
+      }
+      return { valido: true };
+    }
+
+    default:
+      return { valido: true };
+  }
 }
 
 /**

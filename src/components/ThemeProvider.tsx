@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 
-export type ThemeName = "blue" | "dark" | "purple" | "ocean" | "coral";
+export type ThemeName = "blue" | "dark" | "purple" | "red" | "orange" | "green";
 
 interface ThemeContextType {
   theme: ThemeName;
@@ -19,25 +19,31 @@ export function ThemeProvider({
   initialTheme = "blue",
 }: {
   children: React.ReactNode;
-  initialTheme?: ThemeName;
+  initialTheme?: string;
 }) {
-  const [theme, setThemeState] = useState<ThemeName>(initialTheme);
+  const normalizeTheme = (t?: string | null): ThemeName => {
+    if (!t) return "blue";
+    if (t === "coral") return "orange";
+    if (t === "ocean") return "blue";
+    const validThemes: ThemeName[] = ["blue", "dark", "purple", "red", "orange", "green"];
+    return validThemes.includes(t as ThemeName) ? (t as ThemeName) : "blue";
+  };
+
+  const [theme, setThemeState] = useState<ThemeName>(normalizeTheme(initialTheme));
 
   useEffect(() => {
-    // Carrega tema salvo em localStorage se disponível
-    const saved = localStorage.getItem("clube_cota_theme") as ThemeName | null;
-    if (saved && ["blue", "dark", "purple", "ocean", "coral"].includes(saved)) {
-      setThemeState(saved);
-      applyThemeClass(saved);
-    } else {
-      applyThemeClass(initialTheme);
-    }
+    // Carrega tema salvo em localStorage com normalização segura
+    const saved = localStorage.getItem("clube_cota_theme");
+    const resolvedTheme = normalizeTheme(saved || initialTheme);
+    setThemeState(resolvedTheme);
+    applyThemeClass(resolvedTheme);
   }, [initialTheme]);
 
   const setTheme = (newTheme: ThemeName) => {
-    setThemeState(newTheme);
-    localStorage.setItem("clube_cota_theme", newTheme);
-    applyThemeClass(newTheme);
+    const normalized = normalizeTheme(newTheme);
+    setThemeState(normalized);
+    localStorage.setItem("clube_cota_theme", normalized);
+    applyThemeClass(normalized);
   };
 
   const applyThemeClass = (t: ThemeName) => {
@@ -45,6 +51,9 @@ export function ThemeProvider({
       "theme-blue",
       "theme-dark",
       "theme-purple",
+      "theme-red",
+      "theme-orange",
+      "theme-green",
       "theme-ocean",
       "theme-coral"
     );

@@ -4,17 +4,21 @@ import React, { useState, useEffect } from "react";
 import { useTheme, ThemeName } from "./ThemeProvider";
 import {
   updateUserThemeAction,
-  updateUserRoleAction,
   updateUserProfileDadosAction,
 } from "@/app/actions";
-import { TipoChavePix, TIPOS_CHAVE_PIX, getTipoChavePixLabel, formatarTelefone } from "@/lib/finance";
+import {
+  TipoChavePix,
+  TIPOS_CHAVE_PIX,
+  getTipoChavePixLabel,
+  formatarTelefone,
+  aplicarMascaraChavePix,
+  validarChavePix,
+} from "@/lib/finance";
 import { getVigenciaPlano } from "@/lib/plans";
 import { ToastModal, ToastData } from "@/components/ToastModal";
 import { ModalUpgradePlanos } from "./ModalUpgradePlanos";
-import { GestaoAssinaturasAdmin } from "./GestaoAssinaturasAdmin";
 import {
   Palette,
-  Shield,
   User,
   Check,
   RefreshCw,
@@ -51,7 +55,6 @@ export function PerfilView({
 }: PerfilViewProps) {
   const { theme, setTheme } = useTheme();
   const [salvando, setSalvando] = useState(false);
-  const [loadingRole, setLoadingRole] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [modalUpgradeAberto, setModalUpgradeAberto] = useState(false);
 
@@ -70,13 +73,14 @@ export function PerfilView({
   const [salvoComSucesso, setSalvoComSucesso] = useState(false);
 
   // Estado das preferências de recebimento Pix
+  const initialTipoPix = (currentUser?.tipoChavePix as TipoChavePix) || "CELULAR";
   const [receberPixDireto, setReceberPixDireto] = useState<boolean>(
     Boolean(currentUser?.receberPixDireto)
   );
-  const [tipoChavePix, setTipoChavePix] = useState<TipoChavePix>(
-    (currentUser?.tipoChavePix as TipoChavePix) || "CELULAR"
+  const [tipoChavePix, setTipoChavePix] = useState<TipoChavePix>(initialTipoPix);
+  const [chavePix, setChavePix] = useState<string>(
+    currentUser?.chavePix ? aplicarMascaraChavePix(currentUser.chavePix, initialTipoPix) : ""
   );
-  const [chavePix, setChavePix] = useState<string>(currentUser?.chavePix || "");
 
   useEffect(() => {
     setNome(currentUser?.name || "");
@@ -87,10 +91,29 @@ export function PerfilView({
     setAlterarSenhaAberto(false);
     setPerfilMsgErro("");
 
+    const tipo = (currentUser?.tipoChavePix as TipoChavePix) || "CELULAR";
     setReceberPixDireto(Boolean(currentUser?.receberPixDireto));
-    setTipoChavePix((currentUser?.tipoChavePix as TipoChavePix) || "CELULAR");
-    setChavePix(currentUser?.chavePix || "");
+    setTipoChavePix(tipo);
+    setChavePix(currentUser?.chavePix ? aplicarMascaraChavePix(currentUser.chavePix, tipo) : "");
   }, [currentUser]);
+
+  const handleTipoChavePixChange = (novoTipo: TipoChavePix) => {
+    setTipoChavePix(novoTipo);
+    if (chavePix.trim()) {
+      const chaveReformatada = aplicarMascaraChavePix(chavePix, novoTipo);
+      setChavePix(chaveReformatada);
+    } else if (novoTipo === "CELULAR" && telefone) {
+      setChavePix(formatarTelefone(telefone));
+    }
+  };
+
+  const handleChavePixChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valorDigitado = e.target.value;
+    const formatado = aplicarMascaraChavePix(valorDigitado, tipoChavePix);
+    setChavePix(formatado);
+  };
+
+  const statusValidacaoPix = chavePix.trim() ? validarChavePix(chavePix, tipoChavePix) : null;
 
   const handleSalvarDadosCadastrais = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,6 +138,19 @@ export function PerfilView({
         tipo: "warning",
       });
       return;
+    }
+
+    if (chavePix.trim()) {
+      const validacao = validarChavePix(chavePix, tipoChavePix);
+      if (!validacao.valido) {
+        setPerfilMsgErro(validacao.mensagemErro || "Chave Pix inválida.");
+        setToast({
+          titulo: "Chave Pix Inválida",
+          mensagem: validacao.mensagemErro || "Verifique os dados da sua chave Pix.",
+          tipo: "warning",
+        });
+        return;
+      }
     }
 
     if (alterarSenhaAberto) {
@@ -154,10 +190,10 @@ export function PerfilView({
     if (res.success) {
       setToast({
         titulo: "Perfil Atualizado!",
-        mensagem: res.message || "Seus dados cadastrais foram atualizados com sucesso.",
+        mensagem: res.message || "Suas alterações foram salvas com sucesso.",
         tipo: "success",
       });
-      setPerfilMsgSucesso("✓ Dados cadastrais salvos com sucesso!");
+      setPerfilMsgSucesso("✓ Alterações salvas com sucesso!");
       setSalvoComSucesso(true);
       setTimeout(() => {
         setSalvoComSucesso(false);
@@ -178,49 +214,13 @@ export function PerfilView({
     }
   };
 
-  const getRoleBadge = (role: string) => {
-    switch (role) {
-      case "SUPER_ADMIN":
-        return { text: "Super Admin", color: "bg-purple-100 text-purple-800 border-purple-200" };
-      case "PRO_MASTER":
-        return { text: "Pro-Master", color: "bg-amber-100 text-amber-800 border-amber-200" };
-      case "PRO":
-        return { text: "Pro", color: "bg-blue-100 text-blue-800 border-blue-200" };
-      default:
-        return { text: "Comum", color: "bg-slate-100 text-slate-700 border-slate-200" };
-    }
-  };
-
-  const handleAlterarRole = async (targetUserId: string, newRole: any) => {
-    setLoadingRole(targetUserId);
-    const res = await updateUserRoleAction({
-      adminUserId: currentUser.id,
-      targetUserId,
-      newRole,
-    });
-    setLoadingRole(null);
-    if (res.success) {
-      setToast({
-        titulo: "Permissão Atualizada!",
-        mensagem: res.message || "Nível de acesso do usuário atualizado com sucesso.",
-        tipo: "success",
-      });
-      if (onRoleAtualizado) onRoleAtualizado();
-    } else {
-      setToast({
-        titulo: "Erro de Permissão",
-        mensagem: res.error || "Erro ao atualizar nível de acesso.",
-        tipo: "error",
-      });
-    }
-  };
-
   const paletas = [
     { id: "blue", nome: "Azul (Padrão)", cor: "bg-blue-600" },
     { id: "dark", nome: "Escuro", cor: "bg-slate-900" },
     { id: "purple", nome: "Roxo", cor: "bg-purple-600" },
-    { id: "ocean", nome: "Azul Claro", cor: "bg-sky-600" },
-    { id: "coral", nome: "Laranja", cor: "bg-orange-600" },
+    { id: "red", nome: "Vermelho", cor: "bg-red-600" },
+    { id: "orange", nome: "Laranja", cor: "bg-orange-600" },
+    { id: "green", nome: "Verde", cor: "bg-emerald-600" },
   ];
 
   const handleSelecionarTema = async (novoTema: ThemeName) => {
@@ -228,9 +228,10 @@ export function PerfilView({
     setSalvando(true);
     await updateUserThemeAction(currentUser.id, novoTema);
     setSalvando(false);
+    const nomeAmigavel = paletas.find((p) => p.id === novoTema)?.nome || "Personalizado";
     setToast({
       titulo: "Tema Atualizado!",
-      mensagem: `Paleta ${novoTema.toUpperCase()} salva na sua conta.`,
+      mensagem: `Tema ${nomeAmigavel} salvo com sucesso na sua conta!`,
       tipo: "success",
     });
   };
@@ -240,25 +241,21 @@ export function PerfilView({
       case "SUPER_ADMIN":
         return {
           nome: "Super Admin",
-          desc: "Gestão global de usuários, consórcios e auditoria completa.",
           badge: "bg-purple-100 text-purple-800",
         };
       case "PRO_MASTER":
         return {
           nome: "Pro Master",
-          desc: "Criação e gestão ilimitada de consórcios e participantes.",
           badge: "bg-indigo-100 text-indigo-800",
         };
       case "PRO":
         return {
           nome: "Pro",
-          desc: "Até 3 consórcios ativos e 20 participantes por grupo.",
           badge: "bg-blue-100 text-blue-800",
         };
       default:
         return {
           nome: "Comum",
-          desc: "Participa de consórcios e pode criar até 1 consórcio ativo com 10 participantes.",
           badge: "bg-slate-100 text-slate-700",
         };
     }
@@ -287,38 +284,17 @@ export function PerfilView({
               </span>
             </div>
           </div>
-        </div>
 
-        <div className="mt-5 pt-4 border-t border-slate-100 text-xs sm:text-sm text-slate-600 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <p className="flex items-center gap-2 font-bold text-slate-800">
-              <Shield className="w-4 h-4 text-theme-text flex-shrink-0" />
-              <span>Permissões e Capacidades da Conta:</span>
-            </p>
-            <p className="text-slate-500 mt-1 text-xs sm:text-sm leading-relaxed">{roleInfo.desc}</p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap flex-shrink-0 self-start sm:self-auto">
-            {onCriarNovoConsorcio && (
-              <button
-                type="button"
-                onClick={onCriarNovoConsorcio}
-                className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-theme-main hover:bg-theme-main/90 active:scale-95 text-white font-bold text-xs shadow-xs transition cursor-pointer"
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>Criar Consórcio</span>
-              </button>
-            )}
-            {currentUser.role !== "SUPER_ADMIN" && (
-              <button
-                type="button"
-                onClick={() => setModalUpgradeAberto(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-bold text-xs transition cursor-pointer shadow-2xs"
-              >
-                <Crown className="w-4 h-4 text-purple-600" />
-                <span>Migrar de Plano</span>
-              </button>
-            )}
-          </div>
+          {currentUser.role !== "SUPER_ADMIN" && (
+            <button
+              type="button"
+              onClick={() => setModalUpgradeAberto(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-bold text-xs transition cursor-pointer shadow-2xs self-start sm:self-auto"
+            >
+              <Crown className="w-4 h-4 text-purple-600" />
+              <span>Migrar de Plano</span>
+            </button>
+          )}
         </div>
 
         {/* Banner de Vigência da Assinatura para Usuários PRO / PRO_MASTER */}
@@ -482,8 +458,8 @@ export function PerfilView({
                 </label>
                 <select
                   value={tipoChavePix}
-                  onChange={(e) => setTipoChavePix(e.target.value as TipoChavePix)}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-white focus:border-theme-main focus:outline-none"
+                  onChange={(e) => handleTipoChavePixChange(e.target.value as TipoChavePix)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-white focus:border-theme-main focus:outline-none cursor-pointer shadow-2xs"
                 >
                   {TIPOS_CHAVE_PIX.map((t) => (
                     <option key={t.value} value={t.value}>
@@ -494,19 +470,64 @@ export function PerfilView({
               </div>
 
               <div className="sm:col-span-2">
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Chave Pix
-                </label>
-                <input
-                  type="text"
-                  value={chavePix}
-                  onChange={(e) => setChavePix(e.target.value)}
-                  placeholder={
-                    TIPOS_CHAVE_PIX.find((t) => t.value === tipoChavePix)?.placeholder ||
-                    "Informe sua chave Pix"
-                  }
-                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono font-bold bg-white focus:border-theme-main focus:outline-none shadow-2xs"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-600">
+                    Chave Pix
+                  </label>
+                  {tipoChavePix === "CELULAR" && telefone && chavePix !== formatarTelefone(telefone) && (
+                    <button
+                      type="button"
+                      onClick={() => setChavePix(formatarTelefone(telefone))}
+                      className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                    >
+                      Copiar do WhatsApp
+                    </button>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <input
+                    type={tipoChavePix === "EMAIL" ? "email" : "text"}
+                    value={chavePix}
+                    onChange={handleChavePixChange}
+                    placeholder={
+                      TIPOS_CHAVE_PIX.find((t) => t.value === tipoChavePix)?.placeholder ||
+                      "Informe sua chave Pix"
+                    }
+                    className={`w-full p-2.5 pr-9 rounded-xl border text-xs sm:text-sm font-mono font-bold bg-white focus:outline-none shadow-2xs transition ${
+                      statusValidacaoPix
+                        ? statusValidacaoPix.valido
+                          ? "border-emerald-500 focus:border-emerald-600 ring-2 ring-emerald-500/10 text-emerald-950"
+                          : "border-amber-400 focus:border-amber-500 ring-2 ring-amber-400/15 text-slate-900"
+                        : "border-slate-200 focus:border-theme-main"
+                    }`}
+                  />
+                  {statusValidacaoPix && (
+                    <div className="absolute right-3 top-3 pointer-events-none">
+                      {statusValidacaoPix.valido ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-amber-500" />
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Validação e dicas contextuais em tempo real */}
+                {statusValidacaoPix && !statusValidacaoPix.valido && (
+                  <p className="text-[11px] text-amber-700 font-semibold mt-1.5 flex items-center gap-1.5 animate-in fade-in duration-150">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-amber-500" />
+                    <span>{statusValidacaoPix.mensagemErro}</span>
+                  </p>
+                )}
+                {statusValidacaoPix && statusValidacaoPix.valido && (
+                  <p className="text-[11px] text-emerald-700 font-semibold mt-1.5 flex items-center gap-1.5 animate-in fade-in duration-150">
+                    <Check className="w-3.5 h-3.5 flex-shrink-0 text-emerald-600" />
+                    <span>
+                      Chave {TIPOS_CHAVE_PIX.find((t) => t.value === tipoChavePix)?.label} válida e formatada com sucesso.
+                    </span>
+                  </p>
+                )}
               </div>
             </div>
 
@@ -627,7 +648,7 @@ export function PerfilView({
               ) : (
                 <>
                   <Check className="w-4 h-4" />
-                  <span>Salvar Dados Cadastrais</span>
+                  <span>Salvar Alterações</span>
                 </>
               )}
             </button>
@@ -635,7 +656,7 @@ export function PerfilView({
         </form>
       </div>
 
-      {/* Seletor Permanente de Paleta de Cores (Requisito Solicitado) */}
+      {/* Seletor de Paleta de Cores */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-4">
         <div className="flex items-center gap-2.5">
           <Palette className="w-5 h-5 text-theme-text flex-shrink-0" />
@@ -672,124 +693,6 @@ export function PerfilView({
                     <Check className="w-3.5 h-3.5" />
                   </span>
                 )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Gestão de Assinaturas & Planos SaaS (Exclusivo Super Admin) */}
-      {currentUser.role === "SUPER_ADMIN" && (
-        <GestaoAssinaturasAdmin
-          currentUser={currentUser}
-          onAssinaturaAlterada={onRoleAtualizado}
-        />
-      )}
-
-      {/* Gestão de Níveis de Acesso (Exclusivo Super Admin) */}
-      {currentUser.role === "SUPER_ADMIN" && (
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-purple-200 shadow-sm space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="font-bold text-slate-900 text-sm sm:text-base">
-                  Gestão de Níveis de Acesso (Super Admin)
-                </h4>
-                <p className="text-xs text-slate-500">
-                  Promova ou ajuste as permissões de acesso dos usuários do Clube da Cota:
-                </p>
-              </div>
-            </div>
-
-            <span className="text-[10px] font-bold bg-purple-100 text-purple-800 px-2.5 py-1 rounded-full uppercase">
-              Área Administrativa
-            </span>
-          </div>
-
-          <div className="space-y-2.5 pt-2">
-            {todosUsuarios.map((u) => {
-              const badge = getRoleBadge(u.role);
-              const isSelf = u.id === currentUser.id;
-              return (
-                <div
-                  key={u.id}
-                  className="p-3.5 bg-slate-50/70 hover:bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-slate-900 text-sm">{u.name}</span>
-                      {isSelf && (
-                        <span className="text-[10px] font-bold bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-md">
-                          Você
-                        </span>
-                      )}
-                      <span className={`text-[10px] font-bold border px-2 py-0.5 rounded-full ${badge.color}`}>
-                        {badge.text}
-                      </span>
-                    </div>
-                    <span className="text-xs text-slate-400 block truncate mt-0.5">{u.email}</span>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <label className="text-[11px] font-semibold text-slate-500 hidden sm:inline">Alterar Papel:</label>
-                    <select
-                      value={u.role}
-                      disabled={loadingRole === u.id}
-                      onChange={(e) => handleAlterarRole(u.id, e.target.value)}
-                      className="text-xs font-bold p-2.5 rounded-xl border border-slate-200 bg-white hover:border-purple-400 focus:outline-none focus:border-purple-600 cursor-pointer shadow-xs"
-                    >
-                      <option value="COMUM">Comum (1 consórcio, até 10 membros)</option>
-                      <option value="PRO">Pro (até 3 consórcios, até 20 membros)</option>
-                      <option value="PRO_MASTER">Pro-Master (Multiconsórcios avançados)</option>
-                      <option value="SUPER_ADMIN">Super Admin (Acesso total)</option>
-                    </select>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Alternador de Usuários para Teste do MVP */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-3">
-        <div className="flex items-center gap-2.5">
-          <RefreshCw className="w-4 h-4 text-slate-500 flex-shrink-0" />
-          <div>
-            <h4 className="font-bold text-slate-900 text-sm sm:text-base">Alternar Usuário (Simulação de Perfis)</h4>
-            <p className="text-xs text-slate-500">
-              Troque de conta para testar como o criador e participantes com cotas individuais ou compartilhadas visualizam o app:
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-2">
-          {todosUsuarios.map((u) => {
-            const badge = getRoleBadge(u.role);
-            return (
-              <button
-                key={u.id}
-                onClick={() => onTrocarUsuario(u.id)}
-                className={`p-3 rounded-2xl border text-left text-xs flex justify-between items-center transition ${
-                  u.id === currentUser.id
-                    ? "bg-slate-800 text-white font-bold border-slate-800 shadow-sm"
-                    : "bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200"
-                }`}
-              >
-                <div className="truncate pr-2">
-                  <span className="font-bold block truncate">{u.name}</span>
-                  <span className={`text-[10px] block truncate ${u.id === currentUser.id ? "text-slate-300" : "text-slate-400"}`}>
-                    {u.email}
-                  </span>
-                </div>
-                <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md flex-shrink-0 border ${
-                  u.id === currentUser.id ? "bg-white/20 text-white border-white/30" : badge.color
-                }`}>
-                  {badge.text}
-                </span>
               </button>
             );
           })}

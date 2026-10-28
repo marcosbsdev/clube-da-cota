@@ -11,6 +11,8 @@ import {
   validarMinimoParticipantes,
   formatarTelefone,
   TipoChavePix,
+  aplicarMascaraChavePix,
+  validarChavePix,
   analisarCicloConsorcio,
   gerarMensagemFollowupConsorcio,
   gerarLinkWhatsApp,
@@ -1484,7 +1486,13 @@ export async function updateUserProfileDadosAction(input: UpdateUserProfileDados
       updateData.tipoChavePix = input.tipoChavePix || "CELULAR";
     }
     if (input.chavePix !== undefined) {
-      updateData.chavePix = input.chavePix ? input.chavePix.trim() : null;
+      const tipo = (input.tipoChavePix as TipoChavePix) || "CELULAR";
+      const chaveLimpa = input.chavePix ? input.chavePix.trim() : null;
+      if (chaveLimpa) {
+        updateData.chavePix = aplicarMascaraChavePix(chaveLimpa, tipo);
+      } else {
+        updateData.chavePix = null;
+      }
     }
     if (input.receberPixDireto !== undefined) {
       updateData.receberPixDireto = Boolean(input.receberPixDireto);

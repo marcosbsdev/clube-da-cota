@@ -38,6 +38,7 @@ import {
   mesclarUsuariosAdminAction,
   transferirCotaAdminAction,
   excluirUsuarioAdminAction,
+  updateUserRoleAction,
 } from "@/app/actions";
 import { GestaoAssinaturasAdmin } from "./GestaoAssinaturasAdmin";
 import { formatarTelefone } from "@/lib/finance";
@@ -79,6 +80,7 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
   // Filtros de busca
   const [termoBusca, setTermoBusca] = useState("");
   const [filtroRole, setFiltroRole] = useState("TODOS");
+  const [termoBuscaRole, setTermoBuscaRole] = useState("");
 
   // Estado dos Modais
   const [modalEdicaoUsuario, setModalEdicaoUsuario] = useState<any | null>(null);
@@ -118,6 +120,41 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
   });
 
   const [copiadoTexto, setCopiadoTexto] = useState<string | null>(null);
+  const [loadingRole, setLoadingRole] = useState<string | null>(null);
+
+  const handleAlterarRole = async (targetUserId: string, newRole: any) => {
+    setLoadingRole(targetUserId);
+    try {
+      const res = await updateUserRoleAction({
+        adminUserId: currentUser.id,
+        targetUserId,
+        newRole,
+      });
+      if (res.success) {
+        setToast({
+          titulo: "Permissão Atualizada!",
+          mensagem: res.message || "Nível de acesso do usuário atualizado com sucesso.",
+          tipo: "success",
+        });
+        await carregarDados();
+        if (onUsuarioAtualizado) onUsuarioAtualizado();
+      } else {
+        setToast({
+          titulo: "Erro de Permissão",
+          mensagem: res.error || "Erro ao atualizar nível de acesso.",
+          tipo: "error",
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        titulo: "Erro Inesperado",
+        mensagem: err.message || "Falha na comunicação.",
+        tipo: "error",
+      });
+    } finally {
+      setLoadingRole(null);
+    }
+  };
 
   const carregarDados = async () => {
     setCarregando(true);
@@ -424,20 +461,42 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
     }
   };
 
-  // Usuários filtrados para a listagem
+  // Usuários filtrados para a listagem (Participantes Cadastrados)
   const usuariosFiltrados = useMemo(() => {
     return usuarios.filter((u) => {
       if (filtroRole !== "TODOS" && u.role !== filtroRole) return false;
       if (!termoBusca.trim()) return true;
-      const t = termoBusca.toLowerCase();
+      const t = termoBusca.toLowerCase().trim();
+      const tDigits = t.replace(/\D/g, "");
+      const telClean = (u.telefone || "").replace(/\D/g, "");
+      const pixClean = (u.chavePix || "").replace(/\D/g, "");
+
       return (
         u.name.toLowerCase().includes(t) ||
         u.email.toLowerCase().includes(t) ||
         (u.telefone || "").toLowerCase().includes(t) ||
-        (u.chavePix || "").toLowerCase().includes(t)
+        (tDigits.length >= 3 && telClean.includes(tDigits)) ||
+        (u.chavePix || "").toLowerCase().includes(t) ||
+        (tDigits.length >= 3 && pixClean.includes(tDigits))
       );
     });
   }, [usuarios, filtroRole, termoBusca]);
+
+  // Usuários filtrados para a Gestão Rápida de Níveis de Acesso
+  const usuariosFiltradosRole = useMemo(() => {
+    if (!termoBuscaRole.trim()) return usuarios;
+    const t = termoBuscaRole.toLowerCase().trim();
+    const tDigits = t.replace(/\D/g, "");
+    return usuarios.filter((u) => {
+      const nomeMatch = u.name.toLowerCase().includes(t);
+      const emailMatch = u.email.toLowerCase().includes(t);
+      const tel = (u.telefone || "").toLowerCase();
+      const telDigits = tel.replace(/\D/g, "");
+      const telMatch = tel.includes(t) || (tDigits.length >= 3 && telDigits.includes(tDigits));
+      const roleMatch = u.role.toLowerCase().includes(t);
+      return nomeMatch || emailMatch || telMatch || roleMatch;
+    });
+  }, [usuarios, termoBuscaRole]);
 
   // Outros usuários para dropdowns (excluindo o usuário do modal)
   const outrosUsuariosParaMerge = useMemo(() => {
@@ -609,56 +668,55 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
             </div>
           </div>
 
-          {/* BARRA DE FILTROS E BUSCA */}
-          <div className="bg-white rounded-3xl p-4 border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
-            <div className="relative w-full md:w-96">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Buscar por nome, e-mail, telefone ou Pix..."
-                value={termoBusca}
-                onChange={(e) => setTermoBusca(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-theme-main/30 focus:border-theme-main"
-              />
-              {termoBusca && (
-                <button
-                  onClick={() => setTermoBusca("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 scrollbar-none">
-              <Filter className="w-4 h-4 text-slate-400 flex-shrink-0 hidden sm:block" />
-              <span className="text-[11px] font-bold text-slate-400 uppercase hidden sm:block">Role:</span>
-              {(["TODOS", "COMUM", "PRO", "PRO_MASTER", "SUPER_ADMIN"] as const).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setFiltroRole(r)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
-                    filtroRole === r
-                      ? "bg-slate-900 text-white shadow-sm"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
-                >
-                  {r === "TODOS" ? "Todos" : r.replace("_", " ")}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* LISTA / TABELA DE USUÁRIOS */}
+          {/* LISTA / TABELA DE USUÁRIOS (PARTICIPANTES CADASTRADOS) */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-6 py-4 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div>
-                <h2 className="text-sm font-bold text-slate-900">
-                  Participantes Cadastrados
+                <h2 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Users className="w-4 h-4 text-theme-text" />
+                  <span>Participantes Cadastrados</span>
                 </h2>
-                <p className="text-xs text-slate-400">
-                  Exibindo {usuariosFiltrados.length} de {stats.totalUsuarios} contas cadastradas
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Exibindo <span className="font-bold text-slate-700">{usuariosFiltrados.length}</span> de {stats.totalUsuarios} contas cadastradas
                 </p>
+              </div>
+
+              {/* Busca por Nome, E-mail e Telefone + Filtro de Role */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nome, e-mail ou telefone..."
+                    value={termoBusca}
+                    onChange={(e) => setTermoBusca(e.target.value)}
+                    className="w-full pl-8 pr-7 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-theme-main shadow-2xs"
+                  />
+                  {termoBusca && (
+                    <button
+                      onClick={() => setTermoBusca("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none">
+                  {(["TODOS", "COMUM", "PRO", "PRO_MASTER", "SUPER_ADMIN"] as const).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setFiltroRole(r)}
+                      className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition whitespace-nowrap cursor-pointer ${
+                        filtroRole === r
+                          ? "bg-slate-900 text-white shadow-xs"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      {r === "TODOS" ? "Todos" : r.replace("_", " ")}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -666,17 +724,28 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
               <div className="p-12 text-center text-slate-400 space-y-3">
                 <Users className="w-10 h-10 mx-auto text-slate-300" />
                 <p className="text-sm font-medium">Nenhum usuário encontrado com os filtros atuais.</p>
+                {(termoBusca || filtroRole !== "TODOS") && (
+                  <button
+                    onClick={() => {
+                      setTermoBusca("");
+                      setFiltroRole("TODOS");
+                    }}
+                    className="text-xs font-bold text-theme-text hover:underline cursor-pointer"
+                  >
+                    Limpar filtros
+                  </button>
+                )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                      <th className="py-3 px-4">Usuário</th>
-                      <th className="py-3 px-4">Contato & Pix</th>
-                      <th className="py-3 px-4">Nível / Role</th>
-                      <th className="py-3 px-4">Vínculos</th>
-                      <th className="py-3 px-4 text-right">Ações de Suporte</th>
+                  <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 z-10 shadow-2xs">
+                    <tr className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                      <th className="py-3 px-4 bg-slate-50">Usuário</th>
+                      <th className="py-3 px-4 bg-slate-50">Contato & Pix</th>
+                      <th className="py-3 px-4 bg-slate-50">Nível / Role</th>
+                      <th className="py-3 px-4 bg-slate-50">Vínculos</th>
+                      <th className="py-3 px-4 bg-slate-50 text-right">Ações de Suporte</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -851,6 +920,129 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
                 </table>
               </div>
             )}
+          </div>
+
+          {/* GESTÃO DE NÍVEIS DE ACESSO (SUPER ADMIN) */}
+          <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/90 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-theme-light text-theme-text flex items-center justify-center font-bold">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm sm:text-base">
+                    Gestão Rápida de Níveis de Acesso
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Ajuste instantaneamente as permissões e planos de acesso dos usuários do Clube da Cota:
+                  </p>
+                </div>
+              </div>
+
+              {/* Busca por Nome, Email e Telefone */}
+              <div className="relative w-full sm:w-72">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Buscar por nome, e-mail ou telefone..."
+                  value={termoBuscaRole}
+                  onChange={(e) => setTermoBuscaRole(e.target.value)}
+                  className="w-full pl-8 pr-7 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-theme-main shadow-2xs"
+                />
+                {termoBuscaRole && (
+                  <button
+                    onClick={() => setTermoBuscaRole("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400 flex items-center justify-between pt-1">
+              <span>
+                Exibindo <span className="font-bold text-slate-700">{usuariosFiltradosRole.length}</span> de {usuarios.length} usuários
+              </span>
+              {termoBuscaRole && (
+                <span className="text-theme-text font-semibold">
+                  Filtro: "{termoBuscaRole}"
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-2.5 pt-1 max-h-[380px] overflow-y-auto pr-1">
+              {usuariosFiltradosRole.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 space-y-2 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                  <Users className="w-7 h-7 mx-auto text-slate-300" />
+                  <p className="text-xs font-semibold text-slate-500">
+                    Nenhum usuário encontrado para "{termoBuscaRole}".
+                  </p>
+                  <button
+                    onClick={() => setTermoBuscaRole("")}
+                    className="text-xs text-theme-text font-bold hover:underline cursor-pointer"
+                  >
+                    Limpar busca
+                  </button>
+                </div>
+              ) : (
+                usuariosFiltradosRole.map((u) => {
+                  const isSelf = u.id === currentUser.id;
+                  return (
+                    <div
+                      key={u.id}
+                      className="p-3.5 bg-slate-50/70 hover:bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-slate-900 text-sm">{u.name}</span>
+                          {isSelf && (
+                            <span className="text-[10px] font-bold bg-theme-light text-theme-text px-1.5 py-0.2 rounded-md">
+                              Você
+                            </span>
+                          )}
+                          <span className={`text-[10px] font-bold border px-2 py-0.5 rounded-full ${
+                            u.role === "SUPER_ADMIN"
+                              ? "bg-purple-100 text-purple-800 border-purple-200"
+                              : u.role === "PRO_MASTER"
+                              ? "bg-amber-100 text-amber-800 border-amber-200"
+                              : u.role === "PRO"
+                              ? "bg-blue-100 text-blue-800 border-blue-200"
+                              : "bg-slate-100 text-slate-700 border-slate-200"
+                          }`}>
+                            {u.role}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-slate-400 mt-0.5 flex-wrap">
+                          <span className="truncate">{u.email}</span>
+                          {u.telefone && (
+                            <span className="flex items-center gap-1 text-slate-500 font-mono text-[11px]">
+                              <Phone className="w-3 h-3 text-slate-400" />
+                              {u.telefone}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <label className="text-[11px] font-semibold text-slate-500 hidden sm:inline">Alterar Papel:</label>
+                        <select
+                          value={u.role}
+                          disabled={loadingRole === u.id}
+                          onChange={(e) => handleAlterarRole(u.id, e.target.value)}
+                          className="text-xs font-bold p-2.5 rounded-xl border border-slate-200 bg-white hover:border-theme-main focus:outline-none focus:border-theme-main cursor-pointer shadow-xs"
+                        >
+                          <option value="COMUM">Comum (1 consórcio, até 10 membros)</option>
+                          <option value="PRO">Pro (até 3 consórcios, até 20 membros)</option>
+                          <option value="PRO_MASTER">Pro-Master (Multiconsórcios avançados)</option>
+                          <option value="SUPER_ADMIN">Super Admin (Acesso total)</option>
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       )}

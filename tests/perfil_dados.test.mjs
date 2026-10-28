@@ -197,6 +197,7 @@ async function run() {
         usuarioResponsavelId: user.id,
         tipoAcao: "EDICAO_PERFIL_USUARIO",
       },
+      orderBy: { createdAt: "asc" },
     });
 
     assert.ok(logs.length >= 2, "Deve registrar logs de auditoria");
