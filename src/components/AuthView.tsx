@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Lock, Mail, User, Eye, EyeOff, ArrowRight, Check, AlertCircle, KeyRound, Sparkles, Phone, CreditCard } from "lucide-react";
 import { AppLogo } from "./AppLogo";
-import { loginAction, registerAction, forgotPasswordAction, resetPasswordAction, quickLoginAction } from "@/app/actions";
+import { loginAction, registerAction, forgotPasswordAction, resetPasswordAction } from "@/app/actions";
 import { TipoChavePix, TIPOS_CHAVE_PIX, formatarTelefone } from "@/lib/finance";
 
 interface AuthViewProps {
@@ -118,15 +118,6 @@ export function AuthView({ onAuthSuccess, todosUsuarios }: AuthViewProps) {
       }, 1000);
     } else {
       setErroMsg(res.error || "Falha ao redefinir senha.");
-    }
-  };
-
-  const handleQuickLogin = async (userId: string) => {
-    setLoading(true);
-    const res = await quickLoginAction(userId);
-    setLoading(false);
-    if (res.success && res.user) {
-      onAuthSuccess(res.user);
     }
   };
 
@@ -488,38 +479,6 @@ export function AuthView({ onAuthSuccess, todosUsuarios }: AuthViewProps) {
             </div>
           </div>
         )}
-
-        {/* CONTAS DE DEMONSTRAÇÃO RÁPIDA (1-CLIQUE) */}
-        <div className="pt-4 border-t border-slate-200/80 space-y-2.5">
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-bold uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span>Acesso Rápido de Teste (1-Clique)</span>
-          </div>
-          <p className="text-[11px] text-slate-400">
-            Clique em qualquer conta de teste para entrar instantaneamente:
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {todosUsuarios.slice(0, 4).map((u) => (
-              <button
-                key={u.id}
-                type="button"
-                onClick={() => handleQuickLogin(u.id)}
-                className="p-2.5 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200 text-left transition flex items-center justify-between"
-              >
-                <div className="truncate pr-2">
-                  <span className="text-xs font-bold text-slate-800 block truncate">{u.name}</span>
-                  <span className="text-[10px] text-slate-400 block truncate">
-                    {u.role === "SUPER_ADMIN" ? "👑 Criador/Admin" : "👤 Participante"}
-                  </span>
-                </div>
-                <span className="text-[10px] font-bold text-theme-text bg-theme-light px-2 py-0.5 rounded-lg flex-shrink-0">
-                  Entrar
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );

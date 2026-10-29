@@ -39,7 +39,7 @@ import {
 interface PerfilViewProps {
   currentUser: any;
   todosUsuarios: any[];
-  onTrocarUsuario: (id: string) => void;
+  onTrocarUsuario?: (id: string) => void;
   onLogout?: () => void;
   onRoleAtualizado?: () => void;
   onCriarNovoConsorcio?: () => void;

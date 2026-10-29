@@ -3461,7 +3461,7 @@ export function CriadorView({
                       Ciclo de Vida do Consórcio
                     </h4>
                     <p className="text-[11px] text-slate-500">
-                      Encerre este grupo após a conclusão dos sorteios ou exclua rascunhos de teste.
+                      Encerre este grupo após a conclusão dos sorteios ou exclua grupos sem pagamentos.
                     </p>
                   </div>
                   <span
@@ -3506,7 +3506,7 @@ export function CriadorView({
                       className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>Excluir Consórcio de Teste</span>
+                      <span>Excluir Consórcio</span>
                     </button>
                   ) : (
                     <span className="text-[10px] text-slate-400 italic">
@@ -4279,7 +4279,7 @@ export function CriadorView({
         </div>
       )}
 
-      {/* Modal de Exclusão de Consórcio de Teste */}
+      {/* Modal de Exclusão de Consórcio */}
       {modalExcluirAberto && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[110] animate-in fade-in">
           <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-rose-200 shadow-2xl space-y-4 animate-in zoom-in-95">
@@ -4288,7 +4288,7 @@ export function CriadorView({
                 <Trash2 className="w-5 h-5 text-rose-600" />
               </div>
               <div>
-                <h3 className="text-base font-black text-slate-900">Excluir Consórcio de Teste?</h3>
+                <h3 className="text-base font-black text-slate-900">Excluir Consórcio?</h3>
                 <p className="text-xs text-rose-600 font-bold">Ação Permanente e Irreversível</p>
               </div>
             </div>
@@ -4298,7 +4298,7 @@ export function CriadorView({
             </p>
 
             <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-800">
-              💡 <strong>Plano Comum:</strong> Ao excluir este consórcio de teste, a sua vaga de 1 consórcio ativo será liberada imediatamente para criar um novo grupo!
+              💡 <strong>Plano Comum:</strong> Ao excluir este consórcio, a sua vaga de 1 consórcio ativo será liberada imediatamente para criar um novo grupo!
             </div>
 
             <div>

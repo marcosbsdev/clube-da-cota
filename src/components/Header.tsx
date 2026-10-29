@@ -827,7 +827,7 @@ export function Header({
             <button
               onClick={() => setDropdownAberto(!dropdownAberto)}
               className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-2xl bg-white/10 hover:bg-white/20 transition border border-white/20 text-left cursor-pointer"
-              title="Clique para alternar entre os perfis do consórcio"
+              title="Menu do Usuário"
             >
               <div className="w-8 h-8 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">
                 {getInitials(userName)}
@@ -846,80 +846,59 @@ export function Header({
               <ChevronDown className={`w-3.5 h-3.5 text-white/80 transition-transform ${dropdownAberto ? "rotate-180" : ""}`} />
             </button>
 
-            {/* Menu Dropdown com todos os perfis */}
+            {/* Menu Dropdown do Usuário Autenticado */}
             {dropdownAberto && (
-              <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white rounded-3xl shadow-2xl border border-slate-200 py-3 px-3 z-50 text-slate-800">
-                <div className="px-2 pb-2 mb-2 border-b border-slate-100 flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                    Alternar Conta de Teste
-                  </span>
-                  <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-md">
-                    {todosUsuarios.length} contas
-                  </span>
+              <div className="absolute right-0 mt-2 w-72 bg-white rounded-3xl shadow-2xl border border-slate-200 py-3 px-3 z-50 text-slate-800 space-y-2">
+                {/* Cabeçalho do Usuário */}
+                <div className="p-3 bg-slate-50/80 rounded-2xl border border-slate-100 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-theme-main text-white flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-2xs">
+                    {getInitials(userName)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-900 truncate">{userName}</p>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-theme-light text-theme-text inline-block mt-0.5">
+                      {formatRole(userRole)}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="space-y-1 max-h-72 overflow-y-auto">
-                  {todosUsuarios.map((u) => {
-                    const isCurrent = u.id === currentUserId;
-                    return (
-                      <button
-                        key={u.id}
-                        onClick={() => {
-                          if (onTrocarUsuario) onTrocarUsuario(u.id);
-                          setDropdownAberto(false);
-                        }}
-                        className={`w-full p-2.5 rounded-2xl text-left text-xs flex items-center justify-between transition ${
-                          isCurrent
-                            ? "bg-theme-light border border-theme-main/30 text-theme-text font-bold"
-                            : "hover:bg-slate-50 border border-transparent text-slate-700"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${
-                            isCurrent ? "bg-theme-main text-white" : "bg-slate-200 text-slate-700"
-                          }`}>
-                            {getInitials(u.name)}
-                          </div>
-                          <div className="truncate">
-                            <span className="block truncate font-bold text-slate-900">{u.name}</span>
-                            <span className="block text-[10px] text-slate-400 truncate">{u.email}</span>
-                          </div>
-                        </div>
+                {/* Opções de Navegação */}
+                <div className="space-y-1">
+                  {onChangeTab && (
+                    <button
+                      onClick={() => {
+                        setDropdownAberto(false);
+                        onChangeTab("perfil");
+                      }}
+                      className="w-full p-2.5 rounded-xl text-left text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition cursor-pointer"
+                    >
+                      <UserCircle className="w-4 h-4 text-slate-500" />
+                      <span>Meu Perfil & Configurações</span>
+                    </button>
+                  )}
 
-                        <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                            {formatRole(u.role)}
-                          </span>
-                          {isCurrent && <Check className="w-3.5 h-3.5 text-theme-text" />}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {userRole === "SUPER_ADMIN" && onChangeTab && (
-                  <div className="pt-2 mt-2 border-t border-slate-100">
+                  {userRole === "SUPER_ADMIN" && onChangeTab && (
                     <button
                       onClick={() => {
                         setDropdownAberto(false);
                         onChangeTab("admin");
                       }}
-                      className="w-full p-2.5 rounded-2xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 flex items-center justify-center gap-2 transition cursor-pointer"
+                      className="w-full p-2.5 rounded-xl text-left text-xs font-bold text-purple-700 hover:bg-purple-50 flex items-center gap-2.5 transition cursor-pointer"
                     >
                       <ShieldCheck className="w-4 h-4 text-purple-600" />
-                      <span>Acessar Painel Super Admin</span>
+                      <span>Painel Super Admin</span>
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {onLogout && (
-                  <div className="pt-2 mt-2 border-t border-slate-100">
+                  <div className="pt-2 border-t border-slate-100">
                     <button
                       onClick={() => {
                         setDropdownAberto(false);
                         onLogout();
                       }}
-                      className="w-full p-2.5 rounded-2xl text-xs font-bold text-rose-600 hover:bg-rose-50 flex items-center justify-center gap-2 transition cursor-pointer"
+                      className="w-full p-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 flex items-center justify-center gap-2 transition cursor-pointer"
                     >
                       <LogOut className="w-4 h-4" />
                       <span>Sair da Conta (Logout)</span>
