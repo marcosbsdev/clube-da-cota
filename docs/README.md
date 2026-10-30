@@ -51,6 +51,7 @@ Bem-vindo à documentação oficial do **Clube da Cota**. Toda a base de conheci
 * ⚡ **Revalidação Não-Destrutiva (`silent = true`):** Ao invocar rotinas de atualização de dados em segundo plano após mutações (ex: `carregarDados`), deve-se sempre utilizar o modo silencioso (`silent = true`). Isso previne a montagem de telas de loading de página inteira que desmontem as views ativas ou destruam os modais/toasts antes da leitura pelo usuário.
 
 ### 4. Guias de Operação e Infraestrutura (`docs/guias/`)
+* **[Monitoramento e Observabilidade com Sentry.io](./guias/sentry-config.md):** Integração com `@sentry/nextjs`, rastreamento de erros em tempo real, monitoramento de performance e Session Replay.
 * **[Deploy de Produção: Vercel + Supabase](./guias/supabase-deploy.md):** Arquitetura oficial de produção com Vercel, Supabase PostgreSQL 17 e domínio próprio no Registro.br.
 * **[Deploy Serverless na Vercel com PostgreSQL na Nuvem](./guias/vercel-deploy.md):** Passo a passo completo de implantação na Vercel com Neon Tech, configuração de variáveis de ambiente e apontamento de domínio próprio no Registro.br.
 * **[Execução Local com Docker e Deploy em Servidor Dedicado](./guias/docker-deploy.md):** Manual completo de comandos `docker compose up`, variáveis de ambiente e deploy em VPS com reverse proxy SSL (Caddy/Nginx).
