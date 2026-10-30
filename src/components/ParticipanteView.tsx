@@ -38,11 +38,12 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
     navigator.clipboard.writeText(chave);
     setPixCopiado(true);
     setTimeout(() => setPixCopiado(false), 2500);
+    const isConsorcio = !nomeFavorecido || nomeFavorecido === "Consórcio" || nomeFavorecido === "Chave PIX do Consórcio";
     setToast({
       titulo: "Chave PIX Copiada!",
-      mensagem: nomeFavorecido
-        ? `A chave Pix de ${nomeFavorecido} foi copiada para sua área de transferência. Cole no app do seu banco para pagar.`
-        : "A chave Pix foi copiada para a área de transferência. Cole no app do seu banco para pagar.",
+      mensagem: isConsorcio
+        ? "A chave Pix do Consórcio foi copiada para sua área de transferência. Cole no app do seu banco para pagar."
+        : `A chave Pix de ${nomeFavorecido} foi copiada para sua área de transferência. Cole no app do seu banco para pagar.`,
       tipo: "success",
     });
   };
@@ -590,7 +591,7 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-slate-500 font-medium">Favorecido:</span>
                         <strong className="text-slate-900 font-bold truncate max-w-[200px] text-right">
-                          {nomeDestinatario}
+                          {contempladoDesejaPixDireto ? nomeDestinatario : "Chave PIX do Consórcio"}
                         </strong>
                       </div>
 
@@ -623,7 +624,7 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                           />
                           <button
                             type="button"
-                            onClick={() => handleCopiarPix(chaveDestino, nomeDestinatario)}
+                            onClick={() => handleCopiarPix(chaveDestino, contempladoDesejaPixDireto ? nomeDestinatario : "Chave PIX do Consórcio")}
                             disabled={!chaveDestino}
                             className={`p-3 rounded-xl transition cursor-pointer flex items-center justify-center shrink-0 border shadow-2xs active:scale-95 ${
                               pixCopiado
@@ -640,7 +641,7 @@ export function ParticipanteView({ consorcio, currentUser }: ParticipanteViewPro
                       {/* Botão de Ação Primária em Destaque Máximo */}
                       <button
                         type="button"
-                        onClick={() => handleCopiarPix(chaveDestino, nomeDestinatario)}
+                        onClick={() => handleCopiarPix(chaveDestino, contempladoDesejaPixDireto ? nomeDestinatario : "Chave PIX do Consórcio")}
                         disabled={!chaveDestino}
                         className={`w-full py-3.5 px-4 rounded-2xl font-black text-xs sm:text-sm shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer touch-target ${
                           pixCopiado

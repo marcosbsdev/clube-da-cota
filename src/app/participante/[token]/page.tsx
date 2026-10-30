@@ -124,11 +124,12 @@ export default function ParticipanteTokenPage() {
     navigator.clipboard.writeText(chave);
     setPixCopiado(true);
     setTimeout(() => setPixCopiado(false), 2500);
+    const isConsorcio = !nomeFavorecido || nomeFavorecido === "Consórcio" || nomeFavorecido === "Chave PIX do Consórcio";
     setToast({
       titulo: "Chave PIX Copiada!",
-      mensagem: nomeFavorecido
-        ? `A chave Pix de ${nomeFavorecido} foi copiada para sua área de transferência. Cole no app do seu banco para pagar.`
-        : "A chave Pix foi copiada para sua área de transferência. Cole no app do seu banco para pagar.",
+      mensagem: isConsorcio
+        ? "A chave Pix do Consórcio foi copiada para sua área de transferência. Cole no app do seu banco para pagar."
+        : `A chave Pix de ${nomeFavorecido} foi copiada para sua área de transferência. Cole no app do seu banco para pagar.`,
       tipo: "success",
     });
   };
@@ -855,7 +856,7 @@ export default function ParticipanteTokenPage() {
                     <span className={`text-[11px] font-bold ${
                       temPixDiretoContemplado ? "text-emerald-800" : "text-blue-700"
                     }`}>
-                      {temPixDiretoContemplado ? cicloInfo.usuarioNome : consorcio.criadorNome}
+                      {temPixDiretoContemplado ? cicloInfo.usuarioNome : "Chave PIX do Consórcio"}
                     </span>
                     <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
                       temPixDiretoContemplado
@@ -878,7 +879,7 @@ export default function ParticipanteTokenPage() {
                   />
                   <button
                     type="button"
-                    onClick={() => handleCopiarPix(chavePixEfetiva, temPixDiretoContemplado ? cicloInfo.usuarioNome : consorcio.criadorNome)}
+                    onClick={() => handleCopiarPix(chavePixEfetiva, temPixDiretoContemplado ? cicloInfo.usuarioNome : "Chave PIX do Consórcio")}
                     className={`px-3.5 py-2.5 active:scale-95 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer flex-shrink-0 ${
                       temPixDiretoContemplado
                         ? "bg-emerald-600 hover:bg-emerald-700"
@@ -893,7 +894,7 @@ export default function ParticipanteTokenPage() {
                 {/* Botão de Destaque Primário para Copiar a Chave (Substitui o botão de enviar comprovante) */}
                 <button
                   type="button"
-                  onClick={() => handleCopiarPix(chavePixEfetiva, temPixDiretoContemplado ? cicloInfo.usuarioNome : consorcio.criadorNome)}
+                  onClick={() => handleCopiarPix(chavePixEfetiva, temPixDiretoContemplado ? cicloInfo.usuarioNome : "Chave PIX do Consórcio")}
                   className={`w-full py-3.5 px-4 rounded-xl font-bold text-xs sm:text-sm shadow-xs transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer touch-target ${
                     pixCopiado
                       ? "bg-emerald-600 text-white"
