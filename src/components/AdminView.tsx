@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import {
   ShieldCheck,
   Users,
@@ -104,6 +105,28 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
   const [modalMesclarAberto, setModalMesclarAberto] = useState(false);
   const [modalRaioXUsuario, setModalRaioXUsuario] = useState<any | null>(null);
   const [modalExclusaoUsuario, setModalExclusaoUsuario] = useState<any | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const algumModalAberto = Boolean(
+    modalEdicaoUsuario ||
+    modalSenhaUsuario ||
+    modalMesclarAberto ||
+    modalRaioXUsuario ||
+    modalExclusaoUsuario
+  );
+
+  useEffect(() => {
+    if (!algumModalAberto) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [algumModalAberto]);
 
   // Estados dos formulários internos dos modais
   const [formEdicao, setFormEdicao] = useState({
@@ -1225,9 +1248,9 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
       {/* ====================================================================== */}
       {/* MODAL 1: EDIÇÃO DE DADOS CADASTRAIS                                    */}
       {/* ====================================================================== */}
-      {modalEdicaoUsuario && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 animate-in fade-in zoom-in-95 duration-150">
+      {isMounted && modalEdicaoUsuario && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 animate-in fade-in zoom-in-95 duration-150 my-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-theme-main" />
@@ -1368,15 +1391,16 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ====================================================================== */}
       {/* MODAL 2: GESTÃO E REDEFINIÇÃO DE SENHA                                 */}
       {/* ====================================================================== */}
-      {modalSenhaUsuario && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-150">
+      {isMounted && modalSenhaUsuario && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-150 my-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Key className="w-5 h-5 text-amber-500" />
@@ -1522,15 +1546,16 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ====================================================================== */}
       {/* MODAL 3: MESCLAR CONTAS DUPLICADAS (SMART MERGE)                       */}
       {/* ====================================================================== */}
-      {modalMesclarAberto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-xl w-full p-6 animate-in fade-in zoom-in-95 duration-150">
+      {isMounted && modalMesclarAberto && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-xl w-full p-6 animate-in fade-in zoom-in-95 duration-150 my-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <GitMerge className="w-5 h-5 text-emerald-600" />
@@ -1640,15 +1665,16 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ====================================================================== */}
       {/* MODAL 4: RAIO-X DO USUÁRIO & TRANSFERÊNCIA DE COTAS                    */}
       {/* ====================================================================== */}
-      {modalRaioXUsuario && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full p-6 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+      {isMounted && modalRaioXUsuario && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full p-6 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Layers className="w-5 h-5 text-theme-main" />
@@ -1811,15 +1837,16 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ====================================================================== */}
       {/* MODAL 5: EXCLUSÃO SEGURA DE USUÁRIO                                    */}
       {/* ====================================================================== */}
-      {modalExclusaoUsuario && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-150">
+      {isMounted && modalExclusaoUsuario && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-150 my-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Trash2 className="w-5 h-5 text-rose-600" />
@@ -1879,7 +1906,8 @@ export function AdminView({ currentUser, onUsuarioAtualizado }: AdminViewProps) 
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

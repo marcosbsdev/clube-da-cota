@@ -27,11 +27,13 @@ flowchart TD
 
     subgraph DataLayer["Camada de Persistência & Dados"]
         PrismaORM["Prisma ORM 5.22\n(Transaction Manager & Schema)"]
-        DB_Postgres["PostgreSQL 16 Alpine\n(Ambiente de Produção / Docker)"]
-        DB_SQLite["SQLite dev.db\n(Ambiente de Desenvolvimento Local)"]
+        DB_Supabase["Supabase PostgreSQL 17\n(Produção Oficial Cloud - AWS us-east-1)"]
+        DB_Postgres["PostgreSQL 16 Alpine\n(Docker Local / Standalone)"]
+        DB_SQLite["SQLite dev.db\n(Desenvolvimento Rápido Local)"]
     end
 
     subgraph ExternalLayer["Integrações & Serviços Externos"]
+        Sentry["Sentry.io APM & Tracing\n(Observabilidade Client, Server & Edge)"]
         WhatsApp["WhatsApp Web / App API\n(Notificações e Links Diretos)"]
         PixNetwork["Rede Pix / Bancos\n(Chaves Pix & Comprovantes)"]
     end
@@ -43,10 +45,13 @@ flowchart TD
     Actions --> SanitizeEngine
     Actions --> AuthRBAC
     Actions --> PrismaORM
+    PrismaORM --> DB_Supabase
     PrismaORM --> DB_Postgres
     PrismaORM --> DB_SQLite
     PWA -.-> WhatsApp
     Actions -.-> PixNetwork
+    PWA -.-> Sentry
+    Actions -.-> Sentry
 ```
 
 ---
@@ -55,15 +60,18 @@ flowchart TD
 
 | Camada | Tecnologia | Função Principal |
 | :--- | :--- | :--- |
+| **Hospedagem & CDN** | **Vercel Serverless Platform** | Deploy contínuo, roteamento Edge global, SSL/TLS gerenciado e alta disponibilidade. |
+| **Domínio Próprio & DNS** | **Registro.br (`clubedacota.com.br`)** | Registro oficial de domínio com apontamento de DNS autoritativo e subdomínio `www`. |
 | **Framework Fullstack** | **Next.js 14.2 (App Router)** | Renderização híbrida (RSC), roteamento moderno e Server Actions com zero overhead REST. |
 | **Biblioteca de UI** | **React 18.3 & TypeScript 5.6** | Interface reativa, tipagem estrita de ponta a ponta e estados locais otimizados. |
-| **Estilização & Temas** | **Tailwind CSS 3.4** | Design responsivo mobile-first, animações fluidas e suporte a 5 paletas de temas dinâmicos. |
+| **Estilização & Temas** | **Tailwind CSS 3.4** | Design responsivo mobile-first, animações fluidas e suporte a 6 paletas de temas oficiais. |
 | **Ícones do Sistema** | **Lucide React** | Conjunto padronizado de ícones semânticos para toda a aplicação. |
 | **Renderização Gráfica** | **HTML5 Canvas 2D API** | Geração e exportação client-side de tabelas e cronogramas em alta resolução (PNG 2x scale). |
 | **Camada ORM** | **Prisma ORM 5.22** | Modelagem relacional tipada, migrations automatizadas e transações atômicas seguras. |
-| **Bancos de Dados** | **PostgreSQL 16 / SQLite** | Suporte multi-banco com transição transparente via script `switch-db.mjs`. |
+| **Bancos de Dados** | **Supabase PostgreSQL 17 / SQLite** | Banco em nuvem com Session Pooler (`aws-0-us-east-1`) em produção e SQLite local dev. |
+| **Observabilidade & APM** | **Sentry.io (`@sentry/nextjs` 11)** | Monitoramento de performance, alertas em tempo real de erros no cliente, servidor e Edge. |
 | **Segurança & Criptografia** | **Bcrypt.js & Crypto** | Hashing seguro de senhas com salt rounds e tokens criptográficos temporários. |
-| **Contêineres & DevOps** | **Docker & Docker Compose** | Build multi-stage standalone (~150MB) e orquestração de banco + aplicação. |
+| **Contêineres & DevOps** | **Docker & Docker Compose** | Build multi-stage standalone (~150MB) e orquestração opcional para ambientes dedicados/on-premise. |
 | **Suíte de Testes** | **Node.js Test Runner Nativo** | 15 suítes de teste de integração e unidade sem dependências pesadas de terceiros. |
 
 ---
@@ -323,9 +331,58 @@ sequenceDiagram
 
 ## 7. Infraestrutura de Deploy & Ambientes
 
+### 7.1. Arquitetura Oficial de Produção (Serverless Cloud & Observabilidade)
+
+A infraestrutura oficial de produção do **Clube da Cota** opera em arquitetura Serverless de alta disponibilidade, com distribuição de borda (Edge Network) e banco de dados gerenciado:
+
 ```mermaid
 flowchart TD
-    subgraph DockerContainer["Ambiente Dockerizado (Produção)"]
+    subgraph Users["Acesso dos Usuários (Mobile PWA & Web)"]
+        UserMobile["Smartphones (PWA Mobile)"]
+        UserDesktop["Computadores (Web Desktop)"]
+    end
+
+    subgraph DNSLayer["Governança de Domínio & DNS"]
+        RegistroBR["Registro.br\n(Domínio: clubedacota.com.br)"]
+        DNS_CNAME["Apontamento CNAME www\ncname.vercel-dns.com"]
+        DNS_A["Apontamento A Apex\n76.76.21.21"]
+    end
+
+    subgraph VercelCloud["Vercel Edge Platform (Produção)"]
+        EdgeCDN["Vercel Global Edge Network\n(SSL/TLS Automático Let's Encrypt)"]
+        ServerlessApp["Next.js 14 App Router Standalone\n(Server Actions & Server Components)"]
+    end
+
+    subgraph SupabaseCloud["Supabase Managed Database (AWS us-east-1)"]
+        SessionPooler["Session Pooler PgBouncer\n(Porta 5432 - aws-0-us-east-1.pooler.supabase.com)"]
+        Postgres17["PostgreSQL 17 Managed Engine\n(Schema Prisma, SSL Require & Backups)"]
+    end
+
+    subgraph ObservabilityLayer["Observabilidade & APM"]
+        SentryCloud["Sentry.io Platform\n(Issue Tracking, Tracing Client/Server/Edge)"]
+    end
+
+    UserMobile --> RegistroBR
+    UserDesktop --> RegistroBR
+    RegistroBR --> DNS_CNAME
+    RegistroBR --> DNS_A
+    DNS_CNAME --> EdgeCDN
+    DNS_A --> EdgeCDN
+    EdgeCDN --> ServerlessApp
+    ServerlessApp <-->|Prisma ORM via TLS| SessionPooler
+    SessionPooler --> Postgres17
+    ServerlessApp -.->|Logs & Error Ingest| SentryCloud
+    UserMobile -.->|Client Errors & Replays| SentryCloud
+    UserDesktop -.->|Client Errors & Replays| SentryCloud
+```
+
+### 7.2. Ambiente Docker Dedicado / On-Premise (Alternativo)
+
+Para implementações em servidores VPS dedicados (ex: Hetzner, DigitalOcean ou AWS EC2):
+
+```mermaid
+flowchart TD
+    subgraph DockerContainer["Ambiente Dockerizado (VPS Dedicado)"]
         direction TB
         NextApp["Next.js App Standalone Container\n(Node.js 20 Alpine - Porta 3000)"]
         PostgresContainer["PostgreSQL 16 Alpine Container\n(Porta 5432 - Volume postgres_data)"]
@@ -337,19 +394,17 @@ flowchart TD
         ReverseProxy -->|Proxy reverso porta 3000| NextApp
     end
 
-    subgraph Users["Acesso dos Usuários"]
-        UserMobile["Smartphones (PWA Mobile)"]
-        UserDesktop["Computadores (Web Desktop)"]
-        UserMobile --> ReverseProxy
-        UserDesktop --> ReverseProxy
+    subgraph OnPremUsers["Acesso dos Usuários"]
+        ClientApp["PWA Mobile / Web Desktop"]
+        ClientApp --> ReverseProxy
     end
 ```
 
 ---
 
-## 8. Cobertura de Testes Automatizados (15 Suítes - 100% de Sucesso)
+## 8. Cobertura de Testes Automatizados (17 Suítes - 100% de Sucesso)
 
-O sistema possui uma suíte rigorosa de **15 arquivos de testes automatizados**, cobrindo todas as camadas sem necessidade de servidores externos ativos:
+O sistema possui uma suíte rigorosa de **17 arquivos de testes automatizados**, cobrindo todas as camadas sem necessidade de servidores externos ativos:
 
 1. `tests/finance.test.mjs`: Validação de parcelas, juros, acréscimos e bolada líquida.
 2. `tests/auth.test.mjs`: Autenticação real com hash bcrypt e validação dos 4 papéis.
@@ -366,3 +421,5 @@ O sistema possui uma suíte rigorosa de **15 arquivos de testes automatizados**,
 13. `tests/sorteio_ordem_contemplacao.test.mjs`: Fisher-Yates e imutabilidade do Sorteio 1.
 14. `tests/export_cronograma_image.test.mjs`: Canvas 2D dinâmico e exportação PNG.
 15. `tests/admin_gestao_usuarios.test.mjs`: Smart Merge, senhas amigáveis e governança.
+16. `tests/pix_pagamento_participante.test.mjs`: Validação e mascaramento de chave Pix no pagamento do participante.
+17. `tests/pagination.test.mjs`: Algoritmo universal de paginação em memória e fatiamento de dados.

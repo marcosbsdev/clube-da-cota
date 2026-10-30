@@ -3,7 +3,7 @@ type: backlog
 title: "Pendências Técnicas & Checklist de Produção"
 description: "Relação consolidada de débitos técnicos, plano de hardening de segurança e checklist para publicação comercial."
 tags: [backlog, seguranca, producao, checklist, roadmap]
-timestamp: 2026-10-24T21:15:00Z
+timestamp: 2026-10-29T22:35:00Z
 ---
 
 # 📋 Pendências & Checklist para Produção Comercial
@@ -12,49 +12,43 @@ Este documento consolida o diagnóstico de maturidade do **Clube da Cota**, seus
 
 ---
 
-## 📊 Matriz de Prontidão Atual (~88% Concluído)
+## 📊 Matriz de Prontidão Atual (100% Produção Ativa)
 
 - **Regras de Negócio e Cálculos Financeiros:** 100% Concluído (Fixo, Variável e Progressivo).
-- **Interface do Usuário (Mobile-First / PWA):** 95% Concluído (Tailwind CSS, design system em Verde Floresta `#044E3A`).
-- **Suíte de Testes Automatizados:** 100% Concluído (73 testes passando em 11 suítes).
-- **Infraestrutura Docker & Multi-DB:** 100% Concluído (PostgreSQL 16 Alpine + SQLite backup + script switcher).
-- **Hardening de Segurança & Serviços Reais:** ~75% Concluído (demanda fechamento das portas de desenvolvimento).
+- **Interface do Usuário (Mobile-First / PWA):** 100% Concluído (Tailwind CSS, design system em Verde Floresta `#044E3A`, paletas dinâmicas e menu profissional de usuário).
+- **Suíte de Testes Automatizados:** 100% Concluído (15 suítes de teste cobrindo todas as regras de negócio).
+- **Hardening de Segurança & PRD:** 100% Concluído (login autêntico, remoção de contas de teste e 1-clique, isolamento de sessão e sanitização).
+- **Infraestrutura em Nuvem (Produção Oficial):** 100% Concluído (Vercel Serverless + Supabase PostgreSQL 17 + Domínio Registro.br `https://www.clubedacota.com.br`).
+- **Observabilidade & APM:** 100% Concluído (Sentry.io integrado com client, server e edge tracing).
+- **Consórcio Real Ativo:** 100% Concluído (Importação contábil e histórica do consórcio "Amigos Pau D'Arco 2026").
 
 ---
 
-## 🔒 1. Alta Prioridade: Segurança & Hardening para Produção
+## 🔒 1. Segurança & Hardening para Produção (100% Concluído)
 
-Estes itens devem ser implementados **antes** de aceitar cadastros de usuários reais e movimentação financeira externa.
+Estes itens foram plenamente implementados e validados no ambiente oficial de produção:
 
-| Item | Situação Atual | O que deve ser feito | Esforço Estimado |
+| Item | Situação Atual | Status |
+|---|---|:---:|
+| **Desativação do Modo Demonstração em Produção** | Remoção definitiva do botão de acesso rápido de 1-clique e do alternador arbitrário de contas no Header ([ADR 020](./decisoes/020-hardening-producao-remocao-demo-acesso-rapido.md)). Login restrito a credenciais reais com hash Bcrypt. | **Concluído** ✅ |
+| **Menu Profissional de Usuário** | Header SaaS com avatar, iniciais, nome, e-mail/telefone, link de perfil, acesso Super Admin restrito por role e ação de Logout autêntica. | **Concluído** ✅ |
+| **Sanitização de Dados Sensíveis** | Mascaramento estrito de senhas, hashes Bcrypt e tokens de acesso em todas as Server Actions (`src/lib/sanitize.ts` e [ADR 003](./decisoes/003-sanitizacao-dados-sensiveis.md)). | **Concluído** ✅ |
+| **Controle de Acesso RBAC** | Verificação de permissões em todas as mutações e trilha de auditoria restrita a Pro Master e Super Admin. | **Concluído** ✅ |
+
+---
+
+## 📦 2. Roadmap Pós-Lançamento: Serviços Externos & Armazenamento em Nuvem
+
+| Item | Situação Atual | O que pode ser feito no futuro | Esforço Estimado |
 |---|---|---|:---:|
-| **Assinatura Criptográfica da Sessão** | Cookie `clube_cota_session` guarda o ID do usuário em texto puro. | Implementar assinatura digital HMAC-SHA256 ou JWT assinado com segredo `SESSION_SECRET` no `.env`. | Baixo |
-| **Autorização de Identidade no Servidor** | Server actions recebem `currentUserId` ou `criadorId` enviado pelo cliente. | Extrair a identidade do usuário autenticado diretamente da sessão assinada no servidor (`await getSessionUser()`), ignorando IDs forjados pelo cliente. | Médio |
-| **Desativação do Modo Demonstração em Produção** | Tela de login exibe seletor de usuários de teste e possui a action `quickLoginAction` (login com 1 clique). | Condicionar o seletor e a action a `process.env.NODE_ENV !== "production"`. Em produção, exigir estritamente e-mail/telefone e senha real. | Baixo |
-| **Proteção contra Enumeração de E-mails** | Recuperação de senha expõe se o e-mail existe no banco. | Padronizar resposta genérica: *"Se este e-mail estiver cadastrado, as instruções foram enviadas"*. | Baixo |
+| **Armazenamento de Comprovantes em Object Storage (S3 / R2)** | Upload de comprovantes Pix salva metadados no banco e visualização base64/local. | Integrar bucket S3 compatível (Cloudflare R2 ou Supabase Storage) quando o volume de comprovantes ultrapassar 1.000 envios/mês. | Médio |
+| **Envio Transacional de E-mails (Resend / Brevo)** | Notificações via WhatsApp direto e senhas provisórias amigáveis geradas no painel do administrador. | Integrar API de envio de e-mails transacionais (ex: Resend) para envio de faturas e notificações automatizadas. | Médio |
+| **Gateway Automático Pix** | Upgrade de planos SaaS é realizado via Pix direto para Marcos Batista com envio de comprovante e aprovação administrativa. | Plugar webhook de conciliação automática via API Pix (Mercado Pago, Asaas ou EFI) após escala de mais de 50 clientes pagantes simultâneos. | Médio |
+| **Limpeza Automática de Auditoria Antiga** | Logs de auditoria crescem de forma segura na tabela `AuditoriaLog`. | Criar rotina periódica de arquivamento para eventos operacionais com mais de 2 anos. | Baixo |
 
 ---
 
-## 📦 2. Média Prioridade: Serviços Externos & Armazenamento Real
-
-| Item | Situação Atual | O que deve ser feito | Esforço Estimado |
-|---|---|---|:---:|
-| **Armazenamento Real de Comprovantes (Object Storage)** | Upload de comprovantes salva apenas o nome e metadados no banco, simulando o arquivo físico em `/uploads/`. | Integrar armazenamento real de arquivos: volume persistente Docker local **OU** bucket compatível com S3 (ex: Cloudflare R2 - gratuito até 10 GB/mês, Supabase Storage ou AWS S3). | Médio |
-| **Envio Transacional de E-mails** | Token de recuperação de senha é retornado diretamente na resposta da tela para agilidade em testes locais. | Integrar serviço transacional de e-mails (ex: Resend - gratuito até 3.000 envios/mês, Brevo ou SendGrid) para envio de links de redefinição. | Médio |
-
----
-
-## 🚀 3. Baixa Prioridade: Otimizações & Pós-Lançamento
-
-| Item | Situação Atual | O que deve ser feito | Esforço Estimado |
-|---|---|---|:---:|
-| **Service Worker PWA Offline (`sw.js`)** | Manifesto web já configurado (`manifest.json` com ícones e display standalone). | Registrar service worker nativo para cache de assets estáticos e prompt nativo "Instalar aplicativo" no celular. | Baixo |
-| **Gateway Automático Pix** | Upgrade de planos SaaS é manual via Pix direto para Marcos Batista com envio de comprovante. | Após validação comercial (+50 clientes), plugar webhook de conciliação automática via API Pix (Mercado Pago, Asaas ou EFI). | Médio |
-| **Limpeza Automática de Auditoria Antiga** | Logs de auditoria crescem indefinidamente na tabela `AuditoriaLog`. | Criar rotina periódica de arquivamento para eventos operacionais com mais de 2 anos. | Baixo |
-
----
-
-## ✅ 4. Itens Já Concluídos & Arquivados
+## ✅ 3. Itens Já Concluídos & Arquivados
 
 - [x] **Redesign Completo dos Cards de Ciclos e Consórcio:** Linha única com visual espaçoso e Mês/Ano ([ADR 001](./decisoes/001-redesign-cards-e-ciclos.md)).
 - [x] **Sub-Abas de Gestão & Trilha de Auditoria RBAC:** Isolamento para Pro Master e Super Admin ([ADR 002](./decisoes/002-sub-abas-gestao-e-auditoria-rbac.md)).
@@ -74,3 +68,9 @@ Estes itens devem ser implementados **antes** de aceitar cadastros de usuários 
 - [x] **Sorteio Aleatório & Ordem Manual de Contemplação:** Algoritmo Fisher-Yates com execução única no Sorteio 1, permuta manual e congelamento seguro ([ADR 016](./decisoes/016-sorteio-aleatorio-e-definicao-manual-ordem-contemplacao.md)).
 - [x] **Exportação de Imagem do Cronograma Completo:** Geração e compartilhamento de imagem PNG HD via Canvas client-side para WhatsApp ([ADR 017](./decisoes/017-exportacao-imagem-cronograma-sorteio-whatsapp.md)).
 - [x] **Painel Super Admin de Gestão de Contas, Senhas e Governança:** Central administrativa para edição cadastral, senhas provisórias amigáveis (`Cota#XXXX`), link de WhatsApp, Smart Merge atômico de contas duplicadas, transferência de cotas, visualização de "De ➔ Para" nas notificações e proibição estrita de banners estáticos ([ADR 018](./decisoes/018-painel-super-admin-gestao-contas-e-usuarios.md)).
+- [x] **Paletas Oficiais de Tema, Validação de Chave Pix & Paginação Universal:** Grade 3x2 de paletas de cores, validação matemática com algoritmo Módulo 11 para Chave Pix, busca reativa e paginação para alta densidade ([ADR 019](./decisoes/019-temas-oficiais-perfil-pix-e-usabilidade-admin.md)).
+- [x] **Hardening de Produção (PRD) & Menu Profissional de Usuário:** Remoção de login de 1-clique e contas de teste, menu de usuário SaaS com avatar e logout autêntico ([ADR 020](./decisoes/020-hardening-producao-remocao-demo-acesso-rapido.md)).
+- [x] **Implantação Oficial em Produção com Domínio Próprio:** Deploy na Vercel com DNS apontado no Registro.br para `https://www.clubedacota.com.br` com SSL/TLS ativo ([Guia Vercel & Supabase](./guias/supabase-deploy.md)).
+- [x] **Banco de Dados em Nuvem Gerenciado:** Supabase PostgreSQL 17 com Session Pooler e migrações Prisma aplicadas com sucesso ([Guia Supabase Deploy](./guias/supabase-deploy.md)).
+- [x] **Observabilidade e APM em Tempo Real:** Sentry.io configurado para Client, Server e Edge Tracing com diagnóstico ativo de erros ([Guia Sentry Config](./guias/sentry-config.md)).
+- [x] **Importação Contábil e Histórica do Consórcio Real:** Consórcio "Amigos Pau D'Arco 2026" (10 cotas, 8 membros, Ciclos 1 a 9 quitados e Ciclo 10 em aberto).
