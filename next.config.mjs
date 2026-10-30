@@ -8,8 +8,8 @@ const nextConfig = {
 
 export default withSentryConfig(nextConfig, {
   silent: true,
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
+  org: process.env.SENTRY_ORG || "personal-t1i",
+  project: process.env.SENTRY_PROJECT || "clube-da-cota",
   widenClientFileUpload: true,
   hideSourceMaps: true,
   disableLogger: true,
